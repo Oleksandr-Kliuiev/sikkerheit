@@ -440,8 +440,9 @@ P1_ADDED = [
      'claim_jobs не меняется; в транзакции evaluate_batch под блокировкой строки устройства задание, у устройства '
      'которого есть ранее принятый пакет (меньший acceptOrder), ещё не обработанный и не в терминальном отказе, '
      'откладывается через nextAttemptAt без эффектов и без увеличения attempts. Терминальные отказы (failed, '
-     'processing_failed) следующие пакеты не блокируют; позднейшая обработка такого пакета идёт только в '
-     'историю. Текущую проекцию меняет только пакет с projectionEligible, если его sequence больше '
+     'processing_failed) следующие пакеты не блокируют; evaluate_batch переходит в failed после 10 попыток или '
+     'через 24 ч от первой попытки, что раньше; позднейшая обработка отказавшего пакета подчиняется п. 5: при '
+     'sequence не больше projectionSequence он поздний. Текущую проекцию меняет только пакет с projectionEligible, если его sequence больше '
      'device.projectionSequence. Пакеты с признаком часов и поздние пакеты пополняют только историю и событий не '
      'создают, кроме переоценки проверки текущей проекции, если такой пакет изменил историю, от которой зависит '
      'её оценка: историю ожидания WIN-006 пары (configuredSource наблюдения проекции, updateId) или эпизод '
@@ -505,26 +506,30 @@ P1_ADDED = [
      result('assessed', 'unknown', 'update_age_unconfirmed'), 'AT-05'),
     # Certificates after restore.
     ('В карантине до открытия доступа команда восстановления в контексте purpose=restore каждой организации '
-     'переводит все неактивированные pending в revoked (аудит device.pending_revoked, причина restore) и '
-     'устанавливает overlapEndsAt = время restore у каждого superseded с overlapEndsAt позже этого времени; '
-     'правило не зависит от событий после точки restore. Сертификат, бывший active в точке restore, остаётся '
-     'действительным.', RESTORE, 'infra',
+     'переводит все неактивированные pending в superseded с overlapEndsAt = время restore (аудит '
+     'device.restore_pending_ended, actorType platform_admin, actorId оператора) и устанавливает overlapEndsAt = '
+     'время restore у каждого прежнего superseded с overlapEndsAt позже этого времени; правило не зависит от '
+     'событий после точки restore. Запрос бывшим pending получает 401 certificate_expired, и сервер записывает '
+     'reenrollAllowedUntil = now + 7 суток. Сертификат, бывший active в точке restore, остаётся действительным.',
+     RESTORE, 'infra',
      'В точке restore у устройства active A и неактивированный pending B; после открытия доступа агент вызывает '
-     'submitHeartbeat сертификатом B.', http(401, 'certificate_revoked'), 'AT-12'),
+     'submitHeartbeat сертификатом B.', http(401, 'certificate_expired'), 'AT-12'),
     ('В карантине для устройства, у которого журнал подписей Issuer показывает выпуск после точки restore, '
      'выставляется reenrollAllowedUntil = now + 7 суток с аудитом device.reenroll_allowed (actorType '
      'platform_admin, actorId оператора), чтобы повторная регистрация сохранила deviceId.', RESTORE, 'infra',
      'Журнал подписей Issuer содержит выпуск сертификата C устройству после точки restore; в восстановленной базе '
      'C нет; карантин до открытия доступа.', {'audit': 'device.reenroll_allowed'}, 'AT-12'),
     ('401 на запрос сертификатом X помечает X отвергнутым; агент повторяет запрос следующим локальным '
-     'сертификатом с неистёкшим validTo от новых к старым (pending, active, superseded в пределах хранения ключа) '
-     'и выполняет действие из таблицы Problem по ответу на последний кандидат; пока есть active, ротацию '
-     'superseded-сертификатом не запрашивает.', AGENT_FSM, 'agent',
+     'сертификатом с неистёкшим validTo от новых к старым (pending, active, superseded) и выполняет действие из '
+     'таблицы Problem по ответу на последний кандидат. Отметка действует в пределах цепочки повторов одного '
+     'запроса: следующий запрос, в том числе GET configuration в TrustFailed, снова перебирает все неистёкшие '
+     'сертификаты. Прежний сертификат и ключ агент хранит после активации нового до validTo прежнего, но не '
+     'меньше 14 суток; пока есть active, ротацию superseded-сертификатом не запрашивает.', AGENT_FSM, 'agent',
      'Restore на точку до продления: агент хранит pending C, базе неизвестный, и active B; heartbeat сертификатом '
      'C получает 401 certificate_unknown, повтор сертификатом B — 200.', {'agentState': 'Active'}, 'AT-12'),
     ('Идемпотентный повтор renewDeviceCertificate (тот же renewalRequestId и CSR), сертификат которого отозван, '
      'получает 409 renewal_request_conflict (действие restart_renewal), а не отозванный сертификат.', CERT,
-     'agent_api', 'renew выдал pending C, ответ до агента не дошёл; restore в карантине отозвал C; агент повторяет '
+     'agent_api', 'renew выдал pending C, ответ до агента не дошёл; новый выпуск для устройства отозвал C; агент повторяет '
      'renew с тем же renewalRequestId и CSR сертификатом B.', http(409, 'renewal_request_conflict'), 'AT-17'),
     ('Из TrustFailed агент выходит повторной регистрацией с новым токеном из канала установки: enrollAgent, при '
      'успехе Active; при неизвестном installationId создаётся устройство. Если installationId известен и у '
