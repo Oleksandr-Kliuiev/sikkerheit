@@ -672,7 +672,7 @@
             }
           }
         },
-        "description": "Идемпотентно по renewalRequestId и CSR; другой CSR с тем же id: 409 renewal_request_conflict. Новый renewalRequestId — новый выпуск в транзакции Issuer: неактивированный pending отзывается, перекрытие superseded заканчивается, поэтому действующих сертификатов не больше двух; при недоступности Issuer — 503 temporarily_unavailable, повтор с тем же id. Правила — 04, «Профиль и продление сертификата».",
+        "description": "Идемпотентно по renewalRequestId и CSR; другой CSR с тем же id или повтор, сертификат которого отозван: 409 renewal_request_conflict. Агент обращается самым новым сертификатом, который сервер выдал и не отверг; пока есть active, ротацию superseded-сертификатом не запрашивает. Новый renewalRequestId — новый выпуск в транзакции Issuer: неактивированный pending отзывается, перекрытие superseded заканчивается, поэтому действующих сертификатов не больше двух; при недоступности Issuer — 503 temporarily_unavailable, повтор с тем же id. Правила — 04, «Профиль и продление сертификата».",
         "requestBody": {
           "required": true,
           "content": {
@@ -6420,7 +6420,8 @@
                         "windows_update",
                         "wsus",
                         "other_approved"
-                      ]
+                      ],
+                      "description": "Источник, к которому относится наблюдение. Сервер хранит историю ожидания по (deviceId, configuredSource, updateId): наблюдение источника обновляет и закрывает эпизоды только этого источника и задаёт previousCompleteAt только для него (03, «Правило WIN-006»)."
                     },
                     "auLastSearchSuccessAt": {
                       "type": [
@@ -6577,7 +6578,7 @@
                             "maxLength": 40,
                             "format": "date-time",
                             "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
-                            "description": "observedAt первого сбора, в котором агент нашёл обновление; не позже observedAt наблюдения."
+                            "description": "observedAt первого сбора, в котором агент нашёл обновление у этого configuredSource; не позже observedAt наблюдения. Агент хранит значение по (configuredSource, updateId) и удаляет его только после поиска с resultCode=succeeded того же configuredSource без этого updateId."
                           }
                         },
                         "required": [
@@ -7096,7 +7097,7 @@
           "csrPem",
           "machineFingerprint"
         ],
-        "description": "Идемпотентно по renewalRequestId и CSR: повтор возвращает прежний сертификат, тот же id с другим CSR даёт 409 renewal_request_conflict."
+        "description": "Идемпотентно по renewalRequestId и CSR: повтор возвращает прежний сертификат, тот же id с другим CSR даёт 409 renewal_request_conflict; повтор, сертификат которого отозван, тоже получает 409 renewal_request_conflict, а не отозванный сертификат."
       },
       "Configuration": {
         "type": "object",
@@ -7970,7 +7971,9 @@
                       "maxSearchAgeHours": {
                         "type": "integer",
                         "minimum": 1,
-                        "default": 72
+                        "maximum": 168,
+                        "default": 72,
+                        "description": "Временная верхняя граница 168 ч до ответа владельца (08, вопрос 15)."
                       },
                       "graceDaysBySeverity": {
                         "type": "object",

@@ -90,8 +90,10 @@ def _pending_update():
                 'categoryIds': array(UUID, 10, unique=True),
                 'msrcSeverity': nullable(enum('Critical', 'Important', 'Moderate', 'Low')),
                 'lastDeploymentChangeAt': nullable(TIME_UTC), 'deadlineAt': nullable(TIME_UTC),
-                'firstSeenPendingAt': {**TIME_UTC, 'description': 'observedAt первого сбора, в котором агент нашёл '
-                                                                  'обновление; не позже observedAt наблюдения.'}})
+                'firstSeenPendingAt': {**TIME_UTC, 'description': (
+                    'observedAt первого сбора, в котором агент нашёл обновление у этого configuredSource; не позже '
+                    'observedAt наблюдения. Агент хранит значение по (configuredSource, updateId) и удаляет его '
+                    'только после поиска с resultCode=succeeded того же configuredSource без этого updateId.')}})
 
 
 def _agent_search():
@@ -115,7 +117,10 @@ EVIDENCE = {
     'WIN-004': obj({'signatureLastUpdatedAt': TIME_UTC}),
     'WIN-005': obj({'domainEnabled': BOOL, 'privateEnabled': BOOL, 'publicEnabled': BOOL}),
     'WIN-006': obj({
-        'configuredSource': enum('windows_update', 'wsus', 'other_approved'),
+        'configuredSource': {**enum('windows_update', 'wsus', 'other_approved'), 'description': (
+            'Источник, к которому относится наблюдение. Сервер хранит историю ожидания по (deviceId, '
+            'configuredSource, updateId): наблюдение источника обновляет и закрывает эпизоды только этого '
+            'источника и задаёт previousCompleteAt только для него (03, «Правило WIN-006»).')},
         'auLastSearchSuccessAt': {**nullable(TIME_UTC), 'description': (
             'LastSearchSuccessDate, прочитанный до начала agentSearch; основа свежести при offline_cache, '
             'null — основы нет (03, «Правило WIN-006»).')},
@@ -235,7 +240,9 @@ def policy_configuration():
                                                   default=['domain', 'private', 'public'])}),
         'WIN-006': obj({'expectedSource': {**nullable(enum('windows_update', 'wsus', 'other_approved')),
                                            'default': None},
-                        'maxSearchAgeHours': integer(1, default=72),
+                        'maxSearchAgeHours': integer(1, maximum=168, default=72,
+                                                     description='Временная верхняя граница 168 ч до ответа '
+                                                                 'владельца (08, вопрос 15).'),
                         'graceDaysBySeverity': obj({k: integer(0, default=v) for k, v in days.items()}),
                         'referenceTimeBasis': {**enum('deadline', 'first_seen'), 'default': 'first_seen'}}),
         'WIN-007': obj({'warnDays': integer(1, default=3)}),
@@ -305,7 +312,8 @@ def api_schemas(observation, batch):
         'RenewalRequest': {**obj({'renewalRequestId': UUID, 'csrPem': CSR, 'machineFingerprint': FINGERPRINT}),
                            'description': 'Идемпотентно по renewalRequestId и CSR: повтор возвращает прежний '
                                           'сертификат, тот же id с другим CSR даёт 409 '
-                                          'renewal_request_conflict.'},
+                                          'renewal_request_conflict; повтор, сертификат которого отозван, тоже '
+                                          'получает 409 renewal_request_conflict, а не отозванный сертификат.'},
         'Configuration': obj({
             'policyVersion': integer(1),
             'activeCheckIds': array({'type': 'string', 'enum': AGENT_IDS}, len(AGENT_IDS), 1, unique=True),

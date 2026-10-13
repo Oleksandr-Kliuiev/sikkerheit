@@ -169,7 +169,9 @@ def build_paths():
         '/api/v1/agent/certificate/renew': {'post': operation(
             'renewDeviceCertificate', 'Продление сертификата устройства', 'device', 200, 'DeviceCertificate',
             'RenewalRequest', description=(
-                'Идемпотентно по renewalRequestId и CSR; другой CSR с тем же id: 409 renewal_request_conflict. '
+                'Идемпотентно по renewalRequestId и CSR; другой CSR с тем же id или повтор, сертификат которого '
+                'отозван: 409 renewal_request_conflict. Агент обращается самым новым сертификатом, который сервер '
+                'выдал и не отверг; пока есть active, ротацию superseded-сертификатом не запрашивает. '
                 'Новый renewalRequestId — новый выпуск в транзакции Issuer: неактивированный pending отзывается, '
                 'перекрытие superseded заканчивается, поэтому действующих сертификатов не больше двух; при '
                 'недоступности Issuer — 503 temporarily_unavailable, повтор с тем же id. Правила — 04, «Профиль и '

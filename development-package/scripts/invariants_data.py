@@ -411,7 +411,8 @@ P1_ADDED = [
      'observedAt этого сбора, серверный firstSeenAt — время поиска этого сбора, previousCompleteAt = null.',
      result('assessed', 'unknown', 'update_age_unconfirmed'), 'AT-05'),
     ('WIN-006 в режиме assessed: при основе first_seen либо deadline без deadlineAt точка отсчёта firstSeenRef = '
-     'min(серверный firstSeenAt, firstSeenPendingAt); история ожидания хранится сервером по (deviceId, updateId) и '
+     'min(серверный firstSeenAt, firstSeenPendingAt); история ожидания хранится сервером по (deviceId, '
+     'configuredSource, updateId) и '
      'не зависит от состояния агента.', WIN006, 'worker',
      'Потеря локальной SQLite при том же deviceId, referenceTimeBasis=first_seen, свежий успешный поиск, '
      'configuredSource=expectedSource: firstSeenPendingAt Important-обновления = observedAt, серверный firstSeenAt '
@@ -432,18 +433,28 @@ P1_ADDED = [
      'worker его не пересчитывает, повтор возвращает исходный receipt. lastAcceptedSequence учитывает и пакеты с '
      'признаком, maxAcceptedSourceTime — только пакеты без признака.', CLOCK, 'agent_api',
      'Принят sequence 100; затем sequence 101 с completedAt раньше maxAcceptedSourceTime при нормальном последнем '
-     'heartbeat; задание пакета 101 выполнено раньше задания пакета 100; WIN-005 в политике в режиме assessed.',
+     'heartbeat; задание пакета 101 повторено после истечения lease; WIN-005 в политике в режиме assessed.',
      result('assessed', 'unknown', 'clock_inconsistent'), 'AT-04'),
-    ('Текущую проекцию устройства меняет только пакет с projectionEligible, если его sequence больше '
-     'device.projectionSequence; сравнение и замена выполняются в evaluate_batch под блокировкой строки '
-     'устройства. Пакеты с признаком часов и пакеты вне порядка пополняют только историю и событий не создают, '
-     'кроме переоценки WIN-006 текущей проекции, когда такой пакет изменил историю ожидания (05, «Выбор текущего '
-     'состояния», п. 5); '
-     'при любом порядке заданий совпадают текущая проекция, projectionSequence и множество открытых finding.',
+    ('Пакеты устройства обрабатываются в порядке приёма: на шаге 11 приёма под блокировкой строки устройства '
+     'пакету присваивается монотонный номер acceptOrder (внутреннее поле scan_batch и job, в API не выдаётся). '
+     'claim_jobs не меняется; в транзакции evaluate_batch под блокировкой строки устройства задание, у устройства '
+     'которого есть ранее принятый пакет (меньший acceptOrder), ещё не обработанный и не в терминальном отказе, '
+     'откладывается через nextAttemptAt без эффектов и без увеличения attempts. Терминальные отказы (failed, '
+     'processing_failed) следующие пакеты не блокируют; позднейшая обработка такого пакета идёт только в '
+     'историю. Текущую проекцию меняет только пакет с projectionEligible, если его sequence больше '
+     'device.projectionSequence. Пакеты с признаком часов и поздние пакеты пополняют только историю и событий не '
+     'создают, кроме переоценки проверки текущей проекции, если такой пакет изменил историю, от которой зависит '
+     'её оценка: историю ожидания WIN-006 пары (configuredSource наблюдения проекции, updateId) или эпизод '
+     'WIN-007 (05, «Выбор текущего состояния», п. 5). Момент свежести для эффектов evaluate_batch — receivedAt '
+     'обрабатываемого пакета. При одной ревизии политики, одной ruleVersion и без терминальных отказов проекция, '
+     'projectionSequence, technicalState, эпизоды WIN-007, история WIN-006, clockStatus и lastFullScanAt '
+     'определяются последовательностью принятых пакетов и не зависят от расписания Worker; события и '
+     'workflowState могут различаться.',
      CURRENT, 'worker',
-     'Finding WIN-005 открыт; пакет 100 — fail, пакет 101 — pass; задание пакета 101 выполнено раньше задания '
-     'пакета 100, и пакет 100 finding не переоткрывает.',
-     event('resolved', 'device_change'), 'AT-04'),
+     'Finding WIN-005 нет; приняты пакет 100 — fail и пакет 101 — unknown; Worker пытается выполнить задание '
+     'пакета 101 раньше задания пакета 100: задание 101 откладывается, пакет 100 открывает finding, пакет 101 '
+     'его не закрывает — итог совпадает с прямым порядком.',
+     event('opened', 'device_change'), 'AT-04'),
     ('SYS-002 в режиме assessed: окончание обслуживания — исключающее UTC-мгновение servicingEndsAt из данных '
      'правила; observedAt, равное servicingEndsAt или позже, даёт fail, а observedAt на 1 с раньше по сроку '
      'обслуживания fail не даёт.', OS_MATRIX, 'worker',
@@ -468,6 +479,60 @@ P1_ADDED = [
      'infra', 'enable организации: commit выполнен, запись в журнал не создана; restore на точку после commit; после '
      'открытия доступа задание дописывает запись enable, затем disable той же организации; повторный restore; агент '
      'вызывает submitScan.', http(403, 'organization_inactive'), 'AT-12'),
+    # Pending-update history per source.
+    ('WIN-006: история ожидания ведётся по (deviceId, configuredSource, updateId); наблюдение источника обновляет '
+     'и закрывает эпизоды только этого источника и задаёт previousCompleteAt только для него. Оценка для '
+     'expectedSource использует только историю этого источника; наблюдение другого источника даёт '
+     'unknown/update_source_mismatch и историю ожидаемого источника не меняет. Поздний пакет переоценивает WIN-006 '
+     'текущей проекции по истории пары (configuredSource наблюдения проекции, updateId).', WIN006, 'worker',
+     'expectedSource=windows_update, referenceTimeBasis=first_seen, свежие успешные полные поиски. Пакет 100: '
+     'windows_update с Important-обновлением U, серверный firstSeenAt U — 15 суток назад; пакет 102: '
+     'windows_update с U после сброса локальной SQLite (firstSeenPendingAt = observedAt пакета 102); пакет 101: '
+     'wsus без U, принят после пакета 102 как поздний.', result('assessed', 'fail'), 'AT-05'),
+    ('WIN-006: наблюдение с agentSearch.resultCode=succeeded того же configuredSource без updateId закрывает эпизод '
+     'ожидания этого обновления у этого источника; агент после такого поиска удаляет firstSeenPendingAt по '
+     '(configuredSource, updateId), и следующее появление обновления начинает новый эпизод.', WIN006, 'worker',
+     'expectedSource=configuredSource=windows_update, referenceTimeBasis=first_seen. Пакет 100: Important-'
+     'обновление U с серверным firstSeenAt 15 суток назад; пакет 101 через 1 ч: online/succeeded без U; пакет 102 '
+     'ещё через 1 ч: U снова, firstSeenPendingAt = observedAt пакета 102, previousCompleteAt — поиск пакета 101; '
+     'total=1, truncated=false.', result('assessed', 'pass'), 'AT-05'),
+    ('WIN-006: после смены expectedSource политикой оценка использует только историю нового источника; при пустой '
+     'истории (previousCompleteAt = null) обновление с точкой отсчёта firstSeenRef даёт '
+     'unknown/update_age_unconfirmed.', WIN006, 'worker',
+     'История ожидания есть только у wsus: U с firstSeenAt 30 суток назад; новая ревизия политики меняет '
+     'expectedSource на windows_update; первый пакет windows_update со свежим успешным поиском и Important-'
+     'обновлением U, firstSeenPendingAt = observedAt, referenceTimeBasis=first_seen.',
+     result('assessed', 'unknown', 'update_age_unconfirmed'), 'AT-05'),
+    # Certificates after restore.
+    ('В карантине до открытия доступа команда восстановления в контексте purpose=restore каждой организации '
+     'переводит все неактивированные pending в revoked (аудит device.pending_revoked, причина restore) и '
+     'устанавливает overlapEndsAt = время restore у каждого superseded с overlapEndsAt позже этого времени; '
+     'правило не зависит от событий после точки restore. Сертификат, бывший active в точке restore, остаётся '
+     'действительным.', RESTORE, 'infra',
+     'В точке restore у устройства active A и неактивированный pending B; после открытия доступа агент вызывает '
+     'submitHeartbeat сертификатом B.', http(401, 'certificate_revoked'), 'AT-12'),
+    ('В карантине для устройства, у которого журнал подписей Issuer показывает выпуск после точки restore, '
+     'выставляется reenrollAllowedUntil = now + 7 суток с аудитом device.reenroll_allowed (actorType '
+     'platform_admin, actorId оператора), чтобы повторная регистрация сохранила deviceId.', RESTORE, 'infra',
+     'Журнал подписей Issuer содержит выпуск сертификата C устройству после точки restore; в восстановленной базе '
+     'C нет; карантин до открытия доступа.', {'audit': 'device.reenroll_allowed'}, 'AT-12'),
+    ('401 на запрос сертификатом X помечает X отвергнутым; агент повторяет запрос следующим локальным '
+     'сертификатом с неистёкшим validTo от новых к старым (pending, active, superseded в пределах хранения ключа) '
+     'и выполняет действие из таблицы Problem по ответу на последний кандидат; пока есть active, ротацию '
+     'superseded-сертификатом не запрашивает.', AGENT_FSM, 'agent',
+     'Restore на точку до продления: агент хранит pending C, базе неизвестный, и active B; heartbeat сертификатом '
+     'C получает 401 certificate_unknown, повтор сертификатом B — 200.', {'agentState': 'Active'}, 'AT-12'),
+    ('Идемпотентный повтор renewDeviceCertificate (тот же renewalRequestId и CSR), сертификат которого отозван, '
+     'получает 409 renewal_request_conflict (действие restart_renewal), а не отозванный сертификат.', CERT,
+     'agent_api', 'renew выдал pending C, ответ до агента не дошёл; restore в карантине отозвал C; агент повторяет '
+     'renew с тем же renewalRequestId и CSR сертификатом B.', http(409, 'renewal_request_conflict'), 'AT-17'),
+    ('Из TrustFailed агент выходит повторной регистрацией с новым токеном из канала установки: enrollAgent, при '
+     'успехе Active; при неизвестном installationId создаётся устройство. Если installationId известен и у '
+     'устройства есть действующий active, ответ 409 ведёт в ReinstallRequired, если агент не восстановил доступ '
+     'прежним сертификатом.', AGENT_FSM, 'agent',
+     'Устройство зарегистрировано после точки restore; после открытия доступа агент получает 401 '
+     'certificate_unknown и переходит в TrustFailed; канал установки доставляет новый токен.',
+     {'agentState': 'Active'}, 'AT-12'),
 ]
 
 
