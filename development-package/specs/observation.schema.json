@@ -1,0 +1,555 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sikkerheit Agent Observation",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "checkId": {
+      "type": "string",
+      "enum": [
+        "WIN-001",
+        "WIN-002",
+        "WIN-003",
+        "WIN-004",
+        "WIN-005",
+        "WIN-006",
+        "WIN-007",
+        "WIN-008",
+        "WIN-009",
+        "WIN-010"
+      ]
+    },
+    "collectorVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][A-Za-z0-9.-]+)?$"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "device",
+            "volume"
+          ]
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "required": [
+        "type",
+        "reference"
+      ]
+    },
+    "observedAt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "format": "date-time"
+    },
+    "collectionStatus": {
+      "type": "string",
+      "enum": [
+        "collected",
+        "unavailable",
+        "not_applicable"
+      ]
+    },
+    "evidence": {
+      "type": "object"
+    },
+    "reasonCode": {
+      "type": "string",
+      "enum": [
+        "permission_denied",
+        "unsupported",
+        "collector_timeout",
+        "temporary_error",
+        "clock_inconsistent",
+        "policy_excluded"
+      ]
+    }
+  },
+  "required": [
+    "checkId",
+    "collectorVersion",
+    "subject",
+    "observedAt",
+    "collectionStatus"
+  ],
+  "oneOf": [
+    {
+      "properties": {
+        "collectionStatus": {
+          "const": "collected"
+        }
+      },
+      "required": [
+        "evidence"
+      ],
+      "not": {
+        "required": [
+          "reasonCode"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "collectionStatus": {
+          "const": "unavailable"
+        },
+        "reasonCode": {
+          "type": "string",
+          "enum": [
+            "permission_denied",
+            "unsupported",
+            "collector_timeout",
+            "temporary_error",
+            "clock_inconsistent"
+          ]
+        }
+      },
+      "required": [
+        "reasonCode"
+      ],
+      "not": {
+        "required": [
+          "evidence"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "collectionStatus": {
+          "const": "not_applicable"
+        },
+        "reasonCode": {
+          "const": "policy_excluded"
+        }
+      },
+      "required": [
+        "reasonCode"
+      ],
+      "not": {
+        "required": [
+          "evidence"
+        ]
+      }
+    }
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-001"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "totalBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "freeBytes": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "totalBytes",
+              "freeBytes"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-002"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "volumeStatus": {
+                "type": "string",
+                "enum": [
+                  "fully_encrypted",
+                  "encrypting",
+                  "decrypting",
+                  "fully_decrypted"
+                ]
+              },
+              "protectionStatus": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off"
+                ]
+              },
+              "encryptionPercentage": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              }
+            },
+            "required": [
+              "volumeStatus",
+              "protectionStatus",
+              "encryptionPercentage"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-003"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "provider": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "productState": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off",
+                  "expired",
+                  "snoozed"
+                ]
+              },
+              "statusSource": {
+                "type": "string",
+                "enum": [
+                  "defender",
+                  "windows_security_center"
+                ]
+              }
+            },
+            "required": [
+              "provider",
+              "productState",
+              "statusSource"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-004"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "signatureLastUpdatedAt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40,
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "signatureLastUpdatedAt"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-005"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "domainEnabled": {
+                "type": "boolean"
+              },
+              "privateEnabled": {
+                "type": "boolean"
+              },
+              "publicEnabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "domainEnabled",
+              "privateEnabled",
+              "publicEnabled"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-006"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "securityUpdatesPending": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "lastSuccessfulSearchAt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40,
+                "format": "date-time"
+              },
+              "configuredSource": {
+                "type": "string",
+                "enum": [
+                  "windows_update",
+                  "wsus",
+                  "other_approved"
+                ]
+              }
+            },
+            "required": [
+              "securityUpdatesPending",
+              "lastSuccessfulSearchAt",
+              "configuredSource"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-007"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "rebootRequired": {
+                "type": "boolean"
+              },
+              "statusSource": {
+                "type": "string",
+                "enum": [
+                  "windows_update_api"
+                ]
+              }
+            },
+            "required": [
+              "rebootRequired",
+              "statusSource"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-008"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "memberSids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 184,
+                  "pattern": "^S-\\d+(?:-\\d+)+$"
+                },
+                "maxItems": 100,
+                "uniqueItems": true
+              },
+              "membershipScope": {
+                "type": "string",
+                "enum": [
+                  "direct_members"
+                ]
+              }
+            },
+            "required": [
+              "memberSids",
+              "membershipScope"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-009"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "platform": {
+                "type": "string",
+                "enum": [
+                  "uefi",
+                  "legacy_bios"
+                ]
+              }
+            },
+            "required": [
+              "enabled",
+              "platform"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-010"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "joinType": {
+                "type": "string",
+                "enum": [
+                  "entra_joined",
+                  "hybrid_joined",
+                  "registered",
+                  "not_joined"
+                ]
+              },
+              "tenantId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "entraDeviceId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "joinType",
+              "tenantId",
+              "entraDeviceId"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "description": "Только allowlisted P1 Windows evidence. Проверка timestamps, применимости, субъекта и ожидаемых проверок выполняется backend согласно 05-data-and-api.md."
+}

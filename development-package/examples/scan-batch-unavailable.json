@@ -1,0 +1,150 @@
+{
+  "schemaVersion": "1.0",
+  "scanId": "44444444-4444-4444-8444-444444444444",
+  "sequence": 2,
+  "agentVersion": "0.1.0",
+  "policyVersion": 1,
+  "startedAt": "2026-10-12T10:00:00Z",
+  "completedAt": "2026-10-12T10:01:30Z",
+  "observations": [
+    {
+      "checkId": "WIN-001",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "volume",
+        "reference": "C:"
+      },
+      "observedAt": "2026-10-12T10:01:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "totalBytes": 256000000000,
+        "freeBytes": 18000000000
+      }
+    },
+    {
+      "checkId": "WIN-002",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "volume",
+        "reference": "C:"
+      },
+      "observedAt": "2026-10-12T10:01:00Z",
+      "collectionStatus": "unavailable",
+      "reasonCode": "permission_denied"
+    },
+    {
+      "checkId": "WIN-003",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "device",
+        "reference": "self"
+      },
+      "observedAt": "2026-10-12T10:01:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "provider": "Microsoft Defender",
+        "productState": "on",
+        "statusSource": "defender"
+      }
+    },
+    {
+      "checkId": "WIN-004",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "device",
+        "reference": "self"
+      },
+      "observedAt": "2026-10-12T10:01:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "signatureLastUpdatedAt": "2026-10-12T08:00:00Z"
+      }
+    },
+    {
+      "checkId": "WIN-005",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "device",
+        "reference": "self"
+      },
+      "observedAt": "2026-10-12T10:01:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "domainEnabled": true,
+        "privateEnabled": true,
+        "publicEnabled": true
+      }
+    },
+    {
+      "checkId": "WIN-006",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "device",
+        "reference": "self"
+      },
+      "observedAt": "2026-10-12T10:01:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "securityUpdatesPending": 0,
+        "lastSuccessfulSearchAt": "2026-10-12T09:59:00Z",
+        "configuredSource": "windows_update"
+      }
+    },
+    {
+      "checkId": "WIN-007",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "device",
+        "reference": "self"
+      },
+      "observedAt": "2026-10-12T10:01:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "rebootRequired": false,
+        "statusSource": "windows_update_api"
+      }
+    },
+    {
+      "checkId": "WIN-008",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "device",
+        "reference": "self"
+      },
+      "observedAt": "2026-10-12T10:01:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "memberSids": [
+          "S-1-5-21-1000-2000-3000-500"
+        ],
+        "membershipScope": "direct_members"
+      }
+    },
+    {
+      "checkId": "WIN-009",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "device",
+        "reference": "self"
+      },
+      "observedAt": "2026-10-12T10:01:00Z",
+      "collectionStatus": "unavailable",
+      "reasonCode": "unsupported"
+    },
+    {
+      "checkId": "WIN-010",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "device",
+        "reference": "self"
+      },
+      "observedAt": "2026-10-12T10:01:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "joinType": "entra_joined",
+        "tenantId": "22222222-2222-4222-8222-222222222222",
+        "entraDeviceId": "33333333-3333-4333-8333-333333333333"
+      }
+    }
+  ]
+}

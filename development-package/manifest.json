@@ -1,0 +1,117 @@
+{
+  "packageVersion": "0.1.0",
+  "date": "2026-10-12",
+  "timezone": "Europe/Oslo",
+  "files": [
+    {
+      "path": "01-product-and-scope.md",
+      "bytes": 11168,
+      "sha256": "d9b8d907aa92a4883eeaf7f9cfeb358a6e2d6019b170cf373c1f4f9579030995"
+    },
+    {
+      "path": "02-architecture-and-stack.md",
+      "bytes": 9588,
+      "sha256": "b02c60acd930e3e7593aca1c5c3775c9a60927e3dbfeb4d7570a0d15215546e6"
+    },
+    {
+      "path": "03-check-catalog.md",
+      "bytes": 14027,
+      "sha256": "cdb2f95ecc0b083c8fa5468cc601e34468fce7e34d5c82f7a9c60ec4fb3cf9ef"
+    },
+    {
+      "path": "04-security-and-privacy.md",
+      "bytes": 12017,
+      "sha256": "0d10a223a1e23a60705870601ef96d50197031642a08f47cc993469d22374c8c"
+    },
+    {
+      "path": "05-data-and-api.md",
+      "bytes": 14211,
+      "sha256": "a7989ed08922b0a220002ab0353a4c80682d897167d5f561bf77c1dbf34aec52"
+    },
+    {
+      "path": "06-azure-and-operations.md",
+      "bytes": 9863,
+      "sha256": "4bef7bb90af0e467af14cdbc6099cb3fb61a62ccf46fe520c3d0382908f190d4"
+    },
+    {
+      "path": "07-delivery-plan-and-acceptance.md",
+      "bytes": 11797,
+      "sha256": "c7c2ec7469f367427027dee76c76756a7881a81d891fcfbdf830c8bb129f0cd4"
+    },
+    {
+      "path": "08-risks-and-decisions.md",
+      "bytes": 7673,
+      "sha256": "de471e646add987ab25377e3ecc3097eab592de8d5e31471c430c6392fffc276"
+    },
+    {
+      "path": "09-independent-review-prompt.md",
+      "bytes": 7942,
+      "sha256": "ef3596d242b8863dd39ef5cc5dfc39b94e656fe8bdfce53931837d1530a61238"
+    },
+    {
+      "path": "10-sources.md",
+      "bytes": 6410,
+      "sha256": "26b7adf6169a4464e9a8f9ee3774b6b1257e96e9d1bdd69926934d14d6fdb4ee"
+    },
+    {
+      "path": "README.md",
+      "bytes": 6172,
+      "sha256": "fbb48e3233d300b9d9d05eab14553f7047d0747320a2fd944fe85a4f9e14b86d"
+    },
+    {
+      "path": "REVIEW-BUNDLE.md",
+      "bytes": 276845,
+      "sha256": "7aaf6614eba00f97d9b2950b31b41feeb0c6088a70cf47d6780fa085c877d46d"
+    },
+    {
+      "path": "VALIDATION.md",
+      "bytes": 1934,
+      "sha256": "b24cab57d37d48af4a1d1a9945a0df6b42544073768e69a9ba6f0fe852c38964"
+    },
+    {
+      "path": "examples/scan-batch-unavailable.json",
+      "bytes": 3782,
+      "sha256": "dee2e27783ddfc6f809f1b4254dc06029268415c092702d207f4d11fe55db159"
+    },
+    {
+      "path": "examples/scan-batch.json",
+      "bytes": 3926,
+      "sha256": "a6cc642f471baff78d0a05aadeaadb864636f289e2b23b33bf18b30e615b0c6c"
+    },
+    {
+      "path": "scripts/build_package.py",
+      "bytes": 13929,
+      "sha256": "af61b631e207abe19e1effa917615ff2591ba004a6a429f29fb78c3c52cca46f"
+    },
+    {
+      "path": "scripts/generate_contracts.py",
+      "bytes": 24667,
+      "sha256": "ab18f5ca75fcfe3fc1eed240813f29085dfc28bd1ab65967d64329819c9206ae"
+    },
+    {
+      "path": "source/boss-chat.md",
+      "bytes": 11958,
+      "sha256": "c9a5c429c5d6274710320dc858fc2a096c730138273785d221a6d540707454fb"
+    },
+    {
+      "path": "specs/check-catalog.json",
+      "bytes": 2195,
+      "sha256": "4bed50bb11fcef52850ee99bdeedef89adb775ed0fa0ca16d268ef69a7f95744"
+    },
+    {
+      "path": "specs/observation.schema.json",
+      "bytes": 12441,
+      "sha256": "c9fa63b601c2f3b44855c6f2519ce730de02ab3ab69b2af8460a98168800d84f"
+    },
+    {
+      "path": "specs/openapi.json",
+      "bytes": 126990,
+      "sha256": "1cce94484be954791378d8189f8a124eb0d5357a7753fc475f3f1875ada61cec"
+    },
+    {
+      "path": "specs/scan-batch.schema.json",
+      "bytes": 1563,
+      "sha256": "c0e975c4657185868b2a3327a82b4e4403859e3ec5e91f01b0231d71d96ab249"
+    }
+  ]
+}

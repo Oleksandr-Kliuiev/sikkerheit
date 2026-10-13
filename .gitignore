@@ -1,0 +1,4 @@
+.DS_Store
+__pycache__/
+# Архив пакета пересобирается build_package.py; sha256 записан в docs/WORKFLOW.md
+/sikkerheit-development-package-*.zip
