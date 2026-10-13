@@ -561,7 +561,7 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 120,
-                      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+                      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
                     },
                     "productState": {
                       "type": "string",
@@ -635,6 +635,7 @@
                       "passive",
                       "edr_block",
                       "sxs_passive",
+                      "not_running",
                       "other"
                     ]
                   },
@@ -769,7 +770,8 @@
                 "minLength": 1,
                 "maxLength": 40,
                 "format": "date-time",
-                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
+                "description": "LastSearchSuccessDate, прочитанный до начала agentSearch; основа свежести при offline_cache, null — основы нет (03, «Правило WIN-006»)."
               },
               "agentSearch": {
                 "type": "object",
@@ -807,6 +809,31 @@
                   "mode",
                   "completedAt",
                   "resultCode"
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "resultCode": {
+                          "const": "succeeded"
+                        }
+                      },
+                      "required": [
+                        "resultCode"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "completedAt": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40,
+                          "format": "date-time",
+                          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+                        }
+                      }
+                    }
+                  }
                 ]
               },
               "pendingSecurityUpdates": {
@@ -889,7 +916,8 @@
                       "minLength": 1,
                       "maxLength": 40,
                       "format": "date-time",
-                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
+                      "description": "observedAt первого сбора, в котором агент нашёл обновление; не позже observedAt наблюдения."
                     }
                   },
                   "required": [
@@ -910,10 +938,12 @@
               },
               "pendingSecurityUpdatesTotal": {
                 "type": "integer",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Длина pendingSecurityUpdates = min(total, 50); иначе 422 schema_violation."
               },
               "truncated": {
-                "type": "boolean"
+                "type": "boolean",
+                "description": "true тогда и только тогда, когда pendingSecurityUpdatesTotal > 50; иначе 422 schema_violation."
               }
             },
             "required": [
@@ -1184,5 +1214,5 @@
       }
     }
   ],
-  "description": "Закрытые allowlisted evidence-структуры P1 для каждого checkId. Применимость определяет сервер: агент не передаёт not_applicable. Межполевые и семантические инварианты (freeBytes <= totalBytes, ожидаемые объекты, время) проверяет backend по 05-data-and-api.md и specs/invariants.json."
+  "description": "Закрытые allowlisted evidence-структуры P1 для каждого checkId. Применимость определяет сервер: агент не передаёт not_applicable. Межполевые и семантические инварианты (freeBytes <= totalBytes, согласованность списка WIN-006, ожидаемые объекты, время) проверяет backend по 05-data-and-api.md и specs/invariants.json."
 }

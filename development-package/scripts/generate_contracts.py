@@ -114,7 +114,7 @@ def main():
                  'description': 'Проект контракта. Example hosts не являются развёрнутыми сервисами. '
                                 'Бизнес-инварианты (specs/invariants.json) и полномочия проверяются '
                                 'дополнительно к схемам; форматы uuid и date-time сервер проверяет явно. '
-                                'P2-интеграции требуют отдельного расширения после SP-03.'},
+                                'P2-интеграции требуют отдельного расширения после части P2 SP-03.'},
         'servers': [{'url': PORTAL_HOST, 'description': 'Portal API and bootstrap host'}],
         'paths': build_paths(),
         'components': {'securitySchemes': SECURITY,

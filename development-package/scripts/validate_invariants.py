@@ -1,8 +1,9 @@
 """Checks of specs/invariants.json: fields, expectedError forms, coverage and document anchors."""
 import re
 
-from contract_catalog import (AGENT_STATES, CAPABILITY_STATUSES, ENFORCEMENTS, EVENT_TABLE, PROBLEM_HTTP,
-                              REASON_CODES, REPLAY_STATUSES, RESULTS, UNCOVERED_CODES)
+from contract_catalog import (AGENT_STATES, CAPABILITY_STATUSES, COLLECTOR_REASONS, ENFORCEMENTS, EVENT_TABLE,
+                              INFORMATIONAL_REASONS, PROBLEM_HTTP, REASON_CODES, REPLAY_STATUSES, RESULTS,
+                              UNCOVERED_CODES)
 from doc_tables import headings, row_ids
 
 FIELDS = ['id', 'rule', 'sourceDoc', 'phase', 'enforcement', 'negativeExample', 'expectedError', 'acceptance']
@@ -22,9 +23,17 @@ def form_error(expected, record, audit_pattern):
     if keys == {'http', 'code'}:
         if PROBLEM_HTTP.get(expected['code']) != expected['http']:
             return 'http/code pair not in the Problem catalog'
-    elif keys in ({'result'}, {'result', 'reasonCode'}):
-        if expected['result'] not in RESULTS or expected.get('reasonCode', REASON_CODES[0]) not in REASON_CODES:
-            return 'result/reasonCode outside closed sets'
+    elif keys in ({'assessmentMode', 'result'}, {'assessmentMode', 'result', 'reasonCode'}):
+        mode, value, reason = expected['assessmentMode'], expected['result'], expected.get('reasonCode')
+        if mode == 'assessed':
+            if value not in RESULTS or (reason is not None and reason not in REASON_CODES) \
+                    or (value in ('pass', 'fail') and 'reasonCode' in expected):
+                return 'assessed result/reasonCode outside closed sets'
+        elif mode == 'informational':
+            if value is not None or (reason is not None and reason not in INFORMATIONAL_REASONS):
+                return 'informational result must be null with a transferable reasonCode'
+        else:
+            return 'unknown assessmentMode'
     elif keys == {'event'}:
         event = expected['event']
         if set(event) != {'eventType', 'cause'} or event['cause'] not in EVENT_TABLE.get(event['eventType'], ([],))[0]:
@@ -88,8 +97,13 @@ def check_invariants(report, ctx, docs):
     sections = {(r['sourceDoc']['file'], r['sourceDoc']['section']) for r in p1 if 'sourceDoc' in r}
     for section in REQUIRED_SECTIONS:
         report.check(section in sections, 'contract', f'invariants.json: no record for {section[1]}')
-    bitlocker = [r for r in p1 if r.get('expectedError') == {'result': 'fail'} and 'WIN-002' in r.get(
-        'negativeExample', '') + r.get('rule', '')]
+    informational = [e for e in expected if e.get('assessmentMode') == 'informational']
+    report.check(any(e.get('reasonCode') in COLLECTOR_REASONS for e in informational), 'contract',
+                 'invariants.json: no informational record with a collector reasonCode')
+    report.check(any('reasonCode' not in e for e in informational), 'contract',
+                 'invariants.json: no informational record without reasonCode')
+    bitlocker = [r for r in p1 if r.get('expectedError') == {'assessmentMode': 'assessed', 'result': 'fail'}
+                 and 'WIN-002' in r.get('negativeExample', '') + r.get('rule', '')]
     report.check(bool(bitlocker), 'contract', 'invariants.json: BitLocker reference record missing')
     p2 = [r for r in records if r.get('phase') == 'P2']
     report.check(len(p2) == len(P2_TOPICS), 'contract', 'invariants.json: P2 records must be exactly the five topics')

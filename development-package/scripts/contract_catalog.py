@@ -104,7 +104,7 @@ UNCOVERED_CODES = ['rate_limited', 'temporarily_unavailable']
 COLLECTOR_REASONS = ['permission_denied', 'unsupported', 'collector_timeout', 'temporary_error']
 REASON_CODES = COLLECTOR_REASONS + [
     'missing_observation', 'clock_inconsistent', 'unmapped_state', 'update_search_failed',
-    'update_search_outdated', 'update_source_mismatch', 'update_list_truncated',
+    'update_search_outdated', 'update_source_mismatch', 'update_list_truncated', 'update_age_unconfirmed',
     'os_version_unknown', 'os_inventory_missing', 'applicability_input_missing',
     'policy_not_applicable', 'evidence_time_invalid',
 ]
@@ -130,7 +130,7 @@ EVENT_TABLE = {
 WORKFLOW_STATES = ['new', 'in_progress', 'risk_accepted', 'suppressed']
 CAPABILITY_STATUSES = ['permission_missing', 'license_unconfirmed', 'partial']
 ENFORCEMENTS = ['schema', 'agent_api', 'portal_api', 'worker', 'db_rls', 'agent', 'infra']
-REPLAY_STATUSES = [200, 202, 204]
+REPLAY_STATUSES = [200, 201, 202, 204]
 
 READ_ROLES = ['PlatformAdmin', 'ServiceManager', 'Technician']
 MANAGE_ROLES = ['PlatformAdmin', 'ServiceManager']
@@ -139,6 +139,18 @@ LANGUAGES = ['nb', 'nn', 'en']
 ACCEPT_LANGUAGE_MAX = 35
 # Portal GET operations whose every read writes audit_event for any role.
 AUDIT_ALWAYS = ['downloadOrganizationExport', 'listAuditEvents', 'downloadReport']
+# Portal GET operations outside an organization context; a read by platform_role writes one platform_audit_event.
+PLATFORM_AUDIT_READS = ['listOrganizations']
+# Actions of changeOrganizationLifecycle (OrganizationLifecycleChange.action and audit details).
+LIFECYCLE_ACTIONS = ['disable', 'enable', 'schedule_deletion', 'cancel_deletion']
+# Deletion order of retention_purge (04 «Сроки хранения», 05); keys of RetentionPurgeAuditDetails.deleted.
+RETENTION_PURGE_ORDER = ['finding_event', 'assessment', 'finding', 'observation', 'pending_update_episode',
+                         'scan_batch', 'scan_request', 'device_certificate', 'enrollment', 'enrollment_token',
+                         'device']
+# AuditEvent.action -> schema of AuditEvent.details; details is null for every other action.
+AUDIT_DETAILS = {'organization.lifecycle_change': 'OrganizationLifecycleAuditDetails',
+                 'finding.assignment_change': 'FindingAssignmentAuditDetails',
+                 'retention.purge_summary': 'RetentionPurgeAuditDetails'}
 # Operations accepting Accept-Language and answering with Content-Language.
 LOCALIZED_OPERATIONS = ['listDeviceAssessments', 'listFindings', 'getFinding', 'patchFinding',
                         'decideFindingRisk']

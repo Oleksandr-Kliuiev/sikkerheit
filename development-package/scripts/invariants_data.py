@@ -36,14 +36,16 @@ M365 = ('03', 'Проверки Microsoft 365')
 CAPABILITY = ('03', 'Возможности интеграции')
 GRAPH = ('04', 'Разрешения интеграций')
 AGENT_API = ('05', 'API агента')
+CONTEXT = ('04', 'Контекст организации и аудит PlatformAdmin')
+WIN006 = ('03', 'Правило WIN-006')
 
 
 def http(status, code):
     return {'http': status, 'code': code}
 
 
-def result(value, reason=None):
-    return {'result': value, **({'reasonCode': reason} if reason else {})}
+def result(mode, value, reason=None):
+    return {'assessmentMode': mode, 'result': value, **({'reasonCode': reason} if reason else {})}
 
 
 def event(event_type, cause):
@@ -75,9 +77,10 @@ P1 = [
      'Клон VM отправляет пакет с другим признаком машины.', http(409, 'identity_conflict'), 'AT-04'),
     ('Пакет старше maxBatchAgeDays по completedAt относительно receivedAt отклоняется.', INTAKE, 'agent_api',
      'Пакет возрастом maxBufferDays + 3 суток.', http(422, 'batch_too_old'), 'AT-04'),
-    ('completedAt не раньше startedAt, observedAt не позже completedAt; startedAt, completedAt и '
-     'observations[].observedAt не позже receivedAt + 5 мин. Метки времени внутри evidence при приёме не '
-     'проверяются.', CLOCK, 'agent_api', 'completedAt на 10 мин позже receivedAt.', http(422, 'batch_time_inconsistent'), 'AT-04'),
+    ('Внутренне противоречивый пакет — completedAt раньше startedAt либо observedAt вне [startedAt, completedAt] — '
+     'отклоняется. Метки позже receivedAt + 5 мин пакет не отклоняют, а метки времени внутри evidence при приёме '
+     'не проверяются.', CLOCK, 'agent_api', 'observedAt наблюдения WIN-005 на 2 мин позже completedAt пакета.',
+     http(422, 'batch_time_inconsistent'), 'AT-04'),
     ('policyVersion пакета известна серверу и не из будущего.', INTAKE, 'agent_api',
      'policyVersion больше текущей версии политики.', http(422, 'unknown_policy_version'), 'AT-06'),
     ('Тот же sequence с другим scanId вызывает ресинхронизацию, не чаще раза в 24 ч.', IDENTITY, 'agent_api',
@@ -92,25 +95,24 @@ P1 = [
      'agent_api', 'Два тома с role=os для WIN-001.', http(422, 'unexpected_subject'), 'AT-04'),
     ('freeBytes не больше totalBytes (межполевой инвариант тела).', EXTRA, 'agent_api',
      'WIN-001 с freeBytes больше totalBytes.', http(422, 'schema_violation'), 'AT-05'),
-    ('Отсутствующая ожидаемая пара даёт unknown без отклонения пакета.', UNIQUE, 'worker',
-     'Пакет без наблюдения WIN-005 при активной WIN-005.', result('unknown', 'missing_observation'), 'AT-04'),
+    ('В режиме assessed отсутствующая ожидаемая пара даёт unknown без отклонения пакета.', UNIQUE, 'worker',
+     'Пакет без наблюдения WIN-005 при активной WIN-005.', result('assessed', 'unknown', 'missing_observation'), 'AT-04'),
     ('Пакет с признаком часов сохраняется в истории и не меняет текущую проекцию. Признак действует на все '
      'оценки пакета: assessed получают unknown, informational — result=null, обе с clock_inconsistent.', CLOCK,
      'worker', 'completedAt раньше maxAcceptedSourceTime при большем sequence.',
-     result('unknown', 'clock_inconsistent'), 'AT-04'),
+     result('assessed', 'unknown', 'clock_inconsistent'), 'AT-04'),
     ('Рост droppedBatchCount в heartbeat пишется в аудит устройства.', INTAKE, 'agent_api',
      'droppedBatchCount вырос с 0 до 2.', {'audit': 'device.data_loss'}, 'AT-04'),
     # Identity, enrollment and certificates.
     ('Истёкший, отозванный или исчерпанный enrollment-токен и токен неактивной организации не регистрируют '
-     'устройство; не больше maxUses устройств при конкурентных запросах.', ENROLL, 'portal_api',
+     'устройство; при конкурентных запросах создаётся не больше maxUses записей enrollment (гарантия транзакции '
+     'регистрации Portal API); идентичный повтор записанной регистрации в окне 7 суток регистрацией не считается.',
+     ENROLL, 'portal_api',
      'Одиннадцатая регистрация пакетным токеном с maxUses 10.', http(401, 'enrollment_token_invalid'), 'AT-02'),
-    ('Порядок проверок enrollAgent: неизвестный, истёкший или отозванный токен; идемпотентный повтор того же '
-     'registrationRequestId с тем же CSR, в том числе при исчерпанном токене (с другим CSR — 409 '
-     'idempotency_conflict); исчерпанный токен; новый installationId — новое устройство; отозванное устройство — '
-     '409 installation_already_enrolled; несовпадающий признак машины — 409 identity_conflict; active '
-     'сертификат с validTo > now при reenrollAllowedUntil, который не задан или истёк, — 409 '
-     'installation_already_enrolled (неактивированный pending не учитывается); иначе новый сертификат тому же '
-     'deviceId, useCount увеличивается, создаётся запись enrollment, неактивированный pending отзывается.',
+    ('Проверки enrollAgent выполняются в едином порядке 05, раздел «API агента»; первая сработавшая определяет '
+     'ответ. В частности, идемпотентный повтор (шаг 2) проверяется раньше срока, отзыва и исчерпания токена, а '
+     'active-сертификат с validTo > now при reenrollAllowedUntil, который не задан или истёк, даёт 409 '
+     'installation_already_enrolled (шаг 7; неактивированный pending не учитывается).',
      AGENT_API, 'portal_api',
      'enrollAgent с installationId активного устройства с действующим active-сертификатом, новым '
      'registrationRequestId и reenrollAllowedUntil=null.',
@@ -136,11 +138,14 @@ P1 = [
     ('schedule_deletion требует готового экспорта после перехода в disabled либо exportWaived=true.',
      LIFECYCLE, 'portal_api', 'schedule_deletion без экспорта и без exportWaived.',
      http(409, 'lifecycle_transition_forbidden'), 'AT-12'),
-    ('После удаления организации агенты получают certificate_revoked, пока хранится запись отзыва.', LIFECYCLE,
-     'agent_api', 'submitHeartbeat после выполнения organization_delete.', http(401, 'certificate_revoked'),
-     'AT-12'),
+    ('После удаления организации агенты получают certificate_revoked до validTo сертификата: sha256, revokedAt и '
+     'validTo хранятся в платформенной таблице revoked_certificate без связи с организацией, а вход в контекст с '
+     'purpose=agent ищет hash в ней и в device_certificate одним запросом.', LIFECYCLE,
+     'agent_api', 'getAgentConfiguration сертификатом устройства удалённой организации сразу после завершения '
+     'organization_delete.', http(401, 'certificate_revoked'), 'AT-12'),
     ('Restore выполняется в карантине: журнал жизненного цикла применяется до открытия доступа, отозванное '
-     'устройство остаётся отозванным.', RESTORE, 'infra', 'Restore на точку до отзыва устройства.',
+     'устройство остаётся отозванным, а повторное применение delete переносит сертификаты удалённой организации в '
+     'revoked_certificate.', RESTORE, 'infra', 'Restore на точку до отзыва устройства или до удаления организации.',
      http(401, 'certificate_revoked'), 'AT-12'),
     # Portal API.
     ('Запрос портала без действительной сессии отклоняется.', PORTAL, 'portal_api', 'GET findings без cookie.',
@@ -176,51 +181,55 @@ P1 = [
      'Organization.name со строкой <script>.', http(422, 'schema_violation'), 'AT-07'),
     # Tenancy, roles and audit.
     ('Запрос без контекста организации возвращает 0 строк (FORCE ROW LEVEL SECURITY).', TENANCY, 'db_rls',
-     'SELECT из клиентской таблицы без app.begin_org_context.', {'rows': 0}, 'AT-01'),
-    ('Каждый доступ субъекта с platform_role к данным клиента пишет audit_event в той же транзакции, '
-     'даже при членстве в организации.', ROLES, 'db_rls', 'PlatformAdmin с членством читает listFindings.',
+     'Первый SELECT из клиентской таблицы на новом соединении без app.begin_org_context.', {'rows': 0}, 'AT-01'),
+    ('Каждый вход субъекта с platform_role в контекст организации пишет audit_event platform.access внутри '
+     'app.begin_org_context после установки контекста и до первого чтения данных, в той же транзакции, даже при '
+     'членстве в организации.', CONTEXT, 'db_rls', 'PlatformAdmin с членством читает listFindings.',
      {'audit': 'platform.access'}, 'AT-01'),
     # Evaluation (03 and 05).
-    ('Наблюдение unavailable даёт unknown с reasonCode наблюдения.', SEMANTICS, 'worker',
-     'WIN-002 unavailable/permission_denied.', result('unknown', 'permission_denied'), 'AT-05'),
-    ('Неподдерживаемый сбор даёт unknown, а не fail.', SEMANTICS, 'worker', 'WIN-009 unavailable/unsupported.',
-     result('unknown', 'unsupported'), 'AT-05'),
-    ('Временная ошибка сборщика даёт unknown.', SEMANTICS, 'worker', 'WIN-005 unavailable/temporary_error.',
-     result('unknown', 'temporary_error'), 'AT-05'),
+    ('В режиме assessed наблюдение unavailable применимой проверки (применимость известна и не даёт '
+     'not_applicable) даёт unknown с reasonCode наблюдения.', SEMANTICS, 'worker',
+     'WIN-002 unavailable/permission_denied; WIN-011 collected, editionId=Professional.', result('assessed', 'unknown', 'permission_denied'), 'AT-05'),
+    ('В режиме assessed неподдерживаемый сбор применимой проверки даёт unknown, а не fail.', SEMANTICS, 'worker', 'WIN-009 unavailable/unsupported.',
+     result('assessed', 'unknown', 'unsupported'), 'AT-05'),
+    ('В режиме assessed временная ошибка сборщика применимой проверки даёт unknown.', SEMANTICS, 'worker', 'WIN-005 unavailable/temporary_error.',
+     result('assessed', 'unknown', 'temporary_error'), 'AT-05'),
     ('Ожидание результата сборщика — 30 с, по истечении collector_timeout; зависшая привилегированная работа '
-     'принудительно завершается не позже 120 с; дочерние процессы не запускаются.', LOCAL, 'agent',
-     'Сборщик WIN-005 не отвечает 60 с.', result('unknown', 'collector_timeout'),
+     'принудительно завершается не позже 120 с; дочерние процессы не запускаются; в режиме assessed оценка — '
+     'unknown/collector_timeout.', LOCAL, 'agent',
+     'Сборщик WIN-005 не отвечает 60 с.', result('assessed', 'unknown', 'collector_timeout'),
      'AT-03'),
-    ('Эталонный отрицательный тест BitLocker: fully_encrypted при protectionStatus=off и encryptionRequired=true '
-     'даёт fail.', WINDOWS, 'worker', 'WIN-002 из examples/scan-batch.json.', result('fail'), 'AT-05'),
+    ('Эталонный отрицательный тест BitLocker в режиме assessed: fully_encrypted при protectionStatus=off и encryptionRequired=true '
+     'даёт fail.', WINDOWS, 'worker', 'WIN-002 из examples/scan-batch.json.', result('assessed', 'fail'), 'AT-05'),
     ('WIN-003 в режиме assessed: ни один одобренный продукт не активен, а у одного одобренного productState=unknown.', WINDOWS,
      'worker', 'Одобренный VendorX с productState=unknown и rawState без сопоставления.',
-     result('unknown', 'unmapped_state'), 'AT-05'),
+     result('assessed', 'unknown', 'unmapped_state'), 'AT-05'),
     ('WIN-006 в режиме assessed: неуспешный поиск обновлений даёт unknown.', WINDOWS, 'worker', 'agentSearch.resultCode=failed.',
-     result('unknown', 'update_search_failed'), 'AT-05'),
-    ('WIN-006 в режиме assessed: основа свежести поиска старше maxSearchAgeHours даёт unknown.', WINDOWS, 'worker',
-     'auLastSearchSuccessAt 100 ч назад при offline_cache.', result('unknown', 'update_search_outdated'), 'AT-05'),
+     result('assessed', 'unknown', 'update_search_failed'), 'AT-05'),
+    ('WIN-006 в режиме assessed: основа свежести поиска старше maxSearchAgeHours (разность, равная '
+     'maxSearchAgeHours, — ещё свежая) даёт unknown.', WINDOWS, 'worker',
+     'auLastSearchSuccessAt 100 ч назад при offline_cache.', result('assessed', 'unknown', 'update_search_outdated'), 'AT-05'),
     ('WIN-006 в режиме assessed: configuredSource отличается от expectedSource.', WINDOWS, 'worker',
-     'configuredSource=wsus при expectedSource=windows_update.', result('unknown', 'update_source_mismatch'),
+     'configuredSource=wsus при expectedSource=windows_update.', result('assessed', 'unknown', 'update_source_mismatch'),
      'AT-05'),
     ('WIN-006 в режиме assessed: усечённый список без просрочки среди переданных элементов даёт unknown.', WINDOWS, 'worker',
-     'truncated=true, все переданные обновления в пределах grace.', result('unknown', 'update_list_truncated'),
+     'truncated=true, все переданные обновления в пределах grace.', result('assessed', 'unknown', 'update_list_truncated'),
      'AT-05'),
     ('WIN-006 в режиме assessed: просрочка хотя бы одного переданного обновления даёт fail независимо от truncated.', WINDOWS,
-     'worker', 'truncated=true и одно Critical обновление старше 7 суток.', result('fail'), 'AT-05'),
-    ('SYS-002: версия, редакция или архитектура вне матрицы совместимости даёт fail.', OS_MATRIX, 'worker',
-     'WIN-011 displayVersion=27H1.', result('fail'), 'AT-05'),
-    ('SYS-002: нет свежего WIN-011.', OS_MATRIX, 'worker', 'Последний WIN-011 старше окна свежести.',
-     result('unknown', 'os_inventory_missing'), 'AT-05'),
-    ('Межпроверочная применимость берётся из того же пакета; без пригодного входа зависимая проверка unknown. '
+     'worker', 'truncated=true и одно Critical обновление старше 7 суток.', result('assessed', 'fail'), 'AT-05'),
+    ('SYS-002 в режиме assessed: версия, редакция или архитектура вне матрицы совместимости даёт fail.', OS_MATRIX, 'worker',
+     'WIN-011 displayVersion=27H1.', result('assessed', 'fail'), 'AT-05'),
+    ('SYS-002 в режиме assessed: нет свежего WIN-011.', OS_MATRIX, 'worker', 'Последний WIN-011 старше окна свежести.',
+     result('assessed', 'unknown', 'os_inventory_missing'), 'AT-05'),
+    ('В режиме assessed межпроверочная применимость берётся из того же пакета; без пригодного входа зависимая проверка unknown. '
      'Правило применяется, только если у пакета нет признака часов.',
-     SEMANTICS, 'worker', 'WIN-002 в пакете без WIN-011.', result('unknown', 'applicability_input_missing'),
+     SEMANTICS, 'worker', 'WIN-002 в пакете без WIN-011.', result('assessed', 'unknown', 'applicability_input_missing'),
      'AT-05'),
-    ('Редакция из notApplicableEditionIds даёт not_applicable.', SEMANTICS, 'worker',
-     'WIN-011 editionId=Core, WIN-002 при стартовой политике.', result('not_applicable', 'policy_not_applicable'),
+    ('В режиме assessed редакция из notApplicableEditionIds даёт not_applicable.', SEMANTICS, 'worker',
+     'WIN-011 editionId=Core, WIN-002 при стартовой политике.', result('assessed', 'not_applicable', 'policy_not_applicable'),
      'AT-05'),
-    ('WIN-007: перезагрузка между двумя rebootRequired=true начинает новый эпизод и не даёт ложного fail.',
-     WINDOWS, 'worker', 'Два наблюдения rebootRequired=true с разным lastBootAt через 4 суток.', result('pass'),
+    ('WIN-007 в режиме assessed: перезагрузка между двумя rebootRequired=true начинает новый эпизод и не даёт ложного fail.',
+     WINDOWS, 'worker', 'Два наблюдения rebootRequired=true с разным lastBootAt через 4 суток.', result('assessed', 'pass'),
      'AT-06'),
     # Finding events (05 «Таблица переходов finding», «Допустимые сочетания eventType и cause»).
     ('Свежий fail без finding создаёт open/new и событие opened.', TRANSITIONS, 'worker',
@@ -270,13 +279,13 @@ P1_ADDED = [
     ('Зарегистрированный сертификат устройства в состоянии superseded после окончания перекрытия, например в '
      'образе старше ротации, получает 401 certificate_expired; в той же транзакции сервер записывает '
      'device.reenrollAllowedUntil = now + 7 суток и аудит device.reenroll_allowed, независимо от validTo, если '
-     'запрос дошёл до приложения. Отозванный сертификат или '
-     'отозванное устройство это поле не выставляют. Повторная регистрация при reenrollAllowedUntil > now, том же '
-     'installationId и совпадающем признаке машины выдаёт pending-сертификат тому же deviceId, история '
-     'сохраняется; неактивированный pending отзывается (аудит device.pending_revoked), useCount увеличивается, '
-     'создаётся запись enrollment, перекрытие прежних superseded заканчивается в момент выдачи, пишутся аудит '
-     'device.reenroll_over_active и оповещение; прежний active переходит в superseded при первом mTLS-запросе новым; reenrollAllowedUntil '
-     'обнуляется в транзакции выдачи, previousCertificateValidUntil = null.', CERT, 'agent_api',
+     'запрос дошёл до приложения. Отозванный сертификат или отозванное устройство это поле не выставляют. '
+     'Повторная регистрация при reenrollAllowedUntil > now, том же installationId и совпадающем признаке машины '
+     'выдаёт pending-сертификат тому же deviceId, история сохраняется: useCount увеличивается, создаётся запись '
+     'enrollment, reenrollAllowedUntil обнуляется, пишутся аудит device.reenroll_over_active и оповещение — в '
+     'транзакции регистрации Portal API; неактивированный pending отзывается (аудит device.pending_revoked) и '
+     'перекрытие прежних superseded заканчивается — в транзакции выпуска Issuer; прежний active переходит в '
+     'superseded при первом mTLS-запросе новым; previousCertificateValidUntil = null.', CERT, 'agent_api',
      'Восстановленный образ старше ротации отправляет heartbeat старым сертификатом после перекрытия.',
      http(401, 'certificate_expired'), 'AT-17'),
     ('enrollAgent с уже зарегистрированным installationId и несовпадающим признаком машины отклоняется; '
@@ -288,10 +297,10 @@ P1_ADDED = [
      'finding событием resolved с applicability_change; это не исправление.', TRANSITIONS, 'worker',
      'WIN-011 editionId сменился на Core при открытом finding WIN-002 и той же ревизии политики.',
      event('resolved', 'applicability_change'), 'AT-06'),
-    ('WIN-004: signatureLastUpdatedAt позже observedAt этого наблюдения даёт unknown/evidence_time_invalid; '
+    ('WIN-004 в режиме assessed: signatureLastUpdatedAt позже observedAt этого наблюдения даёт unknown/evidence_time_invalid; '
      'пакет не отклоняется.',
      WINDOWS, 'worker', 'signatureLastUpdatedAt на двое суток позже observedAt.',
-     result('unknown', 'evidence_time_invalid'), 'AT-05'),
+     result('assessed', 'unknown', 'evidence_time_invalid'), 'AT-05'),
     ('Пакет с чужим или просроченным scanRequestId принимается как обычный сбор: scanRequestId игнорируется, '
      'пишется запись диагностики, новых кодов нет.', PORTAL, 'agent_api',
      'Пакет с scanRequestId другого устройства и свежим pass WIN-005 после исправления.',
@@ -300,10 +309,154 @@ P1_ADDED = [
      'resolved с device_change.', PORTAL, 'worker',
      'Пакет с действующим scanRequestId и pass WIN-005 после исправления.',
      event('resolved', 'device_change'), 'AT-05'),
-    ('SYS-002: версия из матрицы совместимости, которой нет в таблице жизненного цикла, даёт unknown.',
+    ('SYS-002 в режиме assessed: версия из матрицы совместимости, которой нет в таблице жизненного цикла, даёт unknown.',
      OS_MATRIX, 'worker', 'Тестовая версия данных правила: матрица расширена версией 27H1, строки 27H1 в таблице '
      'жизненного цикла ещё нет; WIN-011 displayVersion=27H1.',
-     result('unknown', 'os_version_unknown'), 'AT-05'),
+     result('assessed', 'unknown', 'os_version_unknown'), 'AT-05'),
+    # Enrollment and certificates.
+    ('Новый выпуск (renew с новым renewalRequestId или выпуск по записи enrollment) в транзакции выпуска Issuer под '
+     'блокировкой строки устройства отзывает неактивированный pending и устанавливает overlapEndsAt равным моменту '
+     'выдачи у каждого superseded с overlapEndsAt > now; активация pending выполняется под той же блокировкой, '
+     'поэтому у устройства в любой момент не больше одного pending и не больше двух действующих сертификатов. '
+     'Идемпотентный повтор новым выпуском не является и перекрытие не меняет.', CERT, 'agent_api',
+     'После активации B сертификат A superseded в перекрытии; renew сертификатом B с новым renewalRequestId выдаёт '
+     'C; затем heartbeat сертификатом A.', http(401, 'certificate_expired'), 'AT-17'),
+    ('Идентичный повтор enrollAgent (тот же токен, registrationRequestId, CSR и installationId) в течение 7 суток от '
+     'записи enrollment проверяется раньше срока, отзыва и исчерпания токена и возвращает прежний ответ; если сбой '
+     'Issuer после commit транзакции регистрации помешал выпуску, повтор выпускает недостающий сертификат записи. '
+     'useCount не меняется, новых enrollment и device нет, у записи не больше одного сертификата.', AGENT_API,
+     'portal_api', 'Регистрация записана, Issuer недоступен (ответ 503); одноразовый токен истёк; через 2 ч повтор '
+     'с тем же токеном, registrationRequestId, CSR и installationId.', {'replay': {'http': 201, 'duplicate': True}},
+     'AT-02'),
+    ('Тело enrollAgent больше 16384 байт отклоняется до разбора JSON и до проверки токена; лимит портальных '
+     'запросов 64 KiB к enrollAgent не применяется.', AGENT_API, 'portal_api',
+     'Тело enrollAgent размером 16385 байт с недействительным токеном.', http(413, 'payload_too_large'), 'AT-02'),
+    # Organization context and audit.
+    ('Ошибка вставки audit_event при входе субъекта с platform_role в контекст организации прерывает транзакцию: '
+     'контекст откатывается, данные клиента не выдаются; ответ портала отправляется только после COMMIT.',
+     CONTEXT, 'db_rls', 'PlatformAdmin вызывает listFindings; вставка audit_event отклонена тестовым триггером.',
+     http(503, 'temporarily_unavailable'), 'AT-01'),
+    ('Контекст организации устанавливается один раз за транзакцию и действует до её конца: соединение, '
+     'возвращённое в pool после запроса организации A, без нового вызова app.begin_org_context видит 0 строк; '
+     'повторный вызов функции в той же транзакции отклоняется.', CONTEXT, 'db_rls',
+     'Соединение после запроса организации A взято запросом организации B; SELECT из finding до вызова функции.',
+     {'rows': 0}, 'AT-01'),
+    ('listOrganizations не входит в контекст организации: app.list_accessible_organizations возвращает субъекту с '
+     'platform_role все неудалённые организации и до выдачи строк пишет ровно одну запись platform_audit_event '
+     'platform.access (target listOrganizations) на запрос, даже при членстве, и ни одной audit_event; участнику '
+     'без platform_role — только организации с его членством, без записи аудита.', CONTEXT, 'db_rls',
+     'PlatformAdmin, член одной из трёх организаций, вызывает listOrganizations.', {'audit': 'platform.access'},
+     'AT-01'),
+    ('Переход changeOrganizationLifecycle в одной транзакции со сменой статуса пишет audit_event организации и '
+     'platform_audit_event с action=organization.lifecycle_change, одним correlationId и одинаковыми details '
+     '{lifecycleAction, reason, exportWaived}; listAuditEvents возвращает reason без изменений; повтор с тем же '
+     'idempotencyKey новых записей не создаёт; reason не попадает в журнал жизненного цикла, операционные логи и '
+     'Log Analytics.', LIFECYCLE, 'portal_api', 'disable с reason «R-7f3c <img src=x onerror=alert(1)>».',
+     {'audit': 'organization.lifecycle_change'}, 'AT-12'),
+    ('patchFinding, изменивший assigneeId или dueAt, пишет audit_event finding.assignment_change с details.from и '
+     'details.to только для изменившихся полей; если ни одно из них не изменилось, запись не создаётся; смена '
+     'workflowState в details не входит.', WORKFLOW, 'portal_api',
+     'patchFinding с новыми assigneeId и dueAt у finding в состоянии risk_accepted.',
+     {'audit': 'finding.assignment_change'}, 'AT-08'),
+    ('FindingPatch.assigneeId — entraUserId участника этой организации с ролью ServiceManager или Technician '
+     '(OrganizationMember.entraUserId); organization_member.id и entraUserId сотрудника без членства в этой '
+     'организации, в том числе участника только другой организации или отозванного участника, отклоняются.',
+     WORKFLOW, 'portal_api', 'patchFinding с assigneeId, равным organization_member.id участника.',
+     http(422, 'validation_failed'), 'AT-08'),
+    # Lifecycle journal and restore.
+    ('Понижение роли ServiceManager → Technician и отзыв назначения записываются в журнал жизненного цикла до '
+     'изменения БД и переживают restore.', RESTORE, 'infra',
+     'Restore на точку до понижения роли ServiceManager → Technician; после открытия доступа пользователь вызывает '
+     'decideFindingRisk.', http(403, 'forbidden'), 'AT-12'),
+    ('Replay применяет по каждому объекту запись журнала с наибольшей targetVersion; порядок добавления и '
+     'occurredAt не учитываются.', RESTORE, 'infra',
+     'Запись enable создана в журнале позже записи disable той же организации, но с меньшей targetVersion; '
+     'restore на точку до disable; агент вызывает submitScan.', http(403, 'organization_inactive'), 'AT-12'),
+    ('Ограничивающая запись, созданная в журнале без commit в БД, применяется при restore; версия неудачной '
+     'попытки повторно не используется.', RESTORE, 'infra',
+     'revokeDevice: запись в журнале создана, commit сорвался (ответ 503); restore; агент устройства вызывает '
+     'submitHeartbeat.', http(401, 'certificate_revoked'), 'AT-12'),
+    ('Restore в карантине отзывает все неотозванные enrollment-токены восстановленной базы: погашения и useCount '
+     'после точки restore в ней не отражены.', RESTORE, 'infra',
+     'Batch-токен исчерпан после точки restore (в восстановленной базе useCount < maxUses); после открытия доступа '
+     'enrollAgent этим токеном с новым registrationRequestId.', http(401, 'enrollment_token_invalid'), 'AT-12'),
+    # WIN-006 and assessment modes.
+    ('WIN-006 в режиме assessed: при agentSearch.mode=offline_cache и auLastSearchSuccessAt=null основы свежести '
+     'нет; успешный поиск агента её не заменяет, результат unknown/update_search_outdated; наблюдение непригодно '
+     'для истории ожидания.', WIN006, 'worker',
+     'offline_cache, resultCode=succeeded, auLastSearchSuccessAt=null, configuredSource=expectedSource='
+     'windows_update, полный пустой список.', result('assessed', 'unknown', 'update_search_outdated'), 'AT-05'),
+    ('WIN-006 в режиме assessed: agentSearch.completedAt или firstSeenPendingAt хотя бы одного переданного '
+     'обновления позже observedAt, а при offline_cache также auLastSearchSuccessAt позже agentSearch.completedAt, '
+     'дают unknown/evidence_time_invalid раньше проверки свежести и просрочки; пакет не отклоняется, наблюдение '
+     'непригодно для истории ожидания.', WIN006, 'worker',
+     'offline_cache со свежей основой, configuredSource=expectedSource; Critical-обновление с firstSeenPendingAt '
+     'на 3 суток позже observedAt.', result('assessed', 'unknown', 'evidence_time_invalid'), 'AT-05'),
+    ('WIN-006 в режиме assessed: deadlineAt в будущем не нарушает отношений времени; при '
+     'referenceTimeBasis=deadline такое обновление не просрочено и не требует подтверждения возраста.', WIN006,
+     'worker', 'expectedSource=configuredSource=windows_update, referenceTimeBasis=deadline, online/succeeded с '
+     'completedAt за 1 ч до observedAt; единственное Critical-обновление: deadlineAt через 10 суток, '
+     'firstSeenPendingAt 30 суток назад; total=1, truncated=false.', result('assessed', 'pass'), 'AT-05'),
+    ('Длина pendingSecurityUpdates в WIN-006 равна min(pendingSecurityUpdatesTotal, 50), а truncated=true тогда и '
+     'только тогда, когда pendingSecurityUpdatesTotal > 50 (межполевой инвариант тела).', EXTRA, 'agent_api',
+     'WIN-006 с pendingSecurityUpdates=[], pendingSecurityUpdatesTotal=3, truncated=false.',
+     http(422, 'schema_violation'), 'AT-05'),
+    ('WIN-006 в режиме assessed: если точка отсчёта переданного обновления — firstSeenRef (основа first_seen либо '
+     'deadline без deadlineAt), просрочки и усечения нет, а previousCompleteAt равен null или previousCompleteAt + '
+     'grace + maxSearchAgeHours раньше observedAt, результат unknown/update_age_unconfirmed, а не pass.', WIN006,
+     'worker', 'Первый пакет нового устройства, referenceTimeBasis=first_seen, свежий успешный поиск, '
+     'configuredSource=expectedSource; Important-обновление, опубликованное 60 дней назад; firstSeenPendingAt = '
+     'observedAt этого сбора, серверный firstSeenAt — время поиска этого сбора, previousCompleteAt = null.',
+     result('assessed', 'unknown', 'update_age_unconfirmed'), 'AT-05'),
+    ('WIN-006 в режиме assessed: при основе first_seen либо deadline без deadlineAt точка отсчёта firstSeenRef = '
+     'min(серверный firstSeenAt, firstSeenPendingAt); история ожидания хранится сервером по (deviceId, updateId) и '
+     'не зависит от состояния агента.', WIN006, 'worker',
+     'Потеря локальной SQLite при том же deviceId, referenceTimeBasis=first_seen, свежий успешный поиск, '
+     'configuredSource=expectedSource: firstSeenPendingAt Important-обновления = observedAt, серверный firstSeenAt '
+     '— 15 суток назад.', result('assessed', 'fail'), 'AT-05'),
+    ('В режиме informational наблюдение unavailable применимой проверки даёт result=null с reasonCode наблюдения; '
+     'finding не создаётся.', SEMANTICS, 'worker',
+     'WIN-002 unavailable/permission_denied, WIN-011 collected с editionId=Professional, политика с WIN-002 в '
+     'режиме informational.', result('informational', None, 'permission_denied'), 'AT-05'),
+    ('В режиме informational причина правила, которая не переносится (unmapped_state, update_*, '
+     'evidence_time_invalid, os_version_unknown, os_inventory_missing, policy_not_applicable), даёт result=null и '
+     'reasonCode=null; finding не создаётся.', SEMANTICS, 'worker',
+     'WIN-006 при политике v1 (informational) с agentSearch.resultCode=failed.', result('informational', None),
+     'AT-05'),
+    # Device clock, current projection and OS lifecycle.
+    ('Признак часов вычисляется один раз — при приёме, в транзакции записи scan_batch под блокировкой строки '
+     'устройства, по receivedAt и значениям устройства до этого пакета (lastAcceptedSequence, '
+     'maxAcceptedSourceTime, heartbeatClockSkewExceeded) — и хранится в scan_batch вместе с projectionEligible; '
+     'worker его не пересчитывает, повтор возвращает исходный receipt. lastAcceptedSequence учитывает и пакеты с '
+     'признаком, maxAcceptedSourceTime — только пакеты без признака.', CLOCK, 'agent_api',
+     'Принят sequence 100; затем sequence 101 с completedAt раньше maxAcceptedSourceTime при нормальном последнем '
+     'heartbeat; задание пакета 101 выполнено раньше задания пакета 100; WIN-005 в политике в режиме assessed.',
+     result('assessed', 'unknown', 'clock_inconsistent'), 'AT-04'),
+    ('Текущую проекцию устройства меняет только пакет с projectionEligible, если его sequence больше '
+     'device.projectionSequence; сравнение и замена выполняются в evaluate_batch под блокировкой строки '
+     'устройства. Пакеты с признаком часов и пакеты вне порядка пополняют только историю и событий не создают; '
+     'при любом порядке заданий совпадают текущая проекция, projectionSequence и множество открытых finding.',
+     CURRENT, 'worker',
+     'Finding WIN-005 открыт; пакет 100 — fail, пакет 101 — pass; задание пакета 101 выполнено раньше задания '
+     'пакета 100, и пакет 100 finding не переоткрывает.',
+     event('resolved', 'device_change'), 'AT-04'),
+    ('SYS-002 в режиме assessed: окончание обслуживания — исключающее UTC-мгновение servicingEndsAt из данных '
+     'правила; observedAt, равное servicingEndsAt или позже, даёт fail, а observedAt на 1 с раньше по сроку '
+     'обслуживания fail не даёт.', OS_MATRIX, 'worker',
+     'SYS-002 в политике в режиме assessed; WIN-011 Professional x64 displayVersion=25H2 с '
+     'observedAt=2027-10-13T07:00:00Z (servicingEndsAt версии 25H2).', result('assessed', 'fail'), 'AT-05'),
+    # Clock jump forward and minor contract rules.
+    ('Пакет, у которого startedAt, completedAt или какое-либо observedAt позже receivedAt + 5 мин, не отклоняется: '
+     'он принимается с признаком часов, его оценки исторические, текущая проекция не меняется, droppedBatchCount '
+     'не растёт.', CLOCK, 'agent_api',
+     'Часы устройства на 6 мин впереди: completedAt на 6 мин позже receivedAt; WIN-005 в политике в режиме '
+     'assessed.', result('assessed', 'unknown', 'clock_inconsistent'), 'AT-04'),
+    ('Organization.timezone — идентификатор часового пояса IANA; неизвестная зона отклоняется.', PORTAL,
+     'portal_api', 'createOrganization с timezone=Europe/Oslow.', http(422, 'validation_failed'), 'AT-07'),
+    ('createReport принимает только границы ISO-недели в timezone организации (понедельник 00:00 — следующий '
+     'понедельник 00:00); иные границы отклоняются.', REPORT, 'portal_api',
+     'createReport с periodStart во вторник 00:00 и periodEnd через 7 суток в timezone организации.',
+     http(422, 'validation_failed'), 'AT-07'),
 ]
 
 
