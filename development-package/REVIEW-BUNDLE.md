@@ -13,7 +13,7 @@
 
 Предлагается сервис регулярной оценки настроек Windows и Microsoft 365 с внутренним порталом для техников, историей отклонений и еженедельным отчётом. Первая поставка включает портал и источник Windows-фактов: собственный агент либо импорт из Intune и RMM по решению SP-05; облачные проверки подключаются отдельным этапом. Платный пилот определяет дальнейший объём продукта.
 
-Статус — проект для независимой оценки и технических экспериментов. P0 начинается после независимого одобрения версии 0.2.0. Контракты описывают предлагаемое поведение; приложение, Azure-инфраструктура и проверки на Windows ещё должны быть реализованы. Оценки сроков, ресурсы и пороги являются плановыми допущениями.
+Статус — проект для независимой оценки и технических экспериментов. P0 начинается после одобрения версии 0.2.0 обоими независимыми рецензентами архитектуры. Контракты описывают предлагаемое поведение; приложение, Azure-инфраструктура и проверки на Windows ещё должны быть реализованы. Оценки сроков, ресурсы и пороги являются плановыми допущениями.
 
 ## Как читать пакет
 
@@ -81,12 +81,12 @@
 
 | Этап | Входит | Условие завершения |
 | --- | --- | --- |
-| P0 | Начинается после независимого одобрения версии 0.2.0. Эксперименты SP-01…SP-05: права и API Windows без PowerShell, схема mTLS и путь к Issuer в Azure, доступность Graph, изоляция клиентов, сравнение с текущими инструментами и выбор источника Windows-фактов. Из работ по реализации допустимы только пакет и инструмент проверки пакета; серверный слой параллельно P0 не ведётся. Календарный лимит — 5 недель | Протоколы SP-01…SP-05; решение SP-05 (вариант A или вариант B), подписанное Product Owner; утверждённый PKI-дизайн; решение ADR-02; пересчитанные оценки WP и календарь P1; G1 — независимое одобрение одного и того же артефакта двумя рецензентами |
+| P0 | Начинается после одобрения версии 0.2.0 обоими независимыми рецензентами архитектуры. Эксперименты SP-01…SP-05: права и API Windows без PowerShell, схема mTLS и путь к Issuer в Azure, доступность Graph, изоляция клиентов, сравнение с текущими инструментами и выбор источника Windows-фактов. Из работ по реализации допустимы только пакет и инструмент проверки пакета; серверный слой параллельно P0 не ведётся. Календарный лимит — 5 недель | Протоколы SP-01…SP-05; решение SP-05 (вариант A или вариант B), подписанное Product Owner; утверждённый PKI-дизайн; решение ADR-02; пересчитанные оценки WP и календарь P1; G1 — независимое одобрение одного и того же артефакта двумя рецензентами |
 | P1 | Windows 11 Pro x64 по матрице совместимости; источник Windows-фактов по решению SP-05: Windows-агент со сборщиками, регистрацией по токену и работой офлайн (вариант A) либо импорт из Intune и RMM (вариант B); внутренний портал на bokmål с переключением на nynorsk и английский; история; HTML-отчёт (PDF — печатью из браузера) на языке организации | Пройдены критерии продолжения пилота (разделы «Плановые показатели» и «Экономика пилота») |
 | P2 | Отдельное подключение M365, сведения о регистрации MFA, Security Defaults, инвентаризация Conditional Access; Intune при наличии лицензии | Подтверждены права, доступность и корректная интерпретация данных |
 | P3 | Клиентский доступ, рассылка, дополнительные приложения и интеграции | Спрос и стоимость сопровождения подтверждены пилотом |
 
-Матрица совместимости агента P1 — Windows 11 Pro x64 версий 25H2 и 26H2; она записана в `03`, раздел «Матрица совместимости и жизненный цикл ОС». Enterprise, Education, 24H2 и другие языки ОС добавляются по ответу на вопрос 1 в `08` и итогам SP-01. Windows 10 в P1 не входит. Устройства вне матрицы в пилот не включаются; если устройство выходит из матрицы во время пилота, SYS-002 даёт fail или unknown, а устройство до обновления исключается из знаменателей NFR-01 и NFR-02. Windows ARM64 и серверы оцениваются после инвентаризации клиентов. Поддержка новой платформы требует собственных испытаний и явной записи в матрице совместимости.
+Матрица совместимости агента P1 — Windows 11 Pro x64 версий 25H2 и 26H2; она записана в `03`, раздел «Матрица совместимости и жизненный цикл ОС». Enterprise, Education, 24H2 и другие языки ОС добавляются по ответу на вопрос 1 в `08` и итогам SP-01. Windows 10 в P1 не входит. Устройства вне матрицы в пилот не включаются; если во время пилота редакция, версия или архитектура устройства выходит из матрицы либо обслуживание версии заканчивается, SYS-002 даёт fail (unknown, если это определить нельзя), а устройство до обновления исключается из знаменателей NFR-01 и NFR-02. Windows ARM64 и серверы оцениваются после инвентаризации клиентов. Поддержка новой платформы требует собственных испытаний и явной записи в матрице совместимости.
 
 ## Функциональные требования
 
@@ -97,7 +97,7 @@
 | FR-03 | Сбор фактов о Windows без автоматического изменения системы | P1, вариант A | AT-03 | getAgentConfiguration, submitScan |
 | FR-04 | Очередь при отсутствии сети и повторная отправка без дубликатов | P1, вариант A | AT-04 | submitScan, submitHeartbeat |
 | FR-05 | Четыре результата оценки, отдельный признак свежести и явный информационный режим | P1 | AT-05 | listDeviceAssessments, listFindings, listDevices |
-| FR-06 | Стабильная история появления, изменения, повторного открытия и исправления проблем | P1 | AT-06 | getFinding, listFindingEvents |
+| FR-06 | Стабильная история появления, изменения, повторного открытия и исправления проблем | P1 | AT-05, AT-06 | getFinding, listFindingEvents, requestDeviceScan |
 | FR-07 | Отчёт за период в HTML на языке организации, с покрытием проверок и временем наблюдения | P1 | AT-07 | createReport, listReports, downloadReport |
 | FR-08 | Ответственный, срок и принятие риска без подмены технического результата | P1 | AT-08 | patchFinding, decideFindingRisk |
 | FR-09 | Безопасное подключение M365 и отзыв доступа | P2 | AT-09 | — |
@@ -106,7 +106,7 @@
 | FR-12 | Аудит действий, экспорт и жизненный цикл клиентских данных | P1 | AT-12 | listAuditEvents, createOrganizationExport, getOrganizationExport, downloadOrganizationExport, changeOrganizationLifecycle, процедура: RB-09, процедура: RB-10 |
 | FR-13 | Подписанные версии агента, поэтапный выпуск и отзыв устройства | P1, вариант A | AT-13 | revokeDevice, процедура: RB-06, процедура: RB-07 |
 
-Колонка «Контракт» называет операции OpenAPI либо процедуру из таблицы runbooks в `07`, раздел «Runbooks». У FR-09…FR-11 контракта пока нет: P2-расширение контракта появится после SP-03. FR-02, FR-03, FR-04 и FR-13 действуют только в варианте A; при варианте B они заменяются требованиями импорта в пакете 0.3.0. Сверх связей в таблице AT-14 относится к FR-04 и FR-06, AT-15 — к FR-09…FR-11, AT-16 — к NFR-03…NFR-06; NFR-01 и NFR-02 измеряются в пилоте.
+Колонка «Контракт» называет операции OpenAPI либо процедуру из таблицы runbooks в `07`, раздел «Runbooks». У FR-09…FR-11 контракта пока нет: P2-расширение контракта появится после SP-03. FR-02, FR-03, FR-04 и FR-13 действуют только в варианте A; повторная проверка устройства `requestDeviceScan` в FR-06 — тоже только в варианте A; при варианте B они заменяются требованиями импорта в пакете 0.3.0. Сверх связей в таблице AT-14 относится к FR-04 и FR-06, AT-15 — к FR-09…FR-11, AT-16 — к NFR-03…NFR-06; NFR-01 и NFR-02 измеряются в пилоте.
 
 ## Язык портала и отчёта
 
@@ -201,7 +201,7 @@ flowchart LR
 
 ## Выполнение локальной проверки
 
-Плановая гипотеза H-02: сетевой Agent Host работает под виртуальной учётной записью службы без прав администратора, а сборщики, которым нужны повышенные права, выполняются в привилегированном сборщике с фиксированным протоколом. Привилегированный сборщик не имеет сетевых функций и принимает по named pipe только известный `collectorId` и параметры из enum. Произвольные пути, скрипты, команды и имена исполняемых файлов в протоколе отсутствуют. Обязательные требования к разделённому варианту: service SID; pipe только локальный (`PIPE_REJECT_REMOTE_CLIENTS`), создаётся первым экземпляром (`FILE_FLAG_FIRST_PIPE_INSTANCE`) и проверяет SID клиента; ACL на каталог установки, конфигурацию, helpers и ключи разрешают запись только SYSTEM и администраторам; запрос не больше 4 KiB и ответ не больше 64 KiB, по схеме; не больше 10 вызовов одного `collectorId` в час; таймаут вызова 30 секунд, зависшая работа завершается в пределах 120 секунд.
+Плановая гипотеза H-02: сетевой Agent Host работает под виртуальной учётной записью службы без прав администратора, а сборщики, которым нужны повышенные права, выполняются в привилегированном сборщике с фиксированным протоколом. Привилегированный сборщик не имеет сетевых функций и принимает по named pipe только известный `collectorId` и параметры из enum. Произвольные пути, скрипты, команды и имена исполняемых файлов в протоколе отсутствуют. Обязательные требования к разделённому варианту: service SID; pipe только локальный (`PIPE_REJECT_REMOTE_CLIENTS`), создаётся первым экземпляром (`FILE_FLAG_FIRST_PIPE_INSTANCE`) и проверяет SID клиента; ACL на каталог установки, конфигурацию, helpers и ключи разрешают запись только SYSTEM и администраторам; запрос не больше 4 KiB и ответ не больше 64 KiB, по схеме; не больше 10 вызовов одного `collectorId` в час; Agent Host ждёт результат вызова не дольше 30 секунд и по истечении записывает для наблюдения причину `collector_timeout`; зависшая привилегированная работа принудительно завершается не позже чем через 120 секунд после начала вызова.
 
 Решение ADR-02 принимается по итогам SP-01 на основе таблицы «collectorId → минимальная учётная запись → API → замер» для всех 11 WIN-проверок, двух моделей угроз и стоимости разделения; WP-04 не стартует, пока решение не записано. Единая служба LocalSystem выбирается, только если Agent Host сам требует повышенных прав для большинства сборщиков либо стоимость разделения превышает порог, и при этом Security Owner принимает модель угроз с компенсирующими мерами: нет входящих listener, ответы разбираются строго и с ограничениями, нет дочерних процессов, бинарные файлы подписаны, на каталог установки стоит ACL. Установка выполняется администратором; режим чтения сам по себе не означает отсутствие повышенных прав.
 
@@ -219,11 +219,13 @@ flowchart LR
 
 ## Очередь заданий
 
-P1 использует таблицу `job` в PostgreSQL. API записывает пакет и задание в одной транзакции. Типы заданий: `evaluate_batch`, `recalculate_policy`, `report_generate` и `organization_export`; `freshness_sweep`, `scan_request_expiry` и `review_expiry` — раз в час; `weekly_report` — в понедельник в 06:00 по timezone организации за прошедшую неделю, только для активных организаций; `retention_purge` — ежедневно в 02:00; `organization_delete` — планировщик ежечасно ставит его для организаций с `deletionDueAt ≤ now`. В P2 добавляется `graph_collect`. Поля задания включают `leaseOwner`, `leaseToken` и `periodKey`; уникальность — (type, organizationId, coalesce(inputId, periodKey)).
+P1 использует таблицу `job` в PostgreSQL. API записывает пакет и задание в одной транзакции. Типы заданий: `evaluate_batch`, `recalculate_policy`, `report_generate` и `organization_export`; `freshness_sweep`, `scan_request_expiry` и `review_expiry` — раз в час; `weekly_report` — в понедельник в 06:00 по timezone организации за прошедшую неделю, только для активных организаций; `retention_purge` — ежедневно в 02:00; `platform_audit_purge` — ежедневно в 02:30, платформенное задание с `organizationId` = null и уникальностью по (`type`, `periodKey`); `organization_delete` — планировщик ежечасно ставит его для организаций с `deletionDueAt ≤ now`. В P2 добавляется `graph_collect`. Поля задания включают `leaseOwner`, `leaseToken` и `periodKey`; уникальность — (type, organizationId, coalesce(inputId, periodKey)).
 
 Планировщик работает внутри каждой реплики Worker: каждые 5 минут он вставляет периодические задания через `INSERT … ON CONFLICT DO NOTHING`. Пропущенные периоды догоняются не глубже 24 часов для часовых заданий и 4 недель для `weekly_report`. Захват выполняется через `FOR UPDATE SKIP LOCKED` с lease на 5 минут; долгое задание продлевает lease, а `leaseToken` при каждом захвате увеличивается. Завершение и бизнес-эффект выполняются в одной транзакции с условием `WHERE id=? AND leaseToken=?`; если обновлено 0 строк, транзакция откатывается. Эффекты идемпотентны за счёт уникальных ограничений. После повторяющихся ошибок задание попадает в состояние failed и вызывает оповещение. Метрика «последний такт планировщика» поднимает оповещение, если периодические задания не создавались дольше двух периодов.
 
 `retention_purge` выполняется по каждой организации в её контексте RLS, идемпотентно и с аудитом сводки: сколько записей удалено и сколько заменено неизменяемым снимком. Сроки хранения всей цепочки — `04`, раздел «Сроки хранения».
+
+`platform_audit_purge` удаляет строки `platform_audit_event` старше срока хранения аудита без контекста организации. Право DELETE на эту таблицу есть только у роли базы этого задания; у роли для runbook — только SELECT.
 
 Worker в Container Apps имеет минимум одну работающую реплику: очередь в PostgreSQL сама по себе не запускает процесс после scale to zero. При росте добавить Service Bus с outbox и сохранить дедупликацию обработчиков, уникальный ключ периода и fencing по `leaseToken`; доставка сообщения не означает однократное выполнение бизнес-операции.
 
@@ -276,37 +278,39 @@ docs
 
 Агент возвращает для каждого наблюдения `collectionStatus` — только `collected` либо `unavailable`. Evidence передаётся только при `collected` и только по закрытой схеме своей проверки. `reasonCode` агента описывает исключительно сбор и принимает значения `permission_denied`, `unsupported`, `collector_timeout` или `temporary_error`. Проверку, которую на данной платформе выполнить нельзя, агент передаёт как `unavailable`/`unsupported`. Агент не решает, применима ли проверка: `not_applicable` выводит сервер из действующей `policy_revision`, в том числе по фактам WIN-011 и других наблюдений того же пакета (см. «Политика по умолчанию и входные настройки»). Внешняя невозможность проверки не означает not_applicable.
 
-Сервер оценивает наблюдение как `pass`, `fail`, `unknown` либо `not_applicable`. Успешное получение факта не означает pass. Причины unknown и not_applicable, которые выставляет только сервер при оценке, — `missing_observation`, `clock_inconsistent`, `unmapped_state`, `update_search_failed`, `update_search_outdated`, `update_source_mismatch`, `update_list_truncated`, `os_version_unknown`, `os_inventory_missing`, `applicability_input_missing` и `policy_not_applicable`; вместе с четырьмя причинами сбора они образуют закрытый перечень `Assessment.reasonCode`. `clock_inconsistent` агент не передаёт: признак часов вычисляет worker при оценке пакета по алгоритму `05`, раздел «Время и часы устройства». Оценки такого пакета получают `result=unknown`, `reasonCode=clock_inconsistent` и `assessmentScope=historical`, сохраняются в истории и не меняют текущую проекцию.
+Сервер оценивает наблюдение как `pass`, `fail`, `unknown` либо `not_applicable`. Успешное получение факта не означает pass. Причины unknown и not_applicable, которые выставляет только сервер при оценке, — `missing_observation`, `clock_inconsistent`, `unmapped_state`, `update_search_failed`, `update_search_outdated`, `update_source_mismatch`, `update_list_truncated`, `os_version_unknown`, `os_inventory_missing`, `applicability_input_missing`, `policy_not_applicable` и `evidence_time_invalid`; вместе с четырьмя причинами сбора они образуют закрытый перечень `Assessment.reasonCode` из 16 значений. `clock_inconsistent` агент не передаёт: признак часов вычисляет worker при оценке пакета по алгоритму `05`, раздел «Время и часы устройства». Признак часов действует на все оценки пакета: оценка в режиме `assessed` получает `result=unknown` и `reasonCode=clock_inconsistent`, в режиме `informational` — `result=null` и `reasonCode=clock_inconsistent`; все они получают `assessmentScope=historical`, сохраняются в истории и не меняют текущую проекцию.
 
-`assessmentMode` равен `assessed` или `informational`. `defaultAssessmentMode` каталога — режим проверки в политике по умолчанию v1; фактический режим хранится явно в `policy_revision.configuration` для каждой проверки. Условие, при котором клиентская политика может перевести проверку в `assessed`, записано в колонке «Условие оценки». Наличие входных настроек — необходимое, но не достаточное условие: режим выбирает политика. Informational-оценка имеет `result=null`, не создаёт finding и не участвует в оценке соответствия. Finding создаётся только для режима `assessed`. Пороги warn и critical в правилах ниже дают `result=fail` и `Finding.severity` со значением `warning` или `critical` соответственно.
+При приёме с `receivedAt` сравниваются только `startedAt`, `completedAt` и `observations[].observedAt`. Метки времени внутри evidence при приёме не проверяются; правило для них задаёт проверка. Для WIN-004 `signatureLastUpdatedAt` позже `observedAt` этого наблюдения даёт unknown/`evidence_time_invalid`. `deadlineAt` в WIN-006 обычно лежит в будущем и ошибкой не считается.
+
+`assessmentMode` равен `assessed` или `informational`. `defaultAssessmentMode` каталога — режим проверки в политике по умолчанию v1; фактический режим хранится явно в `policy_revision.configuration` для каждой проверки. Условие, при котором клиентская политика может перевести проверку в `assessed`, записано в колонке «Условие оценки». Наличие входных настроек — необходимое, но не достаточное условие: режим выбирает политика. Informational-оценка всегда имеет `result=null`, не создаёт finding и не участвует в оценке соответствия. Finding создаётся только для режима `assessed`. `reasonCode` допускается при `result` unknown или not_applicable, а также у informational-оценки с `result=null`, когда данных нет: причины недоступности наблюдения, `missing_observation`, `clock_inconsistent`, `applicability_input_missing`. В informational-оценку переносятся только причины недоступности наблюдения (коды сборщика), `missing_observation`, `applicability_input_missing` и `clock_inconsistent`: если правило ниже даёт unknown с такой причиной, в режиме `informational` оценка получает `result=null` с той же причиной. Остальные причины правил — `unmapped_state`, `update_search_failed`, `update_search_outdated`, `update_source_mismatch`, `update_list_truncated`, `os_version_unknown`, `os_inventory_missing`, `evidence_time_invalid` и `policy_not_applicable` — informational-оценке не присваиваются: она получает `result=null` и `reasonCode=null`. `Finding.severity` принимает значения `critical` или `warning` и задана колонкой «Severity при fail» таблицы Windows: пороги warn и critical дают `result=fail` и severity `warning` или `critical` соответственно.
 
 Объект наблюдения задаётся полем `subject`. WIN-001 и WIN-002 относятся к тому (`volume`): в P1 это ровно один том ОС с `volumeId` и `role=os`, буква диска — только атрибут отображения `mountPoint`. Остальные проверки относятся к устройству (`device`). Внутри пакета ключ `(checkId, subject.type, localKey)` уникален: повтор отклоняет весь пакет с 422 `duplicate_observation`, а лишний или другой объект — с 422 `unexpected_subject`. Отсутствие ожидаемой пары «объект/проверка» для активной проверки даёт unknown с `missing_observation`. Канонический объект, ключи и ожидаемые пары определены в `05`, разделы «Канонический объект и идентичность устройства» и «Уникальность и ожидаемые объекты».
 
-Отдельно хранится `freshness=fresh|stale`. Окно свежести `freshnessWindowHours` задаётся в политике для каждой проверки, по умолчанию 72 часа от `observedAt`. Свежесть вычисляется при чтении на текущий момент и при формировании отчёта на `periodEnd`. Heartbeat обновляет `lastSeenAt`, но не свежесть оценок. Устаревший pass показывается как прошлый результат с датой и не считается в числителе покрытия. Изменение окна — это изменение политики (`policy_change`). Покрытие измеряется двумя метриками: `coverageAt` — доля свежих pass и fail среди обязательных применимых пар активных устройств на момент измерения — и `coveragePeriod` — доля пар, у которых за период есть хотя бы одна определённая оценка без признака часов. Informational-оценки исключаются из числителя и знаменателя, not_applicable — из знаменателя; обе группы и «не настроено политикой» показываются отдельными счётчиками. Точные определения, пример расчёта и места использования метрик — в `05`, раздел «Отчёт и покрытие».
+Отдельно хранится `freshness=fresh|stale`. Окно свежести `freshnessWindowHours` задаётся в политике для каждой проверки, по умолчанию 72 часа от `observedAt`. Свежесть вычисляется при чтении на текущий момент и при формировании отчёта на `periodEnd`. Heartbeat обновляет `lastSeenAt`, но не свежесть оценок. Устаревший pass показывается как прошлый результат с датой и не считается в числителе покрытия. Изменение окна — это изменение политики (`policy_change`). Покрытие измеряется двумя метриками: `coverageAt` — доля свежих pass и fail среди обязательных применимых пар активных устройств на момент измерения — и `coveragePeriod` — доля пар, у которых за период есть хотя бы одна определённая оценка без признака часов. Informational-оценки исключаются из числителя и знаменателя, not_applicable — из знаменателя; обе группы показываются отдельными счётчиками. «Не настроено политикой» — подмножество informational: пары в режиме informational из-за отсутствующих входных настроек политики (например, WIN-008 без `allowedSids`, WIN-010 без `expectedTenantId`); в отчёте оно показывается как часть informational. Точные определения, пример расчёта и места использования метрик — в `05`, раздел «Отчёт и покрытие».
 
 ## Проверки Windows
 
-| ID | Проверка и данные | Объект | Режим по умолчанию | Условие оценки | Права и ограничения |
-| --- | --- | --- | --- | --- | --- |
-| WIN-001 | Свободное место на томе ОС: `totalBytes`, `freeBytes` | volume | assessed | fail с `severity=warning` при свободном месте менее 10% или 10 GiB (`warnFreePercent`, `warnFreeBytes`); fail с `severity=critical` при менее 5% или 2 GiB (`criticalFreePercent`, `criticalFreeBytes`). Для assessed входные настройки не нужны | Обычное чтение; объект — том ОС (`volumeId`, `role=os`); эксплуатационный показатель, не доказательство защиты |
-| WIN-002 | BitLocker тома ОС: `volumeStatus`, `protectionStatus`, `encryptionPercentage` | volume | assessed | При `encryptionRequired=true` pass только при завершённом шифровании и активной защите; приостановленная защита или расшифровка — fail, в том числе при `volumeStatus=fully_encrypted`, `protectionStatus=off` и `encryptionPercentage=100` (эталонный отрицательный тест ниже). Для редакций из `notApplicableEditionIds` по `editionId` из WIN-011 того же пакета — not_applicable. Для assessed входные настройки не нужны | Права вызова подтверждает SP-01; recovery password никогда не извлекается и не передаётся |
-| WIN-003 | Антивирусы: `products[]` до 10 элементов (`provider`, `productState`, `statusSource`, `rawState`) и объект `defender` (`amRunningMode`, `realTimeProtectionEnabled`) или null | device | informational | По таблице решений WIN-003 ниже: pass при активном одобренном продукте, unknown/`unmapped_state` при неопознанном состоянии одобренного, иначе fail. Для assessed нужен непустой `approvedProviders` или `defenderApproved=true` | Defender передаётся одним элементом со `statusSource=defender`, без дубля из WSC; для стороннего продукта доступен только статус, который он сообщает WSC; больше 10 продуктов — `unavailable`/`unsupported` |
-| WIN-004 | Давность сигнатур Defender: `signatureLastUpdatedAt` | device | assessed | fail с `severity=warning` старше 3 суток (`warnDays`), с `severity=critical` старше 7 (`criticalDays`); будущая дата — unknown. Для assessed WIN-003 должна входить в `activeCheckIds` | Применима только при `defenderApproved=true` и `amRunningMode=normal` по WIN-003 того же пакета, иначе not_applicable/`policy_not_applicable` (в том числе при `defender = null`); без пригодного наблюдения WIN-003 — unknown/`applicability_input_missing`; сторонний AV оценивается отдельной интеграцией |
-| WIN-005 | Брандмауэр: `domainEnabled`, `privateEnabled`, `publicEnabled` | device | assessed | Для штатного Windows Firewall включены все профили из `requiredProfiles` (по умолчанию domain, private, public). Для assessed входные настройки не нужны | Альтернативный firewall требует явной политики и собственного источника |
-| WIN-006 | Windows Update: `configuredSource`, `auLastSearchSuccessAt`, `agentSearch`, `pendingSecurityUpdates[]` до 50 элементов, `pendingSecurityUpdatesTotal`, `truncated` | device | informational | По правилу WIN-006 ниже: unknown при неуспешном или устаревшем поиске либо чужом источнике; fail при просрочке хотя бы одного переданного обновления; unknown/`update_list_truncated` при усечённом списке без просрочки; pass при свежем успешном поиске без просрочки и усечения. Для assessed нужен `expectedSource` | Поиск может быть долгим (гипотеза H-WU2); WSUS-deadline и отсрочки учитываются через `referenceTimeBasis`; одна дата последнего KB недостаточна; заголовки и описания обновлений не передаются |
-| WIN-007 | Необходимость перезагрузки: `rebootRequired`, `lastBootAt`, `statusSource` (`windows_update_api`) | device | assessed | fail с `severity=warning`, если эпизод требования перезагрузки наблюдается не меньше `warnDays` (3) суток по правилу WIN-007 ниже. Для assessed входные настройки не нужны | Отрицательный результат относится только к поддерживаемому Windows Update API, не ко всем установщикам; снятие требования без перезагрузки внутри одного сеанса не обнаруживается |
-| WIN-008 | Прямые члены группы локальных администраторов по известному SID группы: `memberSids` до 100, `membershipScope=direct_members` | device | informational | SID, не предусмотренный `allowedSids`, — fail. Для assessed нужен хотя бы один SID в `allowedSids` | Не равнозначно полному раскрытию вложенных AD/Entra-групп и всех способов повышения прав |
-| WIN-009 | Secure Boot: `enabled`, `platform` (`uefi`, `legacy_bios`) | device | assessed | При `secureBootRequired=true` disabled или подтверждённое отсутствие поддержки — fail. Для assessed входные настройки не нужны | Access denied — unknown/`permission_denied`; виртуальная машина не исключается автоматически |
-| WIN-010 | Присоединение устройства: `joinType` (`entra_joined`, `hybrid_joined`, `domain_joined`, `not_joined`), `tenantId`, `entraDeviceId` | device | informational | Информационная инвентаризация; проверка tenant — только при заданном `expectedTenantId`. Для assessed нужен `expectedTenantId` | Собирается в контексте службы; пользовательская регистрация (workplace join) не наблюдается и не выводится, значения `registered` нет; `domain_joined` означает только локальный AD без Entra; устройство не даёт доступа к данным всего tenant; пользовательская Hello/PIN не выводится из контекста службы |
-| WIN-011 | OS-инвентарь: `editionId`, `displayVersion`, `build`, `ubr`, `architecture` (`x64`, `arm64`) | device | informational | Всегда informational, finding не создаёт. Факты используют SYS-002 и применимость WIN-002 | Обязательна в `activeCheckIds` каждой политики; источник API подтверждает SP-01 |
-| SYS-001 | Индикатор свежего полного сбора: `lastFullScanAt`, `lastSeenAt`, `hasFreshFullScan` | device | informational | Всегда informational. Значение истинно, если `completedAt` последнего полного сбора не старше `freshnessWindowHours` проверки SYS-001 (по умолчанию 72 часа) | Вычисляется сервером; finding не создаёт, в coverage и compliance не входит; выключенный ПК не получает fail |
-| SYS-002 | Поддержка версии ОС по последнему свежему WIN-011 и таблице жизненного цикла | device | assessed | fail — версия вне обслуживания на `observedAt`; unknown/`os_version_unknown` — версии нет в таблице; unknown/`os_inventory_missing` — нет свежего WIN-011. Для assessed входные настройки не нужны | Вычисляется сервером; свежесть SYS-002 равна свежести WIN-011; таблица — в разделе «Матрица совместимости и жизненный цикл ОС» |
+| ID | Проверка и данные | Объект | Режим по умолчанию | Условие оценки | Severity при fail | Права и ограничения |
+| --- | --- | --- | --- | --- | --- | --- |
+| WIN-001 | Свободное место на томе ОС: `totalBytes`, `freeBytes` | volume | assessed | fail с `severity=warning` при свободном месте менее 10% или 10 GiB (`warnFreePercent`, `warnFreeBytes`); fail с `severity=critical` при менее 5% или 2 GiB (`criticalFreePercent`, `criticalFreeBytes`). Для assessed входные настройки не нужны | по порогу | Обычное чтение; объект — том ОС (`volumeId`, `role=os`); эксплуатационный показатель, не доказательство защиты |
+| WIN-002 | BitLocker тома ОС: `volumeStatus`, `protectionStatus`, `encryptionPercentage` | volume | assessed | При `encryptionRequired=true` pass только при завершённом шифровании и активной защите; приостановленная защита или расшифровка — fail, в том числе при `volumeStatus=fully_encrypted`, `protectionStatus=off` и `encryptionPercentage=100` (эталонный отрицательный тест ниже). Для редакций из `notApplicableEditionIds` по `editionId` из WIN-011 того же пакета — not_applicable. Для assessed входные настройки не нужны | critical | Права вызова подтверждает SP-01; recovery password никогда не извлекается и не передаётся |
+| WIN-003 | Антивирусы: `products[]` до 10 элементов (`provider`, `productState`, `statusSource`, `rawState`) и объект `defender` (`amRunningMode`, `realTimeProtectionEnabled`) или null | device | informational | По таблице решений WIN-003 ниже: pass при активном одобренном продукте, unknown/`unmapped_state` при неопознанном состоянии одобренного, иначе fail. Для assessed нужен непустой `approvedProviders` или `defenderApproved=true` | critical | Defender передаётся одним элементом со `statusSource=defender`, без дубля из WSC; для стороннего продукта доступен только статус, который он сообщает WSC; больше 10 продуктов — `unavailable`/`unsupported` |
+| WIN-004 | Давность сигнатур Defender: `signatureLastUpdatedAt` | device | assessed | fail с `severity=warning` старше 3 суток (`warnDays`), с `severity=critical` старше 7 (`criticalDays`); `signatureLastUpdatedAt` позже `observedAt` этого наблюдения — unknown/`evidence_time_invalid`. Для assessed WIN-003 должна входить в `activeCheckIds` | по порогу | Применима только при `defenderApproved=true` и `amRunningMode=normal` по WIN-003 того же пакета, иначе not_applicable/`policy_not_applicable` (в том числе при `defender = null`); без пригодного наблюдения WIN-003 — unknown/`applicability_input_missing`; сторонний AV оценивается отдельной интеграцией |
+| WIN-005 | Брандмауэр: `domainEnabled`, `privateEnabled`, `publicEnabled` | device | assessed | Для штатного Windows Firewall включены все профили из `requiredProfiles` (по умолчанию domain, private, public). Для assessed входные настройки не нужны | critical | Альтернативный firewall требует явной политики и собственного источника |
+| WIN-006 | Windows Update: `configuredSource`, `auLastSearchSuccessAt`, `agentSearch`, `pendingSecurityUpdates[]` до 50 элементов, `pendingSecurityUpdatesTotal`, `truncated` | device | informational | По правилу WIN-006 ниже: unknown при неуспешном или устаревшем поиске либо чужом источнике; fail при просрочке хотя бы одного переданного обновления; unknown/`update_list_truncated` при усечённом списке без просрочки; pass при свежем успешном поиске без просрочки и усечения. Для assessed нужен `expectedSource` | warning | Поиск может быть долгим (гипотеза H-WU2); WSUS-deadline и отсрочки учитываются через `referenceTimeBasis`; одна дата последнего KB недостаточна; заголовки и описания обновлений не передаются |
+| WIN-007 | Необходимость перезагрузки: `rebootRequired`, `lastBootAt`, `statusSource` (`windows_update_api`) | device | assessed | fail с `severity=warning`, если эпизод требования перезагрузки наблюдается не меньше `warnDays` (3) суток по правилу WIN-007 ниже. Для assessed входные настройки не нужны | по порогу | Отрицательный результат относится только к поддерживаемому Windows Update API, не ко всем установщикам; снятие требования без перезагрузки внутри одного сеанса не обнаруживается |
+| WIN-008 | Прямые члены группы локальных администраторов по известному SID группы: `memberSids` до 100, `membershipScope=direct_members` | device | informational | SID, не предусмотренный `allowedSids`, — fail. Для assessed нужен хотя бы один SID в `allowedSids` | warning | Не равнозначно полному раскрытию вложенных AD/Entra-групп и всех способов повышения прав |
+| WIN-009 | Secure Boot: `enabled`, `platform` (`uefi`, `legacy_bios`) | device | assessed | При `secureBootRequired=true` disabled или подтверждённое отсутствие поддержки — fail. Для assessed входные настройки не нужны | critical | Access denied — unknown/`permission_denied`; виртуальная машина не исключается автоматически |
+| WIN-010 | Присоединение устройства: `joinType` (`entra_joined`, `hybrid_joined`, `domain_joined`, `not_joined`), `tenantId`, `entraDeviceId` | device | informational | Информационная инвентаризация; проверка tenant — только при заданном `expectedTenantId`. Для assessed нужен `expectedTenantId` | warning | Собирается в контексте службы; пользовательская регистрация (workplace join) не наблюдается и не выводится, значения `registered` нет; `domain_joined` означает только локальный AD без Entra; устройство не даёт доступа к данным всего tenant; пользовательская Hello/PIN не выводится из контекста службы |
+| WIN-011 | OS-инвентарь: `editionId`, `displayVersion`, `build`, `ubr`, `architecture` (`x64`, `arm64`) | device | informational | Всегда informational, finding не создаёт. Факты используют SYS-002 и применимость WIN-002 | — | Обязательна в `activeCheckIds` каждой политики; источник API подтверждает SP-01 |
+| SYS-001 | Индикатор свежего полного сбора: `lastFullScanAt`, `lastSeenAt`, `hasFreshFullScan` | device | informational | Всегда informational. Значение истинно, если `completedAt` последнего полного сбора не старше `freshnessWindowHours` проверки SYS-001 (по умолчанию 72 часа). Полный сбор — принятый пакет с наблюдением для каждой проверки из `activeCheckIds` своей `policyVersion` (любой `collectionStatus`, включая `unavailable`), без признака часов. Повторную проверку агент выполняет как полный сбор всех `activeCheckIds`; частичных пакетов агент не отправляет. `lastFullScanAt` обновляет только полный сбор; оценку SYS-001 пересчитывают приём полного сбора и задание `freshness_sweep` | — | Вычисляется сервером; finding не создаёт, в coverage и compliance не входит; выключенный ПК не получает fail |
+| SYS-002 | ОС в матрице совместимости и на обслуживании: по последнему свежему WIN-011, матрице совместимости и таблице жизненного цикла | device | assessed | fail — редакция, версия или архитектура вне матрицы совместимости либо обслуживание закончилось на `observedAt`; unknown, если определить нельзя: `os_version_unknown` — только для версии из матрицы, которой нет в таблице жизненного цикла; `os_inventory_missing` — нет свежего WIN-011. Версия вне матрицы, в том числе отсутствующая в таблице, даёт fail, а не unknown. Для assessed входные настройки не нужны | critical | Вычисляется сервером; свежесть SYS-002 равна свежести WIN-011; таблица — в разделе «Матрица совместимости и жизненный цикл ОС» |
 
 ### Политика по умолчанию и входные настройки
 
-Список разрешённых администраторов, источник обновлений, одобренные антивирусы и ожидаемый tenant согласуются по клиенту и записываются в параметры политики. Политика по умолчанию v1 включает в `activeCheckIds` все 11 WIN-проверок; режимы равны `defaultAssessmentMode` каталога: WIN-003, WIN-006, WIN-008, WIN-010, WIN-011 и SYS-001 — informational, остальные проверки P1 — assessed. Стартовые параметры — по таблице и правилам этого раздела; кроме того, `defenderApproved=true` и `approvedProviders=[]`, поэтому WIN-004 применима на устройствах с Defender в режиме normal. Сохранение политики отклоняется с 422 `policy_inputs_missing` в трёх случаях: `assessed` без нужных входных настроек; `activeCheckIds` без WIN-011; активна WIN-004 без WIN-003. Без входных настроек проверка остаётся informational, а не создаёт ложное отклонение. Структура параметров — схема `PolicyConfiguration` в `05`.
+Список разрешённых администраторов, источник обновлений, одобренные антивирусы и ожидаемый tenant согласуются по клиенту и записываются в параметры политики. Политика по умолчанию v1 включает в `activeCheckIds` все 11 WIN-проверок; режимы равны `defaultAssessmentMode` каталога: WIN-003, WIN-006, WIN-008, WIN-010, WIN-011 и SYS-001 — informational, остальные проверки P1 — assessed. Стартовые параметры — по таблице и правилам этого раздела; кроме того, `defenderApproved=true` и `approvedProviders=[]`, поэтому WIN-004 применима на устройствах с Defender в режиме normal; для WIN-006 `referenceTimeBasis=first_seen` и `expectedSource=null`; `notApplicableEditionIds=[]` у всех проверок, кроме WIN-002, у которой список равен [Core, CoreN, CoreSingleLanguage, CoreCountrySpecific]. Каждое обязательное поле политики имеет стартовое значение. Сохранение политики отклоняется с 422 `policy_inputs_missing` в трёх случаях: `assessed` без нужных входных настроек; `activeCheckIds` без WIN-011; активна WIN-004 без WIN-003. Без входных настроек проверка остаётся informational, а не создаёт ложное отклонение. Структура параметров — схема `PolicyConfiguration` в `05`.
 
-Применимость одной проверки может зависеть от наблюдения другой проверки того же пакета: WIN-002 — от `editionId` из WIN-011 (`notApplicableEditionIds`, по умолчанию Core, CoreN, CoreSingleLanguage, CoreCountrySpecific), WIN-004 — от объекта `defender` из WIN-003. Если такого наблюдения в пакете нет, оно `unavailable` или пакет имеет признак часов, зависимая проверка получает unknown/`applicability_input_missing`, а не not_applicable. Если применимость известна и проверка не применима, она получает not_applicable/`policy_not_applicable`.
+Применимость одной проверки может зависеть от наблюдения другой проверки того же пакета: WIN-002 — от `editionId` из WIN-011 (`notApplicableEditionIds`, в политике v1 — Core, CoreN, CoreSingleLanguage, CoreCountrySpecific; у остальных проверок по умолчанию пустой список), WIN-004 — от объекта `defender` из WIN-003. Если такого наблюдения в пакете нет или оно `unavailable`, зависимая проверка получает unknown/`applicability_input_missing`, а не not_applicable. Это правило применяется, только если у пакета нет признака часов; при признаке часов все оценки пакета получают `clock_inconsistent`. Если применимость известна и проверка не применима, она получает not_applicable/`policy_not_applicable`.
 
 ### Правило WIN-003
 
@@ -319,7 +323,7 @@ docs
 | 3 | Одобренные продукты есть, все в `off`, `snoozed` или `expired` либо Defender не активен | fail |
 | 4 | Ни одного одобренного продукта (включая пустой `products[]`) | fail |
 
-`collectionStatus=unavailable` даёт unknown с `reasonCode` наблюдения. Лабораторная матрица SP-01 состоит из пяти конфигураций: только Defender; сторонний AV активен; сторонний AV вместе с MDE или Smart App Control; сторонний AV истёк; snoozed. При политике «одобрен только Defender» ожидаются pass/fail/fail/fail/fail, при политике «Defender + VendorX» — pass/pass/pass/fail/fail.
+`collectionStatus=unavailable` даёт unknown с `reasonCode` наблюдения; в режиме `informational` — `result=null` с тем же `reasonCode`. Лабораторная матрица SP-01 состоит из пяти конфигураций: только Defender; сторонний AV активен; сторонний AV вместе с MDE или Smart App Control; сторонний AV истёк; snoozed. При политике «одобрен только Defender» ожидаются pass/fail/fail/fail/fail, при политике «Defender + VendorX» — pass/pass/pass/fail/fail.
 
 ### Правило WIN-006
 
@@ -331,7 +335,7 @@ Evidence содержит `configuredSource` (`windows_update`, `wsus`, `other_a
 
 ### Правило WIN-007
 
-Эпизод — подряд идущие по sequence наблюдения `rebootRequired=true` с одним `lastBootAt` (UTC, из `LastBootUpTime`); наблюдения с признаком часов исключаются. Fail с `severity=warning` ставится, если `observedAt` последнего наблюдения эпизода минус `observedAt` первого не меньше `warnDays` (3 суток). Это нижняя граница, поэтому вывод формулируется как «наблюдается не менее N дней в текущем сеансе загрузки», а длительность записывается в explanation. Эпизод сбрасывают значение `false`, смена `lastBootAt` и новый deviceId; пропуск данных при том же `lastBootAt` эпизод не прерывает. Поведение `LastBootUpTime` при Fast Startup проверяет SP-01.
+Эпизод — подряд идущие по sequence наблюдения `rebootRequired=true` с одним `lastBootAt` (UTC, из `LastBootUpTime`); наблюдения с признаком часов исключаются. Fail с `severity=warning` ставится, если `observedAt` последнего наблюдения эпизода минус `observedAt` первого не меньше `warnDays` (3 суток). Это нижняя граница, поэтому вывод формулируется как «наблюдается не менее N дней в текущем сеансе загрузки», а длительность записывается в explanation. Эпизод сбрасывают значение `false`, смена `lastBootAt` и новый deviceId; пропуск данных при том же `lastBootAt` эпизод не прерывает. Поведение `LastBootUpTime` при Fast Startup проверяет SP-01. Запасной путь: если SP-01 не подтвердит источник эпизода, WIN-007 переводится в informational «требование перезагрузки обнаружено» без длительности.
 
 ### Эталонный отрицательный тест BitLocker
 
@@ -357,16 +361,16 @@ Evidence содержит `configuredSource` (`windows_update`, `wsus`, `other_a
 
 ## Матрица совместимости и жизненный цикл ОС
 
-Матрица совместимости агента P1: Windows 11 Pro x64, версии 25H2 и 26H2. Enterprise, Education, 24H2 и другие языки ОС добавляются по ответу на вопрос 1 в `08` (раздел «Вопросы перед планированием команды») и по итогам SP-01. Windows 10 в P1 не входит. Устройства вне матрицы в пилот не включаются. Если устройство выходит из матрицы во время пилота, SYS-002 даёт fail или unknown, а устройство до обновления исключается из знаменателей NFR-01 и NFR-02.
+Матрица совместимости агента P1: Windows 11 Pro x64, версии 25H2 и 26H2. Enterprise, Education, 24H2 и другие языки ОС добавляются по ответу на вопрос 1 в `08` (раздел «Вопросы перед планированием команды») и по итогам SP-01. Windows 10 в P1 не входит. Устройства вне матрицы в пилот не включаются. Если устройство выходит из матрицы во время пилота, SYS-002 даёт fail (редакция, версия или архитектура вне матрицы, в том числе версия, которой нет в таблице жизненного цикла) или unknown/`os_inventory_missing` (нет свежего WIN-011), а устройство до обновления исключается из знаменателей NFR-01 и NFR-02.
 
 Факты об ОС собирает WIN-011, вывод о поддержке делает SYS-002. Таблица жизненного цикла — версионируемые данные правила SYS-002, а не параметр клиентской политики: даты Microsoft одинаковы для всех клиентов, поэтому изменение таблицы даёт `rule_change`. Значения сверены 2026-10-13.
 
 | Семейство | editionId | displayVersion → обслуживание до |
 | --- | --- | --- |
 | home_pro | Core, CoreN, CoreSingleLanguage, CoreCountrySpecific, Professional, ProfessionalN, ProfessionalEducation, ProfessionalEducationN, ProfessionalWorkstation, ProfessionalWorkstationN | 24H2 — 2026-10-14 06:59:59 PT (2026-10-14T13:59:59Z); 25H2 — 2027-10-13 06:59:59 PT; 26H1 — 2028-03-15 06:59:59 PT; 26H2 — 2028-10-10 06:59:59 PT |
-| enterprise_education | Enterprise, Education и N-варианты | Строки добавляются после ответа на вопрос 1 в `08` и SP-01, с повторной сверкой; до этого unknown/`os_version_unknown` |
+| enterprise_education | Enterprise, Education и N-варианты | Строки добавляются после ответа на вопрос 1 в `08` и SP-01, с повторной сверкой; до этого редакции вне матрицы и SYS-002 даёт fail |
 
-Правило: fail, если `observedAt` позже окончания обслуживания. Давность патчей по UBR в P1 не обещается.
+Правило: fail, если редакция, версия или архитектура вне матрицы совместимости либо `observedAt` позже окончания обслуживания; unknown/`os_version_unknown` — только для версии из матрицы, которой нет в таблице, unknown/`os_inventory_missing` — нет свежего WIN-011; строки таблицы вне матрицы хранят даты обслуживания на случай её расширения. Давность патчей по UBR в P1 не обещается.
 
 ## Проверки Microsoft 365
 
@@ -388,7 +392,7 @@ Evidence содержит `configuredSource` (`windows_update`, `wsus`, `other_a
 
 ## Возможности интеграции
 
-Каждый модуль имеет `capabilityStatus=available|permission_missing|license_unconfirmed|unsupported|temporary_error|disconnected`. `license_unconfirmed` означает необходимость уточнения, а не доказанное отсутствие лицензии. Проверяются выдача token, endpoint, pagination и полученные свойства. 200 с отсутствующим обязательным свойством не считается полным успешным наблюдением.
+Каждый модуль имеет `capabilityStatus=available|permission_missing|license_unconfirmed|partial|unsupported|temporary_error|disconnected`. `partial` означает, что результат получен не полностью: не все страницы или не все обязательные свойства. `license_unconfirmed` означает необходимость уточнения, а не доказанное отсутствие лицензии. Проверяются выдача token, endpoint, pagination и полученные свойства. 200 с отсутствующим обязательным свойством не считается полным успешным наблюдением.
 
 Частично доступный tenant остаётся подключённым с явным списком недоступных проверок. Обработка Graph GET ограничивается разрешёнными hosts, конкретным tenant, разрешёнными paths и проверенными nextLink; произвольный внешний URL не выполняется.
 
@@ -409,13 +413,13 @@ Evidence содержит `configuredSource` (`windows_update`, `wsus`, `other_a
 
 ## Регистрация и сертификаты агента
 
-ServiceManager или PlatformAdmin создаёт в портале enrollment-токен организации (single_use или batch, см. «Enrollment-токены»), а техник при установке передаёт его агенту секретным параметром канала установки. Агент создаёт отдельный неэкспортируемый ключ P-256 через Windows CNG, формирует CSR и отправляет его с токеном (`Authorization: Enrollment <token>`) в `enrollAgent` на hostname портала по обычному HTTPS. Вместе с CSR агент передаёт `installationId`, `displayName` (имя ПК, недоверенная строка) и `machineFingerprint` — keyed hash идентификаторов машины без сырых значений; алгоритм и правила конфликта записаны в `05`, раздел «Канонический объект и идентичность устройства». Сервер проверяет CSR и подпись владения ключом. Погашение токена и создание устройства атомарны. Повтор того же `registrationRequestId` с тем же CSR в пределах срока токена возвращает прежний сертификат и не расходует токен; другой CSR получает конфликт. `installationId` уникален среди всех неудалённых устройств организации, включая отозванные. После истечения токена нужен новый токен.
+ServiceManager или PlatformAdmin создаёт в портале enrollment-токен организации (single_use или batch, см. «Enrollment-токены»), а техник при установке передаёт его агенту секретным параметром канала установки. Агент создаёт отдельный неэкспортируемый ключ P-256 через Windows CNG, формирует CSR и отправляет его с токеном (`Authorization: Enrollment <token>`) в `enrollAgent` на hostname портала по обычному HTTPS. Вместе с CSR агент передаёт `installationId`, `displayName` (имя ПК, недоверенная строка) и `machineFingerprint` — keyed hash идентификаторов машины без сырых значений; алгоритм и правила конфликта записаны в `05`, раздел «Канонический объект и идентичность устройства». Сервер проверяет CSR и подпись владения ключом. Погашение токена, запись `enrollment` и выдача сертификата (новому устройству или существующему при повторной регистрации) атомарны. Агент сохраняет `registrationRequestId` и новый ключ до отправки запроса, так же как `renewalRequestId` при продлении, и после сбоя повторяет запрос с тем же id. Повтор того же `registrationRequestId` с тем же CSR в пределах срока токена возвращает прежний сертификат и не расходует токен; другой CSR получает конфликт. `installationId` уникален среди всех неудалённых устройств организации, включая отозванные. После истечения токена нужен новый токен.
 
 Выбор провайдера ключа решает эксперимент P0 (гипотеза H-KEY, SP-01 и SP-02): предпочтителен неэкспортируемый ключ P-256 в Microsoft Platform Crypto Provider (TPM 2.0), созданный учётной записью службы вне `OnStart`; без TPM либо при неподтверждённой гипотезе используется неэкспортируемый Software KSP с ACL для Agent Host. Критерий — работа на всех лабораторных ПК с TPM 2.0 без нарушения бюджета времени сессии; выбор записывается в ADR-05. Атрибут `keyProtection` (`tpm` или `software`) в EnrollmentRequest и Device появляется только в версии 0.2.x после SP-01. TPM-ключ не переносится образом диска, поэтому клон отсекается уже на TLS.
 
 Устройство получает сертификат внутреннего CA для аутентификации устройств; подпись выполняет только внутренний компонент Issuer (см. «Граница ключа CA»). Сервер хранит hash сертификата, срок, состояние и связь с устройством. Устройство может отправлять только собственные наблюдения и heartbeat, запрашивать конфигурацию и продлевать собственный сертификат (`renewDeviceCertificate`). Сертификат устройства не предоставляет Graph-права, доступ к порталу и скачивание отчётов. Отзыв проверяется сервером на каждом запросе; кэш авторизации устройств ограничен 60 секундами. Отзыв устройства (`revokeDevice`) отзывает все его сертификаты, включая pending, и запрещает продление. Отзыв сертификата или устройства, отзыв enrollment-токена и отключение интеграции сначала записываются во внешний журнал жизненного цикла и только затем в базу (`06`, раздел «Журнал жизненного цикла и restore в карантине»).
 
-При несовпадении признака машины сервер отвечает 409 `identity_conflict`, а у устройства выставляется `identityState=identity_conflict`; исходное устройство с совпадающим признаком продолжает работу. Сертификат при конфликте не отзывается: отзыв и перерегистрацию выполняет ServiceManager вручную по RB-03. Клон регистрируется заново только после чистой переустановки с новым `installationId`, новым ключом и sequence с нуля; агент не входит в golden image. Истёкший сертификат не принимается: агент переходит в `ReenrollRequired` и регистрируется повторно новым токеном из канала установки. Тому же `deviceId` выдаётся новый сертификат, если устройство не отозвано, действующих сертификатов у него нет и признак совпадает; история сохраняется. Для отозванного устройства повторная регистрация даёт 409 `installation_already_enrolled`, нужна чистая переустановка.
+При несовпадении признака машины в heartbeat, scans или renew сервер отвечает 409 `identity_conflict` (действие агента `identity_stop`), а у устройства выставляется `identityState=identity_conflict`; исходное устройство с совпадающим признаком продолжает работу. Сертификат при конфликте не отзывается: отзыв и перерегистрацию выполняет ServiceManager вручную по RB-03. Регистрация `enrollAgent` с уже зарегистрированным `installationId` и несовпадающим признаком машины получает 409 `identity_conflict` с действием `identity_stop`, новое устройство не создаётся; `identityState` существующего устройства при этом не меняется (регистрация подтверждается только токеном, а не ключом устройства), отказ пишется в аудит `device.enroll_identity_conflict`. Клон регистрируется заново только после чистой переустановки с новым `installationId`, новым ключом и sequence с нуля; агент не входит в golden image. Истёкший сертификат не принимается: агент переходит в `ReenrollRequired` и регистрируется повторно новым токеном из канала установки. Когда агент предъявляет по mTLS зарегистрированный сертификат своего устройства в состоянии `superseded` после окончания перекрытия, сервер отвечает 401 `certificate_expired` и в той же транзакции записывает `device.reenrollAllowedUntil` = now + 7 суток (аудит `device.reenroll_allowed`). Отозванный сертификат или отозванное устройство это поле не выставляют. `enrollAgent` выполняет проверки по порядку, первая сработавшая определяет ответ: (1) токен неизвестен, истёк или отозван либо организация не `active` — 401 `enrollment_token_invalid`; (2) тот же `registrationRequestId` с тем же CSR — идемпотентный повтор прежнего ответа, даже если токен уже исчерпан, `useCount` не увеличивается; тот же `registrationRequestId` с другим CSR — 409 `idempotency_conflict`; (3) токен исчерпан — 401 `enrollment_token_invalid`; (4) новый `installationId` — новое устройство; (5) устройство с этим `installationId` отозвано — 409 `installation_already_enrolled`, нужна чистая переустановка; (6) признак машины не совпадает — 409 `identity_conflict`; (7) у устройства есть `active` сертификат с `validTo` > now (неактивированный `pending` не учитывается), а `reenrollAllowedUntil` не задан или истёк — 409 `installation_already_enrolled`; (8) иначе тому же `deviceId` выдаётся новый сертификат, история сохраняется. В транзакции выдачи случая (8), с окном и без, увеличивается `useCount` токена и создаётся запись `enrollment`, как при создании устройства, а существующий неактивированный `pending` переводится в `revoked` (аудит `device.pending_revoked`). Если в случае (8) `reenrollAllowedUntil` > now, новый сертификат выдаётся как `pending`, перекрытие прежних `superseded` заканчивается в момент выдачи, прежний `active` переходит в `superseded` при первом mTLS-запросе новым, `reenrollAllowedUntil` обнуляется, пишется аудит `device.reenroll_over_active` и поднимается оповещение ServiceManager. При enroll `previousCertificateValidUntil` = null (см. «Профиль и продление сертификата»).
 
 Неэкспортируемый ключ повышает защиту, но локальный администратор или вредоносное ПО с высокими правами может подделать наблюдения. Проект не обещает достоверность измерений с уже полностью захваченного ПК. Подтверждение независимыми источниками Intune/Defender относится к P2 и далее.
 
@@ -429,17 +433,17 @@ ServiceManager или PlatformAdmin создаёт в портале enrollment-
 | Срок | 30 мин по умолчанию (платформенный параметр; через API не задаётся) | `expiresInHours` 1…168, по умолчанию 72 |
 | `maxUses` | 1 | 1…100, по умолчанию 25 |
 
-Секрет — 256 бит случайных данных в base64url, показывается один раз; хранится SHA-256. Токен передаётся секретным параметром канала установки и не попадает в MSI, общие пакеты и логи. Погашение атомарно: счётчик и создание устройства выполняются в одной транзакции, поэтому даже при конкурентных запросах регистрируется не больше `maxUses` устройств; идентичный повтор (`registrationRequestId` + CSR) в пределах срока токена возвращает прежний сертификат и не увеличивает `useCount`. Верхняя граница `maxUses` = 100 и есть лимит организации в P1; отдельной настройки лимита по организации нет. Стартовые лимиты утверждает Security Owner до пилота. Список токенов без секретов возвращает `listEnrollmentTokens`. Отзыв выполняет `revokeEnrollmentToken`, сначала с записью в журнал жизненного цикла. Устройства, зарегистрированные токеном, отбираются фильтром `listDevices?enrollmentTokenId=…`, массовый отзыв выполняется по RB-12. При `disable` организации все её токены отзываются; после `enable` нужны новые токены. Утечка пакетного токена позволяет зарегистрировать в организации посторонние ПК, но не даёт читать данные; меры — `maxUses`, срок, отзыв, список устройств по токену и аудит.
+Секрет — 256 бит случайных данных в base64url, показывается один раз; хранится SHA-256. Токен передаётся секретным параметром канала установки и не попадает в MSI, общие пакеты и логи. Погашение атомарно: `useCount` увеличивается в одной транзакции с выдачей сертификата и записью `enrollment` — и при создании устройства, и при повторной регистрации существующего, поэтому даже при конкурентных запросах по токену выполняется не больше `maxUses` регистраций; идентичный повтор (`registrationRequestId` + CSR) в пределах срока токена возвращает прежний сертификат и не увеличивает `useCount`. Значение 100 — предел `maxUses` одного токена; лимита числа устройств организации в P1 нет. Стартовые лимиты утверждает Security Owner до пилота. Список токенов без секретов возвращает `listEnrollmentTokens`. Отзыв выполняет `revokeEnrollmentToken`, сначала с записью в журнал жизненного цикла. Устройства, зарегистрированные токеном, отбираются фильтром `listDevices?enrollmentTokenId=…`, массовый отзыв выполняется по RB-12. При `disable` организации все её токены отзываются; после `enable` нужны новые токены. Утечка пакетного токена позволяет зарегистрировать в организации посторонние ПК, но не даёт читать данные; меры — `maxUses`, срок, отзыв, список устройств по токену и аудит.
 
 ### Профиль и продление сертификата
 
 Сертификат устройства выпускается по профилю CA: ключ P-256 (провайдер — по H-KEY), подпись CA ECDSA P-256/SHA-256 (ES256 Key Vault), срок 365 дней задаётся параметром профиля CA, `notBefore` = момент выдачи − 5 мин, serial — 128 бит случайных данных. KeyUsage `digitalSignature` (critical), EKU только `clientAuth` (1.3.6.1.5.5.7.3.2), BasicConstraints CA:false. Subject `CN=<DeviceId>` задаёт сервер; SAN и расширения из CSR игнорируются. Тестовый профиль CA имеет срок 1 день и окно продления 6 ч; на нём проверяются значения production (AT-17). Основание срока: отзыв проверяется сервером на каждом запросе, поэтому срок сертификата отвечает за доступность устройства, а не за отзыв.
 
-Агент пытается продлить сертификат при каждом соединении в течение `renewBeforeExpiryHours` (1440 = 60 дней) до истечения. Состояния выдачи: requested → signing → issued (pending) → active → superseded или revoked. `renewalRequestId` привязан к `deviceId` и hash CSR; агент сохраняет его и новый ключ до отправки запроса. Тот же id с тем же CSR возвращает прежний сертификат, тот же id с другим CSR — 409 `renewal_request_conflict`. Новый id при неактивированном pending отзывает этот pending; одновременно существует не больше одного pending и не больше двух действующих сертификатов. Перекрытие начинается с выдачи: pending-сертификат принимается сразу, первый успешный mTLS-запрос им переводит его в `active`, а предыдущий — в `superseded`. Предыдущий перестаёт приниматься через 24 ч после этого запроса или по своему `validTo`, если тот наступает раньше. Сбой между подписью и commit безопасен: незаписанный сертификат не принимается, потому что hash сверяется с записью. Конкурентные renew сериализуются блокировкой строки устройства. Если до истечения сертификата устройства меньше 30 дней, а продления не было, поднимается оповещение. При смене issuer ingress доверяет старому и новому issuer не меньше срока сертификата (365 дней), новые выдачи идут от нового (RB-05).
+Агент пытается продлить сертификат при каждом соединении в течение `renewBeforeExpiryHours` (1440 = 60 дней) до истечения. Состояния выдачи: requested → signing → issued (pending) → active → superseded или revoked. `renewalRequestId` привязан к `deviceId` и hash CSR; агент сохраняет его и новый ключ до отправки запроса. Тот же id с тем же CSR возвращает прежний сертификат, тот же id с другим CSR — 409 `renewal_request_conflict`. Новый id при неактивированном pending отзывает этот pending. Действующим называется сертификат, который сервер принимает по mTLS: `active` с `validTo` > now, `pending` с `validTo` > now или `superseded` в пределах перекрытия; отозванный сертификат действующим не бывает. Одновременно существует не больше одного `pending` и не больше двух действующих сертификатов. Перекрытие начинается с выдачи: pending-сертификат принимается сразу, первый успешный mTLS-запрос им переводит его в `active`, а предыдущий — в `superseded`. Предыдущий перестаёт приниматься через 24 ч после этого запроса или по своему `validTo`, если тот наступает раньше. Сертификат в состоянии `superseded` после окончания перекрытия (например, у ПК, восстановленного из образа старше ротации) получает 401 `certificate_expired`, агент переходит к действию `reenroll_required`. В той же транзакции сервер записывает `device.reenrollAllowedUntil` = now + 7 суток (аудит `device.reenroll_allowed`); отозванный сертификат или отозванное устройство это поле не выставляют. Окно выставляется по состоянию `superseded` независимо от `validTo`, если запрос дошёл до приложения. Если ingress обрывает TLS-рукопожатие из-за истёкшего сертификата, окно не открывается; при действующем `active` того же устройства регистрация получает 409 `installation_already_enrolled`, и нужна чистая переустановка с новым `installationId`. Какой из вариантов действует, устанавливает SP-02. Пока `reenrollAllowedUntil` > now, `enrollAgent` с тем же `installationId` и совпадающим признаком машины сохраняет `deviceId` и историю, хотя у устройства есть `active` сертификат с `validTo` > now: новый сертификат выдаётся как `pending`, существующий неактивированный `pending` переводится в `revoked` в той же транзакции (аудит `device.pending_revoked`), перекрытие прежних `superseded` заканчивается в момент выдачи, прежний `active` переходит в `superseded` при первом mTLS-запросе новым, `reenrollAllowedUntil` обнуляется в транзакции выдачи, `previousCertificateValidUntil` = null, пишется аудит `device.reenroll_over_active` и поднимается оповещение ServiceManager. Сертификат с наступившим `validTo` действующим не считается. Без заданного и неистёкшего `reenrollAllowedUntil` регистрация при `active` сертификате с `validTo` > now даёт 409 `installation_already_enrolled`; неактивированный `pending` регистрации не мешает и отзывается при выдаче нового сертификата; полный порядок проверок `enrollAgent` — в разделе «Регистрация и сертификаты агента» (AT-17). Сбой между подписью и commit безопасен: незаписанный сертификат не принимается, потому что hash сверяется с записью. Конкурентные renew сериализуются блокировкой строки устройства. Если до истечения сертификата устройства меньше 30 дней, а продления не было, поднимается оповещение. При смене issuer ingress доверяет старому и новому issuer не меньше срока сертификата (365 дней), новые выдачи идут от нового (RB-05).
 
 ### Доверие ingress и XFCC
 
-Agent API требует mTLS на отдельном hostname и размещается в отдельном Container Apps environment без других приложений; он не является целью environment-level routes. Приложение доверяет forwarded certificate только от собственного ingress и принимает ровно один заголовок `X-Forwarded-Client-Cert`. Проверяется: Hash равен SHA-256 от Cert; цепочка ведёт к внутреннему CA через собственное доверие приложения, а не через системное хранилище; hash есть в `device_certificate` со статусом `pending` (выдан и не отозван), `active` или `superseded` в пределах перекрытия; срок действует и отзыва нет. Иначе ответ 401 `certificate_unknown`, `certificate_expired` или `certificate_revoked`; запрос без XFCC тоже получает 401. Первый успешный запрос pending-сертификатом активирует его. Наличие сертификата на ingress не заменяет проверку регистрационной записи, срока и отзыва. Агент выбирает клиентский сертификат явно (`LocalCertificateSelectionCallback`). [Механизм Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/client-certificate-authorization).
+Agent API требует mTLS на отдельном hostname и размещается в отдельном Container Apps environment без других приложений; он не является целью environment-level routes. Приложение доверяет forwarded certificate только от собственного ingress и принимает ровно один заголовок `X-Forwarded-Client-Cert`. Проверяется: Hash равен SHA-256 от Cert; цепочка ведёт к внутреннему CA через собственное доверие приложения, а не через системное хранилище; hash есть в `device_certificate` и сертификат действующий (определение — «Профиль и продление сертификата»): `pending` или `active` с `validTo` > now либо `superseded` в пределах перекрытия, без отзыва. Иначе ответ 401: `certificate_unknown` — нет или продублирован XFCC, не совпадает Hash, чужой CA или hash не зарегистрирован; `certificate_expired` — истёк срок либо сертификат `superseded` после окончания перекрытия; `certificate_revoked` — отозван сертификат или устройство. Первый успешный запрос pending-сертификатом активирует его. Наличие сертификата на ingress не заменяет проверку регистрационной записи, срока и отзыва. Агент выбирает клиентский сертификат явно (`LocalCertificateSelectionCallback`). [Механизм Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/client-certificate-authorization).
 
 Остаточный риск: содержимое XFCC не доказывает владение ключом, поэтому защитой служит недостижимость контейнера в обход ingress. Подмена и дублирование `X-Forwarded-Client-Cert`, запросы из соседних приложений и из сети Azure, прокси с TLS inspection и сетевой путь к Issuer проверяются в SP-02. Если SP-02 провален по критерию (а) или (в), применяется запасной вариант ADR-05: TCP ingress в VNet-environment и mTLS в Kestrel.
 
@@ -458,7 +462,7 @@ Agent API требует mTLS на отдельном hostname и размеща
 | Technician | клиент | Назначенные клиенты: просмотр, повторная проверка, ответственный и срок, переходы `new` ↔ `in_progress` |
 | CustomerReader | клиент, P3 | Роль предусмотрена; доступ появляется в P3, в `x-allowed-roles` не входит |
 
-Источник роли PlatformAdmin — назначение app role `PlatformAdmin` в Entra tenant компании. Таблица `platform_role(entraUserId, role, grantedBy, grantedAt)` — зеркало этого назначения: сервер сверяет роль при входе и не реже раза в час, изменения аудируются. `organization_member.role` принимает значения ServiceManager или Technician; PlatformAdmin в `organization_member` не хранится. PlatformAdmin — платформенная роль, а не членство в организации, и не используется для повседневной работы: число учётных записей минимально, перечень утверждает Security Owner, действуют MFA и оповещение об объёме доступа (R-15). Решение записано в ADR-13; пересмотр — переход к доступу по назначению, если этого потребуют договоры или DPA клиентов либо аудит покажет злоупотребления. Кто создаёт организации в P1, решает вопрос 14 в `08`; по умолчанию — только PlatformAdmin.
+Источник роли PlatformAdmin — назначение app role `PlatformAdmin` в Entra tenant компании. Таблица `platform_role(entraUserId, role, grantedBy, grantedAt)` — зеркало этого назначения: сервер сверяет роль при входе и не реже раза в час, изменения аудируются. События платформенного уровня — изменения `platform_role`, создание, отключение и удаление организаций — пишутся в отдельную таблицу `platform_audit_event` без `organizationId` и без RLS. Читать её могут только отдельная роль базы для runbook (только SELECT) и Log Analytics; удалять строки старше срока может только роль задания `platform_audit_purge`; операции API для её чтения в P1 нет, срок хранения такой же, как у аудита. `audit_event` остаётся только клиентским: у каждой записи есть `organizationId`, таблица под RLS. Доступ PlatformAdmin к данным конкретной организации пишется в `audit_event` этой организации и виден в `listAuditEvents`. `organization_member.role` принимает значения ServiceManager или Technician; PlatformAdmin в `organization_member` не хранится. PlatformAdmin — платформенная роль, а не членство в организации, и не используется для повседневной работы: число учётных записей минимально, перечень утверждает Security Owner, действуют MFA и оповещение об объёме доступа (R-15). Решение записано в ADR-13; пересмотр — переход к доступу по назначению, если этого потребуют договоры или DPA клиентов либо аудит покажет злоупотребления. Кто создаёт организации в P1, решает вопрос 14 в `08`; по умолчанию — только PlatformAdmin.
 
 Роли выражаются в RLS. Контекст организации устанавливается только SECURITY DEFINER-функцией `app.begin_org_context(organizationId, actor, purpose)` от роли без входа. Функция сначала проверяет `platform_role`, затем членство. Если у субъекта есть `platform_role`, она в той же транзакции вставляет `audit_event` (`actorType=platform_admin`, `action=platform.access`, target — operationId), даже если у него есть и членство; затем выполняется `SET LOCAL app.organization_id`. Worker входит в контекст с `purpose=job` и проверкой lease. Политики RLS имеют вид `organization_id = app.current_org_id()`; на клиентских таблицах включён `FORCE ROW LEVEL SECURITY`, и без контекста запрос возвращает 0 строк. Политик межклиентского обхода нет: глобальное чтение PlatformAdmin означает право войти в контекст любой организации, а не bypass. `listOrganizations` работает через функцию с теми же правилами. Остаточный риск: роль приложения технически может выставить GUC напрямую; компенсация — статическая проверка, запрещающая прямой SET, а также SP-04 и AT-01.
 
@@ -486,10 +490,16 @@ Graph-сертификаты хранятся в отдельном Key Vault Gr
 | `scan_batch.payload` | Удаляется после успешной обработки, но не позже 7 суток после приёма. Если обработка не удалась, через 7 суток ставится статус `processing_failed` и поднимается оповещение о потере данных |
 | Метаданные `scan_batch` (scanId, sequence, payloadHash, receivedAt) | 90 дней |
 | `observation`, включая evidence | 90 дней |
-| `assessment` | 12 месяцев. Через 90 дней evidence удаляется, остаётся `basisSnapshot`, `evidenceAvailability=expired`, `observationId=NULL` |
-| `finding`, `finding_event` | 12 месяцев от последнего события или `occurredAt` |
-| Отчёты (файл и метаданные), `audit_event` | 12 месяцев |
-| Записи `enrollment_token`, `device_certificate` | 12 месяцев после истечения или отзыва |
+| `assessment` | 12 месяцев от `evaluatedAt`, но не удаляется, пока на неё ссылается сохраняемое событие. Через 90 дней evidence удаляется, остаётся `basisSnapshot`, `evidenceAvailability=expired`, `observationId=NULL` |
+| `finding_event` | 12 месяцев от `occurredAt` |
+| `finding` | Удаляется, когда удалено его последнее событие и он в состоянии `resolved` |
+| `device` | До удаления организации либо 12 месяцев после отзыва и последнего события |
+| `organization_member` | До удаления членства; факт назначения хранится в аудите |
+| `scan_request` | 90 суток от `createdAt` |
+| Отчёты (файл и метаданные), `audit_event`, `platform_audit_event` | 12 месяцев |
+| `policy_revision` | Не меньше 12 месяцев; не удаляется, пока на неё ссылаются сохраняемые записи |
+| Записи `enrollment_token`, `device_certificate` | 12 месяцев после истечения или отзыва; удаляются раньше `device`, на который ссылаются |
+| `enrollment` | 12 месяцев от `createdAt`; удаляется раньше `enrollment_token` и `device`, на которые ссылается |
 | Hash и `revokedAt` сертификатов удалённой организации | До `validTo` сертификата |
 | `job` | Завершённые 30 дней, failed 90 дней; копий payload нет |
 | Файлы экспорта | 7 дней |
@@ -498,7 +508,7 @@ Graph-сертификаты хранятся в отдельном Key Vault Gr
 | Резервные копии БД | 14 дней |
 | `lifecycle_journal` | 30 дней, locked |
 
-Агент удаляет пакеты старше `maxBufferDays` (по умолчанию 7), а сервер принимает пакеты с запасом: `maxBatchAgeDays` по умолчанию на 2 суток больше. `basisSnapshot` неизменяем; в нём сохраняются checkId, ruleId, ruleVersion, evaluatedPolicyVersion, result, freshness, reasonCode, observedAt и минимальные allowlisted-поля для explanation, а для WIN-008 — только неразрешённые SID. Отчёт за период старше 90 дней строится из `basisSnapshot` и `finding_event`; опубликованные отчёты не пересчитываются, а истёкшие подробности помечаются «подробности удалены по сроку хранения». Задание `retention_purge` выполняется ежедневно по каждой организации в контексте RLS и пишет в аудит сводку: что удалено и что заменено снимком. Каскада от наблюдений к истории нет; политика внешних ключей описана в `05`. Клиентская политика может сократить сроки хранения наблюдений, payload и снимков, но не отменяет неизменяемость событий. Срок хранения оснований, порядок утверждения удаления и срок между планированием удаления и удалением организации (по умолчанию 30 суток) решает вопрос 6 в `08`.
+Агент удаляет пакеты старше `maxBufferDays` (по умолчанию 7), а сервер принимает пакеты с запасом: `maxBatchAgeDays` по умолчанию на 2 суток больше. `basisSnapshot` неизменяем; в нём сохраняются checkId, ruleId, ruleVersion, evaluatedPolicyVersion, result, freshness, reasonCode, observedAt и минимальные allowlisted-поля для explanation, а для WIN-008 — только неразрешённые SID. Отчёт за период старше 90 дней строится из `basisSnapshot` и `finding_event`; опубликованные отчёты не пересчитываются, а истёкшие подробности помечаются «подробности удалены по сроку хранения». Задание `retention_purge` выполняется ежедневно по каждой организации в контексте RLS, удаляет данные в порядке `finding_event` → `assessment` → `finding` → `observation` → `scan_batch` → `scan_request` → `device_certificate` → `enrollment` → `enrollment_token` → `device` (`device.enrollmentTokenId` — ON DELETE SET NULL) и пишет в аудит сводку: что удалено и что заменено снимком. `policy_revision` не удаляется, пока на неё ссылаются сохраняемые записи. Каскада от наблюдений к истории нет; политика внешних ключей описана в `05`. Клиентская политика может сократить сроки хранения наблюдений, payload и снимков, но не отменяет неизменяемость событий. Срок хранения оснований, порядок утверждения удаления и срок между планированием удаления и удалением организации (по умолчанию 30 суток) решает вопрос 6 в `08`.
 
 Сроки являются предложением для пилота, а не универсальным юридическим требованием. Перед подключением определить цели обработки, роли сторон, договор обработки, субподрядчиков, сроки и порядок удаления. Принципы минимизации, ограничения хранения и обязанности обработчика установлены GDPR, в частности статьями 5 и 28. [Текст регламента](https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng).
 
@@ -506,7 +516,7 @@ Graph-сертификаты хранятся в отдельном Key Vault Gr
 
 ## Недоверенные строки и выдача отчёта
 
-Недоверенными считаются: `EnrollmentRequest.displayName`, `Device.displayName` (включая значение из `updateDevice`), label enrollment-токена, `products[].provider`, любые будущие строковые evidence, `Organization.name`, `Finding.workflowReason`, `RiskDecision.reason` и `OrganizationMember.displayName`. К машинным строкам, label, имени организации и `displayName` применяется SAFE_TEXT; это дополнительная мера, а основная — контекстное экранирование при выводе. Отчёт строит шаблонизатор с автоматическим контекстным экранированием тела и атрибутов HTML; ссылки и URL из этих строк не строятся. Отчёт самодостаточен: без скриптов и внешних ресурсов (шрифтов, изображений, CSS по URL), с print stylesheet; генератор не делает сетевых обращений. В портале такие поля выводятся только как текст React; `dangerouslySetInnerHTML` запрещён правилом линтера.
+Недоверенными считаются: `EnrollmentRequest.displayName`, `Device.displayName` (включая значение из `updateDevice`), label enrollment-токена, `products[].provider`, любые будущие строковые evidence, `Organization.name`, `Finding.workflowReason`, `RiskDecision.reason`, `OrganizationMember.displayName` и `OrganizationLifecycleChange.reason` (обязательный свободный текст до 1000 символов; выводится только в аудите с экранированием). К машинным строкам, label, имени организации и `displayName` применяется SAFE_TEXT; это дополнительная мера, а основная — контекстное экранирование при выводе. Отчёт строит шаблонизатор с автоматическим контекстным экранированием тела и атрибутов HTML; ссылки и URL из этих строк не строятся. Отчёт самодостаточен: без скриптов и внешних ресурсов (шрифтов, изображений, CSS по URL), с print stylesheet; генератор не делает сетевых обращений. В портале такие поля выводятся только как текст React; `dangerouslySetInnerHTML` запрещён правилом линтера.
 
 В P1 отчёт выдаётся только в HTML, PDF клиент получает печатью из браузера. `downloadReport` отвечает с заголовками `Content-Type: text/html; charset=utf-8`, `Content-Disposition: attachment; filename="report-<reportId>.html"`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:` и `Cache-Control: private, no-store`. Экспорт организации выдаётся как `application/zip` с attachment, nosniff и no-store. CSP SPA портала: `default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`. Отдельный cookieless origin в P1 не нужен. Изолированного PDF-renderer в P1 нет; требования к нему записаны в условии пересмотра в `08`.
 
@@ -516,6 +526,7 @@ Graph-сертификаты хранятся в отдельном Key Vault Gr
 | --- | --- | --- |
 | Чужой OrganizationId в запросе | Серверное членство, mTLS binding, RLS с контекстом только через `app.begin_org_context` | AT-01 и AT-02 |
 | Злоупотребление глобальным чтением PlatformAdmin | Аудит каждого запроса, MFA, минимальный состав, оповещение | AT-01 |
+| Повторная регистрация поверх действующего сертификата в окне `reenrollAllowedUntil` (например, клон VM из снимка старше ротации) | Окно открывается только после предъявления `superseded`-сертификата его ключом по mTLS и длится 7 суток; нужен действующий enrollment-токен и совпадающий признак машины; аудит `device.reenroll_over_active`, оповещение ServiceManager, ручной разбор и отзыв по RB-03 | AT-17 |
 | Утечка пакетного токена | `maxUses`, срок, отзыв, список устройств по токену с массовым отзывом (RB-12), аудит | AT-02 |
 | Повтор/подмена пакета | Уникальный scanId, hash тела и последовательность | AT-04 |
 | Клон или откат устройства | Признак машины, ресинхронизация не чаще раза в 24 ч, `identity_conflict` | AT-04 |
@@ -540,69 +551,71 @@ Graph-сертификаты хранятся в отдельном Key Vault Gr
 
 | Сущность | Ключевые данные | Ограничение |
 | --- | --- | --- |
-| organization | id, name, timezone, reportLanguage (nb, nn, en), status (active, disabled, deletion_scheduled), deletionDueAt | Клиентский контекст. `deletionDueAt` заполнено только в `deletion_scheduled`. Удалённая организация оставляет tombstone (id, deletedAt) и в API не отдаётся. Переходы — раздел «Жизненный цикл организации» |
-| platform_role | entraUserId, role, grantedBy, grantedAt | Зеркало назначения app role `PlatformAdmin` в Entra tenant компании; сервер сверяет его при входе и не реже раза в час. Отдельно от organization_member, изменения аудируются |
+| organization | id, name, timezone, reportLanguage (nb, nn, en), status (active, disabled, deletion_scheduled), deletionDueAt | Клиентский контекст. `timezone` (IANA) обязательна при создании; портал предлагает Europe/Oslo, но сервер значения по умолчанию не подставляет. `deletionDueAt` заполнено только в `deletion_scheduled`. Удалённая организация оставляет tombstone (id, deletedAt) и в API не отдаётся. Переходы — раздел «Жизненный цикл организации» |
+| platform_role | entraUserId, role, grantedBy, grantedAt | Зеркало назначения app role `PlatformAdmin` в Entra tenant компании; сервер сверяет его при входе и не реже раза в час. Отдельно от organization_member, изменения пишутся в `platform_audit_event` |
 | organization_member | organizationId, id, entraUserId, role (ServiceManager, Technician), displayName, grantedAt, grantedBy | Уникальность назначения и серверная авторизация. PlatformAdmin здесь не хранится; CustomerReader появится в P3. Изменения аудируются |
-| device | organizationId, id, displayName, status (active, revoked), installationId, machineFingerprintHash, identityState (ok, identity_conflict), clockStatus (ok, inconsistent), enrollmentTokenId, lastSeenAt, lastFullScanAt, lastAcceptedSequence | Составной ключ для ссылок клиента. `installationId` уникален среди всех неудалённых устройств организации, включая отозванные. `machineFingerprintHash` фиксируется при регистрации |
-| device_certificate | organizationId, deviceId, sha256, state (pending, active, superseded, revoked), validFrom, validTo, activatedAt, revokedAt, renewalRequestId, csrHash | Hash сертификата уникален; private key не хранится. Записи добавляет только роль БД Issuer. Не больше одного pending и не больше двух действующих сертификатов на устройство |
-| enrollment_token | organizationId, id, tokenHash, mode (single_use, batch), label, expiresAt, maxUses, useCount, revokedAt, createdAt, createdBy | Хранится только SHA-256 секрета. Счётчик использований и создание устройства — в одной транзакции, поэтому регистрируется не больше `maxUses` устройств |
-| enrollment | tokenId, installationId, registrationRequestId, csrHash, deviceId | Идентичный повтор (`registrationRequestId` + CSR) возвращает прежний сертификат и не увеличивает `useCount` |
+| device | organizationId, id, displayName, status (active, revoked), installationId, machineFingerprintHash, identityState (ok, identity_conflict), clockStatus (ok, inconsistent), enrollmentTokenId, lastSeenAt, lastFullScanAt, lastAcceptedSequence, reenrollAllowedUntil (timestamp, nullable) | Составной ключ для ссылок клиента. `installationId` уникален среди всех неудалённых устройств организации, включая отозванные. `machineFingerprintHash` фиксируется при регистрации. `lastFullScanAt` — `completedAt` последнего полного сбора (раздел «Отчёт и покрытие», «Определения»). `reenrollAllowedUntil` записывается при ответе 401 `certificate_expired` за `superseded`-сертификат после окончания перекрытия и обнуляется в транзакции выдачи нового сертификата при повторной регистрации (раздел «Канонический объект и идентичность устройства») |
+| device_certificate | organizationId, deviceId, sha256, state (pending, active, superseded, revoked), validFrom, validTo, activatedAt, revokedAt, renewalRequestId, csrHash | Hash сертификата уникален; private key не хранится. Записи добавляет только роль БД Issuer. Не больше одного pending и не больше двух действующих сертификатов на устройство; действующий — принимаемый сервером: `active` или `pending` с `validTo` > now либо `superseded` в пределах перекрытия, без отзыва (`04`, «Профиль и продление сертификата») |
+| enrollment_token | organizationId, id, tokenHash, mode (single_use, batch), label, expiresAt, maxUses, useCount, revokedAt, createdAt, createdBy | Хранится только SHA-256 секрета. `useCount` увеличивается в одной транзакции с выдачей сертификата — и при создании устройства, и при повторной регистрации существующего, поэтому по токену выполняется не больше `maxUses` регистраций |
+| enrollment | organizationId, tokenId, installationId, registrationRequestId, csrHash, deviceId, createdAt | Создаётся в транзакции выдачи при каждой регистрации, в том числе повторной регистрации существующего устройства. Идентичный повтор (`registrationRequestId` + CSR) возвращает прежний сертификат и не увеличивает `useCount` |
 | integration | organizationId, id, entraTenantId, clientId, credentialRef, capabilities | Ссылка на секрет, не сам credential. Контракт интеграций появится в P2-расширении |
 | policy_revision | organizationId, version, effectiveFrom, createdAt, createdBy, configuration | Immutable; хранится, пока на ревизию есть ссылки, но не меньше 12 месяцев; прошлые версии доступны для офлайн-пакетов. Структура configuration — подраздел «Политика клиента» |
 | scan_batch | organizationId, deviceId, scanId, sequence, policyVersion, startedAt, completedAt, receivedAt, payloadHash, payload, state | Unique(deviceId, scanId), unique(deviceId, sequence). Payload удаляется после успешной обработки, но не позже 7 суток после приёма; метаданные повтора хранятся 90 дней |
 | observation | organizationId, deviceId, subjectType, localKey, checkId, observedAt, collectionStatus, evidence, reasonCode | Канонический объект и закрытые evidence по checkId; хранится 90 дней |
-| assessment | organizationId, id, observationId (nullable), deviceId, subjectType, localKey, checkId, ruleId, ruleVersion, sourcePolicyVersion, evaluatedPolicyVersion, assessmentScope (historical, current), assessmentMode (assessed, informational), result, severity, reasonCode, late, basisSnapshot, evidenceAvailability (available, expired) | Исходное измерение не переписывается пересчётом. Свежесть вычисляется при чтении и при формировании отчёта. Хранится 12 месяцев; через 90 дней остаётся `basisSnapshot` |
+| assessment | organizationId, id, observationId (nullable), deviceId, subjectType, localKey, checkId, ruleId, ruleVersion, sourcePolicyVersion, evaluatedPolicyVersion, assessmentScope (historical, current), assessmentMode (assessed, informational), result, severity, reasonCode, late, evaluatedAt, basisSnapshot, evidenceAvailability (available, expired) | Исходное измерение не переписывается пересчётом. Свежесть вычисляется при чтении и при формировании отчёта. Хранится 12 месяцев от `evaluatedAt`, но не удаляется, пока на неё ссылается сохраняемое событие; через 90 дней остаётся `basisSnapshot` |
 | finding | organizationId, id, deviceId, subjectType, localKey, checkId, technicalState, workflowState, severity, assigneeId, dueAt, workflowReason, reviewAt, workflowDecidedBy, revision | Unique(organizationId, deviceId, subjectType, localKey, checkId); политика фиксируется в событиях |
-| finding_event | findingId, id, eventType, cause, assessmentId, actorId, fromWorkflowState, toWorkflowState, occurredAt | События immutable. `cause` ∈ device_change, rule_change, policy_change, data_quality, manual_action, review_expired; допустимые сочетания — подраздел «Допустимые сочетания eventType и cause». `actorId` не null тогда и только тогда, когда `cause=manual_action` |
-| job | organizationId, id, type, inputId, periodKey, state, leaseOwner, leaseToken, leaseUntil, attempts, nextAttemptAt | Unique(type, organizationId, coalesce(inputId, periodKey)); завершение под fencing по `leaseToken`. Подраздел «Задания и планировщик» |
+| finding_event | findingId, id, eventType, cause, assessmentId, actorId, fromWorkflowState, toWorkflowState, occurredAt | События immutable. `cause` ∈ device_change, rule_change, policy_change, applicability_change, data_quality, manual_action, review_expired; допустимые сочетания — подраздел «Допустимые сочетания eventType и cause». `actorId` не null тогда и только тогда, когда `cause=manual_action` |
+| scan_request | organizationId, id, deviceId, requestedBy, createdAt, expiresAt, state (requested, delivered, completed, expired) | Запрос повторной проверки `requestDeviceScan`, только в варианте A; относится к устройству, а не к отдельной проблеме. Ключ `id` совпадает с `ScanRequest.id` в API; в конфигурации агента он передаётся как `pendingScanRequestId`, в пакете агента — как `scanRequestId`. Хранится 90 суток от `createdAt`. Правила — раздел «API портала» |
+| job | organizationId, id, type, inputId, periodKey, state, leaseOwner, leaseToken, leaseUntil, attempts, nextAttemptAt | Unique(type, organizationId, coalesce(inputId, periodKey)); у платформенного `platform_audit_purge` `organizationId` = null и уникальность по (`type`, `periodKey`); завершение под fencing по `leaseToken`. Подраздел «Задания и планировщик» |
 | report | organizationId, id, periodStart, periodEnd, timezone, language, format, state, failureCode, blobKey, policyVersions | Файл выдаётся только после авторизации; опубликованный отчёт не пересчитывается |
 | organization_export | organizationId, id, state (queued, ready, failed, expired), blobKey, createdAt, expiresAt, requestedBy | Файл экспорта хранится 7 дней и выдаётся только через авторизованный backend |
-| audit_event | organizationId, id, occurredAt, actorType (user, platform_admin, device, system), actorId, action, targetType, targetId, outcome (success, denied, failed), correlationId | Отредактированные данные, ограниченный доступ; читает только PlatformAdmin |
-| lifecycle_journal | id, organizationId, targetType, targetId, action, occurredAt, correlationId | Хранится вне PostgreSQL, append-only, без PII и без `actorId`: исполнитель находится через `correlationId` и `audit_event`. Описание — `06`, раздел «Журнал жизненного цикла и restore в карантине» |
+| audit_event | organizationId, id, occurredAt, actorType (user, platform_admin, device, system), actorId, action, targetType, targetId, outcome (success, denied, failed), correlationId | Только клиентский аудит: `organizationId` обязателен, таблица под RLS. Отредактированные данные, ограниченный доступ; читает только PlatformAdmin через `listAuditEvents`. Доступ PlatformAdmin к данным организации пишется в её `audit_event` и виден в `listAuditEvents` |
+| platform_audit_event | id, occurredAt, actorType (user, platform_admin, system), actorId, action, targetType, targetId, outcome (success, denied, failed), correlationId | Платформенный аудит без `organizationId` и без RLS: изменения `platform_role`, создание, отключение и удаление организаций. Чтение — отдельная роль базы для runbook (только SELECT) и Log Analytics; операции API в P1 нет; срок хранения — как у `audit_event`, строки старше срока удаляет ежедневное задание `platform_audit_purge` в 02:30 (`organizationId` = null), а не `retention_purge` организации; право DELETE есть только у роли этого задания |
+| lifecycle_journal | id, organizationId, targetType, targetId, action, occurredAt, correlationId | Хранится вне PostgreSQL, append-only, без PII и без `actorId`: исполнитель находится через `correlationId` и `audit_event` или `platform_audit_event`. Описание — `06`, раздел «Журнал жизненного цикла и restore в карантине» |
 
 Ссылки между клиентскими сущностями используют OrganizationId вместе с ID цели, включая foreign keys. Индексы: устройства по organization/status/lastSeenAt; наблюдения по subject/checkId/observedAt; открытые проблемы по organization/severity; готовые задания по state/nextAttemptAt. Нагрузочные испытания определяют необходимость партиционирования. Контекст организации устанавливается только SECURITY DEFINER-функцией `app.begin_org_context(organizationId, actor, purpose)`: она сначала проверяет `platform_role`, затем членство, и если у субъекта есть `platform_role`, в той же транзакции пишет `audit_event` (`actorType=platform_admin`, `action=platform.access`, target — operationId), даже при наличии членства. Политики RLS имеют вид `organization_id = app.current_org_id()`, на клиентских таблицах включён `FORCE ROW LEVEL SECURITY`, и без контекста запрос возвращает 0 строк; политик межклиентского обхода нет, а глобальное чтение PlatformAdmin означает право войти в контекст любой организации. Роли и аудит описаны в `04`, раздел «Вход в портал и роли».
 
-Сроки хранения всей цепочки перечислены в `04`, раздел «Сроки хранения». Для модели данных важны три правила. `basisSnapshot` неизменяем и содержит checkId, ruleId, ruleVersion, evaluatedPolicyVersion, result, freshness, reasonCode, observedAt и минимальные allowlisted-поля для explanation; для WIN-008 сохраняются только неразрешённые SID. Через 90 дней evidence оценки удаляется, остаётся `basisSnapshot`, `evidenceAvailability=expired` и `observationId=NULL`. Политика FK: `finding_event → assessment` ON DELETE RESTRICT, `assessment → observation` ON DELETE SET NULL (observation_id) — список колонок в этом действии требует PostgreSQL 15 или новее, мажорная версия выбирается до SP-04; organizationId при этом не обнуляется, каскада от observation к истории нет. Задание `retention_purge` выполняется ежедневно по каждой организации в контексте RLS и пишет в аудит сводку: что удалено и что заменено снимком. Клиентская политика может сократить сроки хранения наблюдений, payload и снимков, но не отменяет неизменяемость событий; срок хранения оснований и порядок утверждения удаления — вопрос 6 в `08`.
+Сроки хранения всей цепочки перечислены в `04`, раздел «Сроки хранения». Для модели данных важны следующие правила. `basisSnapshot` неизменяем и содержит checkId, ruleId, ruleVersion, evaluatedPolicyVersion, result, freshness, reasonCode, observedAt и минимальные allowlisted-поля для explanation; для WIN-008 сохраняются только неразрешённые SID. Через 90 дней evidence оценки удаляется, остаётся `basisSnapshot`, `evidenceAvailability=expired` и `observationId=NULL`. Сроки: `assessment` — 12 месяцев от `evaluatedAt`, `finding_event` — 12 месяцев от `occurredAt`; `finding` удаляется, когда удалено его последнее событие и он в `resolved`. Политика FK: `device.enrollmentTokenId` ON DELETE SET NULL; `finding_event → assessment` ON DELETE RESTRICT, поэтому оценка, на которую ссылается сохраняемое событие, не удаляется до удаления этого события; `assessment → observation` ON DELETE SET NULL (observation_id) — список колонок в этом действии требует PostgreSQL 15 или новее, мажорная версия выбирается до SP-04; organizationId при этом не обнуляется, каскада от observation к истории нет. Задание `retention_purge` выполняется ежедневно по каждой организации в контексте RLS, удаляет в порядке `finding_event` → `assessment` → `finding` → `observation` → `scan_batch` → `scan_request` → `device_certificate` → `enrollment` → `enrollment_token` → `device` (`policy_revision` не удаляется, пока на неё ссылаются сохраняемые записи) и пишет в аудит сводку: что удалено и что заменено снимком. Клиентская политика может сократить сроки хранения наблюдений, payload и снимков, но не отменяет неизменяемость событий; срок хранения оснований и порядок утверждения удаления — вопрос 6 в `08`.
 
 ### Политика клиента
 
-`policy_revision.configuration` описывается закрытой схемой PolicyConfiguration. `activeCheckIds` содержит WIN-* проверки, WIN-011 обязательна. `schedule` задаёт `scanIntervalHours` 1…168 (по умолчанию 24), `heartbeatIntervalHours` 1…24 (4) и `scanJitterMinutes` 0…60 (10). `buffer` задаёт `maxBufferDays` 1…30 (7) и `maxBatchAgeDays` 2…32 (9); при сохранении проверяется `maxBatchAgeDays ≥ maxBufferDays + 1`, иначе 422 `schema_violation`. `checks` — объект по 13 P1 checkId: у каждого есть `assessmentMode`, `freshnessWindowHours` 1…720 (72), необязательный `notApplicableEditionIds[]` и `parameters`; у WIN-011 и SYS-001 `assessmentMode` — const `informational`.
+`policy_revision.configuration` описывается закрытой схемой PolicyConfiguration. `activeCheckIds` содержит WIN-* проверки, WIN-011 обязательна. `schedule` задаёт `scanIntervalHours` 1…168 (по умолчанию 24), `heartbeatIntervalHours` 1…24 (4) и `scanJitterMinutes` 0…60 (10). `buffer` задаёт `maxBufferDays` 1…30 (7) и `maxBatchAgeDays` 2…32 (9); при сохранении проверяется `maxBatchAgeDays ≥ maxBufferDays + 1`, иначе 422 `schema_violation`. `checks` — объект по 13 P1 checkId: у каждого есть `assessmentMode`, `freshnessWindowHours` 1…720 (72), необязательный `notApplicableEditionIds[]` (по умолчанию `[]`, у WIN-002 — `[Core, CoreN, CoreSingleLanguage, CoreCountrySpecific]`) и `parameters`; у WIN-011 и SYS-001 `assessmentMode` — const `informational`. Все обязательные поля PolicyConfiguration имеют значение default; таблица ниже показывает стартовые значения всех параметров.
 
 | checkId | parameters (стартовая политика) | Что нужно для assessed |
 | --- | --- | --- |
 | WIN-001 | `warnFreePercent` 10, `warnFreeBytes` 10737418240, `criticalFreePercent` 5, `criticalFreeBytes` 2147483648 | — |
 | WIN-002 | `encryptionRequired` true; `notApplicableEditionIds` [Core, CoreN, CoreSingleLanguage, CoreCountrySpecific] | — |
-| WIN-003 | `approvedProviders[]` (SAFE_TEXT), `defenderApproved` bool | Непустой `approvedProviders` или `defenderApproved=true` |
+| WIN-003 | `approvedProviders` [] (элементы SAFE_TEXT), `defenderApproved` true | Непустой `approvedProviders` или `defenderApproved=true` |
 | WIN-004 | `warnDays` 3, `criticalDays` 7 | WIN-003 в `activeCheckIds`. Применима только при `defenderApproved=true` и `amRunningMode=normal` по WIN-003 того же пакета, иначе not_applicable (в том числе при `defender = null`) |
 | WIN-005 | `requiredProfiles` [domain, private, public] | — |
-| WIN-006 | `expectedSource` (`windows_update`, `wsus`, `other_approved`), `maxSearchAgeHours` 72, `graceDaysBySeverity` {critical 7, important 14, moderate 30, low 30, unrated 14}, `referenceTimeBasis` (`deadline`, `first_seen`) | `expectedSource` |
+| WIN-006 | `expectedSource` null (допустимо `windows_update`, `wsus`, `other_approved`), `maxSearchAgeHours` 72, `graceDaysBySeverity` {critical 7, important 14, moderate 30, low 30, unrated 14}, `referenceTimeBasis` `first_seen` (допустимо `deadline`, `first_seen`) | `expectedSource` не null |
 | WIN-007 | `warnDays` 3 | — |
-| WIN-008 | `allowedSids[]` | Не меньше одного SID |
+| WIN-008 | `allowedSids` [] | Не меньше одного SID |
 | WIN-009 | `secureBootRequired` true | — |
-| WIN-010 | `expectedTenantId` | `expectedTenantId` |
+| WIN-010 | `expectedTenantId` null | `expectedTenantId` не null |
 | WIN-011, SYS-001, SYS-002 | `{}` | WIN-011 и SYS-001 — всегда informational |
 
-`createPolicyRevision` возвращает 422 `policy_inputs_missing` в трёх случаях: режим `assessed` без входных настроек; `activeCheckIds` без WIN-011; активна WIN-004 без WIN-003. Режим проверки хранится в политике явно; наличие входных настроек — необходимое, но не достаточное условие `assessed`. Межпроверочная применимость берётся из наблюдения того же пакета: WIN-002 — по `editionId` из WIN-011 (`notApplicableEditionIds`), WIN-004 — по `defender` из WIN-003. Если такого наблюдения в пакете нет, оно `unavailable` или пакет имеет признак часов, зависимая проверка получает unknown/`applicability_input_missing`, а не not_applicable; если применимость известна и проверка не применима — not_applicable/`policy_not_applicable`.
+`createPolicyRevision` возвращает 422 `policy_inputs_missing` в трёх случаях: режим `assessed` без входных настроек; `activeCheckIds` без WIN-011; активна WIN-004 без WIN-003. Режим проверки хранится в политике явно; наличие входных настроек — необходимое, но не достаточное условие `assessed`. Межпроверочная применимость берётся из наблюдения того же пакета: WIN-002 — по `editionId` из WIN-011 (`notApplicableEditionIds`), WIN-004 — по `defender` из WIN-003. Если такого наблюдения в пакете нет или оно `unavailable`, зависимая проверка получает unknown/`applicability_input_missing` (в режиме informational — `result=null` с тем же `reasonCode`), а не not_applicable; если применимость известна и проверка не применима — not_applicable/`policy_not_applicable` (в режиме informational — `result=null`, `reasonCode=null`). Это правило применяется, только если у пакета нет признака часов: при признаке все оценки пакета получают `clock_inconsistent` (подраздел «Время и часы устройства»).
 
-Политика по умолчанию v1 создаётся вместе с организацией операцией `createOrganization`. В её `activeCheckIds` входят все 11 WIN. Режимы равны `defaultAssessmentMode` каталога `03`: WIN-003, WIN-006, WIN-008, WIN-010, WIN-011 и SYS-001 — informational, остальные P1-проверки — assessed. Стартовые параметры берутся из таблицы выше; кроме того, `defenderApproved=true` и `approvedProviders=[]`, поэтому WIN-004 применима на устройствах с Defender в режиме normal. Новая версия создаётся только с `If-Match`, равным текущей версии, ревизии неизменяемы.
+Политика по умолчанию v1 создаётся вместе с организацией операцией `createOrganization`. В её `activeCheckIds` входят все 11 WIN. Режимы равны `defaultAssessmentMode` каталога `03`: WIN-003, WIN-006, WIN-008, WIN-010, WIN-011 и SYS-001 — informational, остальные P1-проверки — assessed. Стартовые параметры берутся из таблицы выше, в том числе `defenderApproved=true` и `approvedProviders=[]`, поэтому WIN-004 применима на устройствах с Defender в режиме normal. Новая версия создаётся только с `If-Match`, равным текущей версии, ревизии неизменяемы.
 
 ### Задания и планировщик
 
-Типы заданий: `evaluate_batch`, `recalculate_policy`, `report_generate`, `organization_export`; раз в час — `freshness_sweep`, `scan_request_expiry` и `review_expiry`; `weekly_report` — в понедельник 06:00 по timezone организации, за прошедшую неделю и только для `active`; `retention_purge` — ежедневно в 02:00; `organization_delete` — планировщик ежечасно ставит его для организаций с `deletionDueAt ≤ now`; в P2 добавляется `graph_collect`. Планировщик работает внутри каждой реплики worker и каждые 5 мин вставляет периодические задания через `INSERT … ON CONFLICT DO NOTHING`; пропуски догоняются не глубже 24 ч для часовых заданий и 4 недель для `weekly_report`. Захват выполняется через `FOR UPDATE SKIP LOCKED` с lease 5 мин и продлением, при каждом захвате `leaseToken` увеличивается. Завершение и бизнес-эффект выполняются в одной транзакции `WHERE id=? AND leaseToken=?`; если обновлено 0 строк, транзакция откатывается, а эффекты идемпотентны за счёт уникальных ограничений. Выбор и обработка разделены: выбор — SECURITY DEFINER-функция `claim_jobs` от роли без входа, которая видит только метаданные job; обработка — отдельная транзакция с контекстом организации из `job.organizationId` (`purpose=job` с проверкой lease). Метрика «последний такт планировщика» поднимает оповещение, если периодические задания не создавались дольше двух периодов.
+Типы заданий: `evaluate_batch`, `recalculate_policy`, `report_generate`, `organization_export`; раз в час — `freshness_sweep`, `scan_request_expiry` и `review_expiry`; `weekly_report` — в понедельник 06:00 по timezone организации, за прошедшую неделю и только для `active`; `retention_purge` — ежедневно в 02:00; `platform_audit_purge` — ежедневно, платформенное задание с `organizationId` = null и уникальностью по (`type`, `periodKey`), удаляет строки `platform_audit_event` старше срока хранения аудита; `organization_delete` — планировщик ежечасно ставит его для организаций с `deletionDueAt ≤ now`; в P2 добавляется `graph_collect`. Планировщик работает внутри каждой реплики worker и каждые 5 мин вставляет периодические задания через `INSERT … ON CONFLICT DO NOTHING`; пропуски догоняются не глубже 24 ч для часовых заданий и 4 недель для `weekly_report`. Захват выполняется через `FOR UPDATE SKIP LOCKED` с lease 5 мин и продлением, при каждом захвате `leaseToken` увеличивается. Завершение и бизнес-эффект выполняются в одной транзакции `WHERE id=? AND leaseToken=?`; если обновлено 0 строк, транзакция откатывается, а эффекты идемпотентны за счёт уникальных ограничений. Выбор и обработка разделены: выбор — SECURITY DEFINER-функция `claim_jobs` от роли без входа, которая видит только метаданные job; обработка — отдельная транзакция с контекстом организации из `job.organizationId` (`purpose=job` с проверкой lease); `platform_audit_purge` обрабатывается без контекста организации под собственной ролью базы, единственной с правом DELETE на `platform_audit_event`. Метрика «последний такт планировщика» поднимает оповещение, если периодические задания не создавались дольше двух периодов.
 
 ## Канонический объект и идентичность устройства
 
 Серверный ключ объекта — `(organizationId, deviceId, subjectType, localKey)`. `deviceId` берётся только из сертификата: агент не передаёт его и не может адресовать объект другого устройства. `localKey` равен `'device'` для устройства и `volumeId` (`\\?\Volume{GUID}\`) для тома; буква диска — только атрибут отображения `mountPoint`. В API `subject` имеет вид `{type, key, displayName}`. Уникальность внутри пакета — `(checkId, subject.type, localKey)`, уникальность finding — `(organizationId, deviceId, subjectType, localKey, checkId)`. Поэтому два ПК с томом C:, смена буквы тома ОС и повторная регистрация того же устройства не смешивают историю.
 
-`deviceId` создаёт сервер при enroll. `machineFingerprint` — HMAC-SHA256 в hex нижнего регистра: ключ — 16 байт `installationId` (UUID) в порядке байтов RFC 4122 (big-endian), сообщение — UTF-8 строка SMBIOS UUID в каноническом виде (нижний регистр, с дефисами), байт `0x00` и UTF-8 строка MachineGuid в том же виде. Сервер хранит `machineFingerprintHash` = SHA-256 от этого значения, сырые идентификаторы не передаются; стабильность обоих источников в контексте службы проверяет SP-01. Признак передаётся в enroll, heartbeat, scans и renew. Несовпадение даёт 409 `identity_conflict`, у устройства выставляется `identityState=identity_conflict`, а исходное устройство с совпадающим признаком продолжает работу. Сертификат при конфликте не отзывается: отзыв и перерегистрацию выполняет ServiceManager вручную по RB-03. `identityState` возвращается в `ok`, если 7 суток не было запросов с чужим признаком; возникновение и снятие конфликта пишутся в аудит (`device.identity_conflict`, `device.identity_conflict_cleared`). Клон регистрируется заново только после чистой переустановки: новый `installationId`, новый ключ и sequence с нуля; агент не входит в golden image.
+`deviceId` создаёт сервер при enroll. `machineFingerprint` — HMAC-SHA256 в hex нижнего регистра: ключ — 16 байт `installationId` (UUID) в порядке байтов RFC 4122 (big-endian), сообщение — UTF-8 строка SMBIOS UUID в каноническом виде (нижний регистр, с дефисами), байт `0x00` и UTF-8 строка MachineGuid в том же виде. Сервер хранит `machineFingerprintHash` = SHA-256 от этого значения, сырые идентификаторы не передаются; стабильность обоих источников в контексте службы проверяет SP-01. Признак передаётся в enroll, heartbeat, scans и renew. Несовпадение даёт 409 `identity_conflict`. В heartbeat, scans и renew у устройства выставляется `identityState=identity_conflict`; отказ enroll с чужим признаком `identityState` не меняет (регистрацию подтверждает только токен) и пишется в аудит `device.enroll_identity_conflict`, а исходное устройство с совпадающим признаком продолжает работу. Сертификат при конфликте не отзывается: отзыв и перерегистрацию выполняет ServiceManager вручную по RB-03. `identityState` возвращается в `ok`, если 7 суток не было запросов с чужим признаком; возникновение и снятие конфликта пишутся в аудит (`device.identity_conflict`, `device.identity_conflict_cleared`). Клон регистрируется заново только после чистой переустановки: новый `installationId`, новый ключ и sequence с нуля; агент не входит в golden image.
 
 `lastAcceptedSequence` — максимальный принятый sequence устройства; он возвращается в Configuration, пропуски sequence допустимы. Ресинхронизация после `sequence_conflict` при совпадающем признаке выполняется так: агент запрашивает GET configuration, перенумеровывает неподтверждённые пакеты начиная с `lastAcceptedSequence + 1` и даёт им новые `scanId` — это единственное исключение из правила неизменности байтов; сервер пишет `device.sequence_rollback`. Ресинхронизация допускается не чаще раза в 24 ч, повторный конфликт за 24 ч сервер возвращает как `identity_conflict`.
 
-Повторная регистрация после истечения сертификата допускается с тем же `installationId`, если устройство не отозвано, у него нет действующих неотозванных сертификатов и признак совпадает: тому же `deviceId` выдаётся новый сертификат, история сохраняется. Для отозванного устройства enroll возвращает 409 `installation_already_enrolled`, и нужна чистая переустановка с новым `installationId`. Имя устройства: начальное значение — `EnrollmentRequest.displayName`; ServiceManager или PlatformAdmin меняет его через `updateDevice`; агент имя не перезаписывает.
+Повторная регистрация с тем же `installationId` сохраняет `deviceId` и историю, если устройство не отозвано, признак машины совпадает и выполнено одно из условий: у устройства нет `active` сертификата с `validTo` > now (например, сертификат истёк; неактивированный `pending` не учитывается) либо `device.reenrollAllowedUntil > now`. Право на повторную регистрацию при действующем сертификате сервер хранит явно. Когда агент предъявляет по mTLS зарегистрированный сертификат своего устройства в состоянии `superseded` после окончания перекрытия (например, восстановленный образ старше ротации), сервер отвечает 401 `certificate_expired` и в той же транзакции записывает `device.reenrollAllowedUntil = now + 7 суток` (аудит `device.reenroll_allowed`). Отозванный сертификат или отозванное устройство это поле не выставляют. Окно выставляется по состоянию `superseded` независимо от `validTo`, если запрос дошёл до приложения; при обрыве TLS на ingress оно не открывается (вариант устанавливает SP-02, `04`, «Профиль и продление сертификата»). При любой повторной регистрации существующий неактивированный `pending` переводится в `revoked` в транзакции выдачи (аудит `device.pending_revoked`), а `useCount` токена увеличивается и создаётся запись `enrollment`, как при создании устройства. При `reenrollAllowedUntil > now` новый сертификат выдаётся как `pending`; перекрытие прежних `superseded` заканчивается в момент выдачи; прежний `active` переходит в `superseded` при первом mTLS-запросе новым; `reenrollAllowedUntil` обнуляется в транзакции выдачи; `previousCertificateValidUntil = null`; пишется аудит `device.reenroll_over_active` и поднимается оповещение ServiceManager. Если `installationId` уже зарегистрирован, а признак машины не совпадает, enroll возвращает 409 `identity_conflict` (действие агента `identity_stop`). Для отозванного устройства enroll возвращает 409 `installation_already_enrolled`, и нужна чистая переустановка с новым `installationId`; тот же код получает устройство с `active` сертификатом, у которого `validTo` > now, если `reenrollAllowedUntil` не задан или истёк. Порядок проверок `enrollAgent` — раздел «API агента». Имя устройства: начальное значение — `EnrollmentRequest.displayName`; ServiceManager или PlatformAdmin меняет его через `updateDevice`; агент имя не перезаписывает.
 
 ## Жизненный цикл организации
 
-Между `schedule_deletion` и удалением проходит 30 суток (платформенный параметр). Срок, согласованный с клиентом, и порядок утверждения удаления — вопрос 6 в `08`. Переходы выполняет PlatformAdmin операцией `changeOrganizationLifecycle` с `idempotencyKey` в теле; повтор с тем же ключом возвращает прежний результат. Ограничивающие действия записываются сначала в журнал жизненного цикла, затем в БД; разрешающие — сначала в БД, затем в журнал, чтобы потеря записи давала более строгий итог.
+Между `schedule_deletion` и удалением проходит 30 суток (платформенный параметр). Срок, согласованный с клиентом, и порядок утверждения удаления — вопрос 6 в `08`. Переходы выполняет PlatformAdmin операцией `changeOrganizationLifecycle` с `idempotencyKey` в теле; повтор с тем же ключом возвращает прежний результат. Обязательное поле `reason` — свободный текст до 1000 символов; это недоверенная строка, она выводится только в аудите с экранированием. Ограничивающие действия записываются сначала в журнал жизненного цикла, затем в БД; разрешающие — сначала в БД, затем в журнал, чтобы потеря записи давала более строгий итог.
 
 | Из | Действие | В | Условие | Порядок записи и эффекты |
 | --- | --- | --- | --- | --- |
@@ -624,9 +637,9 @@ Hash и `revokedAt` сертификатов удалённой организа
 
 ## Состояния проблем
 
-`technicalState=open|resolved`; `workflowState=new|in_progress|risk_accepted|suppressed`. Finding создаётся только для режима `assessed`. Пороги warn и critical в правилах `03` дают `result=fail` и `Finding.severity` = `warning` или `critical`. `risk_accepted` и `suppressed` требуют причины, сотрудника и срока пересмотра. Они не превращают fail в pass и не повышают показатель соответствия.
+`technicalState=open|resolved`; `workflowState=new|in_progress|risk_accepted|suppressed`. Finding создаётся только для режима `assessed`. Оценка в режиме `informational` всегда имеет `result=null` и finding не создаёт. В informational-оценку переносятся только причины, по которым данных нет: код недоступности наблюдения (код сборщика), `missing_observation`, `applicability_input_missing` и `clock_inconsistent` — `result=null` с той же причиной. Остальные причины правил (`unmapped_state`, `update_*`, `os_version_unknown`, `os_inventory_missing`, `evidence_time_invalid`, `policy_not_applicable`) informational-оценке не присваиваются: `result=null`, `reasonCode=null`. У assessed-оценки `reasonCode` допускается только при `result` unknown или not_applicable. Пороги warn и critical в правилах `03` дают `result=fail` и `Finding.severity` = `warning` или `critical`. `risk_accepted` означает, что риск реален и организация сознательно принимает его до `reviewAt`. `suppressed` означает, что срабатывание признано ложным или неприменимым для этой организации без изменения политики, до `reviewAt`. Оба решения требуют причины, сотрудника и срока пересмотра, права на них одинаковы. Они не превращают fail в pass и не повышают показатель соответствия. Очередь проблем по умолчанию — `technicalState=open&workflowState=new,in_progress`, то есть открытые проблемы без этих решений; фильтр `workflowState` принимает несколько значений через запятую и показывает в том числе решения о риске. Недельный отчёт показывает «принятые риски» и «подавленные срабатывания» раздельно.
 
-Термины. «Правило» — глобальная логика проверки с `ruleId` и `ruleVersion`; таблица жизненного цикла ОС для SYS-002 относится к данным правила. «Политика» — параметры клиента в `policy_revision`. `rule_change` пишется только при смене `ruleVersion`, `policy_change` — только при смене `policy_revision`, в том числе при изменении окна свежести. Исправлением на устройстве считается только `resolved` с `cause=device_change`. Событий задним числом нет: поздний пакет и пакет с признаком часов не создают событий за прошлое. События уровня устройства пишутся в `audit_event` с `actorType=system`, а не в `finding_event`: `device.sequence_rollback`, `device.identity_conflict`, `device.identity_conflict_cleared`, `device.data_loss`.
+Термины. «Правило» — глобальная логика проверки с `ruleId` и `ruleVersion`; таблица жизненного цикла ОС для SYS-002 относится к данным правила. «Политика» — параметры клиента в `policy_revision`. `rule_change` пишется только при смене `ruleVersion`, `policy_change` — только при смене `policy_revision`, в том числе при изменении окна свежести. `applicability_change` пишется только с eventType `resolved`, когда проверка стала not_applicable из-за фактов устройства в пакете (например, `editionId` из WIN-011 для WIN-002 или режим Defender для WIN-004) без смены `policy_revision`. Исправлением на устройстве считается только `resolved` с `cause=device_change`. Событий задним числом нет: поздний пакет и пакет с признаком часов не создают событий за прошлое. События уровня устройства пишутся в `audit_event` с `actorType=system`, а не в `finding_event`: `device.sequence_rollback`, `device.identity_conflict`, `device.identity_conflict_cleared`, `device.data_loss`, `device.reenroll_allowed`, `device.reenroll_over_active`, `device.enroll_identity_conflict`.
 
 Свежесть задаётся `freshnessWindowHours` политики для каждой проверки, по умолчанию 72 ч от `observedAt`. Она вычисляется при чтении (на текущий момент) и при формировании отчёта (на `periodEnd`). Heartbeat обновляет `lastSeenAt`, но не свежесть оценок; устаревший pass показывается как прошлый результат с датой. Задание `freshness_sweep` раз в час пишет `quality_changed` только при переходе свежести открытого finding (идемпотентно) и записывает оценку SYS-001 при смене её значения. Сервер помечает оценку признаком `late`, если `receivedAt − completedAt` больше 24 ч; поздний пакет не отменяет более новое наблюдение.
 
@@ -634,13 +647,15 @@ Hash и `revokedAt` сертификатов удалённой организа
 
 ### Таблица переходов finding
 
-| Текущее | Свежий fail | Свежий pass | unknown или stale | not_applicable по политике | Объект выведен |
-| --- | --- | --- | --- | --- | --- |
-| Нет finding | Создать `open`, `new`, событие `opened` | Ничего | Ничего (видно на устройстве и в coverage) | Ничего | Ничего |
-| open | Без события; `quality_changed`, если раньше качество было не fresh | `resolved`; `workflowState` не меняется | Остаётся `open`; `quality_changed` только при смене качества | `resolved`, `policy_changed`/`policy_change` | `resolved`, `object_retired` |
-| resolved | `reopened`; `workflowState=new`, если нет действующего решения (`reviewAt > now`) | Без события | Без события | Без события | Без события |
+| Текущее | Свежий fail | Свежий pass | unknown или stale | not_applicable после смены ревизии политики | not_applicable после смены фактов устройства | Объект выведен |
+| --- | --- | --- | --- | --- | --- | --- |
+| Нет finding | Создать `open`, `new`, событие `opened` | Ничего | Ничего (видно на устройстве и в coverage) | Ничего | Ничего | Ничего |
+| open | Без события; `quality_changed`, если раньше качество было не fresh | `resolved`; `workflowState` не меняется | Остаётся `open`; `quality_changed` только при смене качества | `resolved`, `policy_changed`/`policy_change` | `resolved`, `resolved`/`applicability_change` | `resolved`, `object_retired` |
+| resolved | `reopened`; `workflowState=new`, если нет действующего решения (`reviewAt > now`) | Без события | Без события | Без события | Без события | Без события |
 
-`cause` у `opened`, `resolved` и `reopened` соответствует триггеру: `device_change`, `rule_change` или `policy_change`. Причины вывода объекта: отзыв устройства — `object_retired`/`manual_action`; исчезновение тома — `object_retired`/`device_change`; исключение проверки из `activeCheckIds` или перевод в informational — `policy_changed`/`policy_change`. Not applicable, удаление объекта, изменение политики и изменение правила не попадают в число исправлений устройством; недельный отчёт показывает их отдельными категориями.
+Результат not_applicable (`reasonCode=policy_not_applicable`) вычисляется по политике и фактам устройства вместе: например, WIN-002 — по `notApplicableEditionIds` политики и `editionId` из WIN-011. Поэтому колонки таблицы различают не результат, а то, что изменилось. Для открытой проблемы причина события зависит от изменившегося входа: новая ревизия политики — `policy_changed`/`policy_change`; новые факты устройства в пакете без смены `policy_revision` — `resolved`/`applicability_change`.
+
+`cause` у `opened`, `resolved` и `reopened` соответствует триггеру: `device_change`, `rule_change` или `policy_change`; у `resolved` из-за неприменимости по фактам устройства — `applicability_change`. Если такая проверка снова применима и даёт fail, пишется `reopened` с `device_change`. Причины вывода объекта: отзыв устройства — `object_retired`/`manual_action`; исчезновение тома — `object_retired`/`device_change`; исключение проверки из `activeCheckIds` или перевод в informational — `policy_changed`/`policy_change`. Not applicable (после смены ревизии политики и после смены фактов устройства), удаление объекта, изменение политики и изменение правила не попадают в число исправлений устройством; недельный отчёт показывает их отдельными категориями.
 
 ### Автомат workflowState
 
@@ -662,7 +677,7 @@ Hash и `revokedAt` сертификатов удалённой организа
 | eventType | Допустимые cause | assessmentId |
 | --- | --- | --- |
 | opened | device_change, rule_change, policy_change | обязателен |
-| resolved | device_change, rule_change, policy_change | обязателен |
+| resolved | device_change, rule_change, policy_change, applicability_change | обязателен |
 | reopened | device_change, rule_change, policy_change | обязателен |
 | quality_changed | data_quality | может быть null (переход в stale без новой оценки) |
 | workflow_changed | manual_action, review_expired | null |
@@ -683,11 +698,11 @@ Hash и `revokedAt` сертификатов удалённой организа
 
 ## API агента
 
-Контракт находится в [specs/openapi.json](specs/openapi.json). JSON Schema отдельно описывает пакет и observation. P1 принимает только Windows-наблюдения: Graph-данные создаются Worker и не принимаются из агента. API агента действует в варианте A; если gate SP-05 выбирает вариант B, Agent API, PKI и Issuer отпадают, а модель observation/assessment/finding остаётся той же (`07`).
+Контракт находится в [specs/openapi.json](specs/openapi.json). JSON Schema отдельно описывает пакет и observation. P1 принимает только Windows-наблюдения. Graph-данные создаёт отдельный Graph-компонент (P2), при варианте B факты импорта создаёт компонент импорта; из агента они не принимаются, Worker Graph-сертификатов не получает. API агента действует в варианте A; если gate SP-05 выбирает вариант B, Agent API, PKI и Issuer отпадают, а модель observation/assessment/finding остаётся той же (`07`).
 
 | operationId | Метод и путь | Хост и доступ | Повтор и конкуренция | Успех |
 | --- | --- | --- | --- | --- |
-| enrollAgent | POST `/api/v1/agent/enroll` | Portal API; `Authorization: Enrollment <token>` | Идемпотентно по `registrationRequestId` + CSR: повтор возвращает исходный ответ | 201 DeviceCertificate |
+| enrollAgent | POST `/api/v1/agent/enroll` | Portal API; `Authorization: Enrollment <token>` | Идемпотентно по `registrationRequestId` + CSR: повтор возвращает исходный ответ, в том числе при исчерпанном токене | 201 DeviceCertificate |
 | getAgentConfiguration | GET `/api/v1/agent/configuration` | Agent API; mTLS | Доступна агенту в `VersionBlocked`, `Suspended` и `TrustFailed` | 200 Configuration |
 | submitHeartbeat | POST `/api/v1/agent/heartbeat` | Agent API; mTLS | — | 200 HeartbeatReceipt |
 | submitScan | POST `/api/v1/agent/scans` | Agent API; mTLS | Заголовок `Idempotency-Key` = `scanId`; повтор по `payloadHash` | 202 ScanReceipt |
@@ -695,7 +710,20 @@ Hash и `revokedAt` сертификатов удалённой организа
 
 Bootstrap расположен на Portal API, остальные пути — на отдельном Agent API в собственном Container Apps environment; правила доверия XFCC описаны в `04`, раздел «Доверие ingress и XFCC». Серверная связь сертификата определяет device и organization. Agent API отклоняет OrganizationId/DeviceId в теле пакета как неизвестные поля (422 `schema_violation`). Выпуск и продление сертификата выполняет внутренний компонент Issuer: Portal API (enroll) и Agent API (renew) вызывают его, Issuer заново проверяет CSR, а сетевая схема выбирается по SP-02 (`04`, раздел «Граница ключа CA»).
 
-`enrollAgent` принимает `registrationRequestId`, `installationId`, `displayName` (SAFE_TEXT, до 120), `csrPem` и `machineFingerprint` и возвращает `deviceId`, `certificatePem`, `notBefore`, `expiresAt`, `previousCertificateValidUntil` (при enroll null) и `agentApiUrl`. Идентичный повтор в пределах срока токена возвращает прежний сертификат и не увеличивает `useCount`. Тот же `installationId` активного устройства с действующим сертификатом при другом CSR или `registrationRequestId`, а также `installationId` отозванного устройства дают 409 `installation_already_enrolled`. Неизвестный, истёкший, отозванный или исчерпанный токен, как и организация не в статусе `active`, дают 401 `enrollment_token_invalid`. Свойства токенов — `04`, раздел «Enrollment-токены».
+`enrollAgent` принимает `registrationRequestId`, `installationId`, `displayName` (SAFE_TEXT, до 120), `csrPem` и `machineFingerprint` и возвращает `deviceId`, `certificatePem`, `notBefore`, `expiresAt`, `previousCertificateValidUntil` (при enroll null, в том числе при повторной регистрации) и `agentApiUrl`. Проверки выполняются в таком порядке; первая сработавшая определяет ответ.
+
+1. Токен неизвестен, истёк или отозван либо организация не в статусе `active` — 401 `enrollment_token_invalid`.
+2. Тот же `registrationRequestId` с тем же CSR — идемпотентный повтор: прежний ответ с прежним сертификатом, даже если токен уже исчерпан; `useCount` не увеличивается. Тот же `registrationRequestId` с другим CSR — 409 `idempotency_conflict`.
+3. Токен исчерпан (`useCount` = `maxUses`) — 401 `enrollment_token_invalid`.
+4. `installationId` не зарегистрирован — создаётся новое устройство.
+5. Устройство с этим `installationId` отозвано — 409 `installation_already_enrolled`.
+6. Признак машины не совпадает с зафиксированным для этого `installationId` — 409 `identity_conflict`; `identityState` существующего устройства не меняется, пишется аудит `device.enroll_identity_conflict`.
+7. У устройства есть `active` сертификат с `validTo` > now (неактивированный `pending` не учитывается), а `reenrollAllowedUntil` не задан или истёк — 409 `installation_already_enrolled`.
+8. Иначе тому же `deviceId` выдаётся новый сертификат, история сохраняется. С окном и без в транзакции выдачи увеличивается `useCount` токена, создаётся запись `enrollment`, как при создании устройства, а существующий неактивированный `pending` переводится в `revoked` (аудит `device.pending_revoked`). Если в случае (8) `reenrollAllowedUntil` > now, новый сертификат выдаётся как `pending`, перекрытие прежних `superseded` заканчивается в момент выдачи, прежний `active` переходит в `superseded` при первом mTLS-запросе новым, `reenrollAllowedUntil` обнуляется, пишется аудит `device.reenroll_over_active` и поднимается оповещение ServiceManager. Подробности — раздел «Канонический объект и идентичность устройства».
+
+Агент сохраняет `registrationRequestId` и новый ключ до отправки `enroll`, так же как `renewalRequestId` при продлении, и после потери ответа повторяет запрос с тем же id.
+
+Свойства токенов — `04`, раздел «Enrollment-токены».
 
 `renewDeviceCertificate` принимает `renewalRequestId`, `csrPem` и `machineFingerprint`. `renewalRequestId` привязан к deviceId и csrHash: тот же id и CSR возвращают прежний сертификат, другой CSR — 409 `renewal_request_conflict`. Новый id при неактивированном pending отзывает этот pending. Pending-сертификат принимается сразу; первый успешный mTLS-запрос им переводит его в `active`, а предыдущий — в `superseded`. `previousCertificateValidUntil` при renew равен `validTo` предыдущего сертификата как верхней границе, а фактически предыдущий перестаёт приниматься через 24 ч после первого запроса новым. Агент сохраняет `renewalRequestId` и новый ключ до отправки запроса, так же как байты пакета. Профиль и сроки — `04`, раздел «Профиль и продление сертификата».
 
@@ -715,7 +743,7 @@ Bootstrap расположен на Portal API, остальные пути — 
 4. Повтор по (deviceId, `Idempotency-Key`) и SHA-256 сырых байтов. Совпадение возвращает исходный receipt (202, `duplicate=true`) независимо от возраста пакета и без повторной оценки. Другой hash — 409 `idempotency_conflict`. Метаданные повтора хранятся 90 дней.
 5. Разбор: 400 `invalid_json`. Затем `agentVersion` — 422 `agent_version_unsupported`; `schemaVersion` — 422 `unsupported_schema_version`; полная схема (включая checkId вне каталога) и совпадение `scanId` с ключом — 422 `schema_violation`.
 6. `machineFingerprint`: 409 `identity_conflict`.
-7. Окно и время: 422 `batch_too_old` или `batch_time_inconsistent`.
+7. Окно и время: 422 `batch_too_old` по `maxBatchAgeDays` действующей ревизии политики организации (не ревизии пакета) или 422 `batch_time_inconsistent` по `startedAt`, `completedAt` и `observations[].observedAt`; метки времени внутри evidence на этом шаге не проверяются.
 8. Версия политики: 422 `unknown_policy_version`.
 9. Sequence: тот же sequence с другим `scanId` — 409 `sequence_conflict`.
 10. Семантика: `unknown_check_id` (checkId каталога вне `activeCheckIds` версии политики пакета), `duplicate_observation`, `unexpected_subject`, межполевые инварианты (`schema_violation`). Отказ атомарный, частичного сохранения нет.
@@ -723,20 +751,20 @@ Bootstrap расположен на Portal API, остальные пути — 
 
 ### Уникальность и ожидаемые объекты
 
-Канонический ключ наблюдения в пакете — `(checkId, subject.type, localKey)`. Повтор ключа даёт атомарный отказ 422 `duplicate_observation` независимо от порядка элементов. Ожидаемые пары задаёт `policyVersion` пакета. В P1 это `device` для каждой активной проверки из WIN-003…WIN-011 и ровно один `volume` с `role=os` для WIN-001 и для WIN-002. Лишний или другой объект даёт 422 `unexpected_subject`. Отсутствующая ожидаемая пара даёт unknown/`missing_observation`, даже если присланный пакет в остальном валиден. checkId вне каталога отклоняет схема (`schema_violation`), а checkId каталога вне `activeCheckIds` версии политики пакета — `unknown_check_id`.
+Канонический ключ наблюдения в пакете — `(checkId, subject.type, localKey)`. Повтор ключа даёт атомарный отказ 422 `duplicate_observation` независимо от порядка элементов. Ожидаемые пары задаёт `policyVersion` пакета. В P1 это `device` для каждой активной проверки из WIN-003…WIN-011 и ровно один `volume` с `role=os` для WIN-001 и для WIN-002. Лишний или другой объект даёт 422 `unexpected_subject`. Отсутствующая ожидаемая пара даёт unknown/`missing_observation` (в режиме informational — `result=null` с тем же `reasonCode`), даже если присланный пакет в остальном валиден. checkId вне каталога отклоняет схема (`schema_violation`), а checkId каталога вне `activeCheckIds` версии политики пакета — `unknown_check_id`.
 
 ### Время и часы устройства
 
-Время в схемах агента — UTC RFC3339 с окончанием `Z` и секундами; в портальных схемах допускается смещение `±hh:mm`. `completedAt` не раньше `startedAt`, `observedAt` не позже `completedAt`, и никакое время не может быть позже `receivedAt` + 5 мин; иначе 422 `batch_time_inconsistent`. Heartbeat обновляет доступность устройства, даже если пакеты отклоняются.
+Время в схемах агента — UTC RFC3339 с окончанием `Z` и секундами; в портальных схемах допускается смещение `±hh:mm`. `completedAt` не раньше `startedAt`, `observedAt` не позже `completedAt`, а `startedAt`, `completedAt` и `observations[].observedAt` не позже `receivedAt` + 5 мин; иначе 422 `batch_time_inconsistent`. Метки времени внутри evidence при приёме не проверяются: правила для них задаёт проверка в `03`, например у WIN-004 `signatureLastUpdatedAt` позже `observedAt` этого наблюдения даёт unknown/`evidence_time_invalid`, а пакет не отклоняется. Heartbeat обновляет доступность устройства, даже если пакеты отклоняются.
 
 | Параметр | Значение | Правило |
 | --- | --- | --- |
 | `maxBufferDays` | По умолчанию 7, допустимо 1…30 | Агент удаляет пакеты старше окна; переполнение 100 МБ удаляет самые старые и увеличивает `droppedBatchCount` |
-| `maxBatchAgeDays` | По умолчанию 9 (= `maxBufferDays` + 2), допустимо 2…32 | Параметр политики; при сохранении проверяется `≥ maxBufferDays + 1`, иначе 422 `schema_violation`. Возраст считается по `completedAt` относительно `receivedAt`; пакет старше окна получает 422 `batch_too_old` |
+| `maxBatchAgeDays` | По умолчанию 9 (= `maxBufferDays` + 2), допустимо 2…32 | Параметр политики; при сохранении проверяется `≥ maxBufferDays + 1`, иначе 422 `schema_violation`. Окно берётся из действующей ревизии политики организации, а не из ревизии пакета. Возраст считается по `completedAt` относительно `receivedAt`; пакет старше окна получает 422 `batch_too_old` |
 | Признак `late` | `receivedAt − completedAt` > 24 ч | Пишется в Assessment; поздний пакет не отменяет более новое наблюдение. Клиентского флага нет |
-| Будущее время | Не больше `receivedAt` + 5 мин | Иначе `batch_time_inconsistent` |
+| Будущее время | Не больше `receivedAt` + 5 мин | Только `startedAt`, `completedAt` и `observations[].observedAt`, иначе `batch_time_inconsistent`; время в evidence — по правилу проверки в `03` |
 
-Алгоритм часов единственный. Время источника пакета (`batchSourceTime`) равно `completedAt`. `maxAcceptedSourceTime` — максимум min(`completedAt`, `receivedAt` + 5 мин) по принятым пакетам без признака; ограничение сверху не даёт скачку часов вперёд заблокировать следующие пакеты. Пакет принимается с признаком `clock_inconsistent`, если выполнено одно из условий: а) `sequence > lastAcceptedSequence` и `completedAt < maxAcceptedSourceTime`; б) по последнему heartbeat расхождение `|observedAt − receivedAt|` больше 5 мин. Такой пакет сохраняется в истории, его оценки получают `result=unknown`, `reasonCode=clock_inconsistent` и `assessmentScope=historical`, текущая проекция не меняется; если меняется качество открытого finding, пишется `quality_changed` с `cause=data_quality`, а прошлые записи не меняются. Признак вычисляется для каждого пакета и не хранится как режим устройства.
+Алгоритм часов единственный. Время источника пакета (`batchSourceTime`) равно `completedAt`. `maxAcceptedSourceTime` — максимум min(`completedAt`, `receivedAt` + 5 мин) по принятым пакетам без признака; ограничение сверху не даёт скачку часов вперёд заблокировать следующие пакеты. Пакет принимается с признаком `clock_inconsistent`, если выполнено одно из условий: а) `sequence > lastAcceptedSequence` и `completedAt < maxAcceptedSourceTime`; б) по последнему heartbeat расхождение `|observedAt − receivedAt|` больше 5 мин. Такой пакет сохраняется в истории, признак действует на все его оценки: assessed-оценки получают `result=unknown`, `reasonCode=clock_inconsistent`, informational-оценки — `result=null`, `reasonCode=clock_inconsistent`; все они получают `assessmentScope=historical`, текущая проекция не меняется. Правило зависимых проверок (`applicability_input_missing`) применяется, только если у пакета нет признака часов; если меняется качество открытого finding, пишется `quality_changed` с `cause=data_quality`, а прошлые записи не меняются. Признак вычисляется для каждого пакета и не хранится как режим устройства.
 
 Восстановление после ошибки часов не требует ручной правки БД. `Device.clockStatus` становится `inconsistent` после пакета с признаком или heartbeat с расхождением и сам возвращается в `ok` после heartbeat с расхождением не больше 5 мин и пакета с `completedAt ≥ maxAcceptedSourceTime`.
 
@@ -778,19 +806,19 @@ Bootstrap расположен на Portal API, остальные пути — 
 | unexpected_subject | 422 | submitScan | Объект не ожидается политикой | drop_batch + refresh_configuration |
 | duplicate_observation | 422 | submitScan | Повтор канонического ключа | drop_batch |
 | unknown_policy_version | 422 | submitScan | `policyVersion` неизвестна или из будущего | drop_batch + refresh_configuration |
-| batch_too_old | 422 | submitScan | `completedAt` < `receivedAt − maxBatchAgeDays` | drop_batch |
-| batch_time_inconsistent | 422 | submitScan | `completedAt < startedAt`, `observedAt > completedAt` или время позже `receivedAt` + 5 мин | drop_batch |
+| batch_too_old | 422 | submitScan | `completedAt` < `receivedAt − maxBatchAgeDays` по действующей ревизии политики организации | drop_batch |
+| batch_time_inconsistent | 422 | submitScan | `completedAt < startedAt`, `observedAt > completedAt` или `startedAt`, `completedAt` либо `observedAt` позже `receivedAt` + 5 мин | drop_batch |
 | agent_version_unsupported | 422 | submitScan | `agentVersion < minimumAgentVersion`; поле `minimumAgentVersion` заполнено | stop_until_upgrade |
-| idempotency_conflict | 409 | submitScan; портальные операции с `idempotencyKey` | Тот же ключ, другое тело | submitScan: drop_batch |
+| idempotency_conflict | 409 | enrollAgent; submitScan; портальные операции с `idempotencyKey` | Тот же ключ, другое тело (для enrollAgent — тот же `registrationRequestId` с другим CSR) | enrollAgent: reenroll_required; submitScan: drop_batch |
 | sequence_conflict | 409 | submitScan | Тот же `sequence` с другим `scanId`; ресинхронизация не чаще раза в 24 ч | resync_sequence |
-| identity_conflict | 409 | submitScan, submitHeartbeat, renewDeviceCertificate | `machineFingerprint` не совпадает с зафиксированным либо второй `sequence_conflict` за 24 ч | identity_stop |
+| identity_conflict | 409 | enrollAgent, submitScan, submitHeartbeat, renewDeviceCertificate | `machineFingerprint` не совпадает с зафиксированным (при enroll — для уже зарегистрированного неотозванного `installationId`) либо второй `sequence_conflict` за 24 ч | identity_stop |
 | organization_inactive | 403 | getAgentConfiguration, submitHeartbeat, submitScan, renewDeviceCertificate | Организация устройства в статусе `disabled` или `deletion_scheduled` | suspend_until_active |
-| certificate_expired | 401 | Агентские mTLS-операции | Сертификат истёк (если запрос дошёл до приложения) | reenroll_required |
+| certificate_expired | 401 | Агентские mTLS-операции | Сертификат истёк (если запрос дошёл до приложения) либо зарегистрированный сертификат устройства в состоянии `superseded` после окончания перекрытия, например у восстановленного образа старше ротации; во втором случае (в том числе если наступил и `validTo`) сервер в той же транзакции записывает `device.reenrollAllowedUntil` = now + 7 суток | reenroll_required |
 | certificate_revoked | 401 | Агентские mTLS-операции | Отозван сертификат или устройство, в том числе при удалении организации | stop_until_reinstall |
 | certificate_unknown | 401 | Агентские mTLS-операции | Нет XFCC, XFCC продублирован, не совпадает Hash, чужой CA или hash не зарегистрирован | trust_failure |
 | renewal_request_conflict | 409 | renewDeviceCertificate | Тот же `renewalRequestId` с другим CSR | restart_renewal |
 | enrollment_token_invalid | 401 | enrollAgent | Токен неизвестен, истёк, отозван или исчерпан, либо организация не `active` | await_new_token |
-| installation_already_enrolled | 409 | enrollAgent | `installationId` принадлежит отозванному устройству, либо активному устройству с действующим сертификатом при другом CSR или `registrationRequestId` | stop_until_reinstall |
+| installation_already_enrolled | 409 | enrollAgent | `installationId` принадлежит отозванному устройству, либо у устройства есть `active` сертификат с `validTo` > now, а `reenrollAllowedUntil` не задан или истёк; идентичный повтор проверяется раньше; для случая с действующим сертификатом раньше проверяется и несовпадающий признак машины (порядок — раздел «API агента») | stop_until_reinstall |
 | rate_limited | 429 | Все | Лимит запросов | retry_after |
 | temporarily_unavailable | 503 | Все | Временный отказ | retry_after; без Retry-After: retry_backoff |
 | session_required | 401 | Портал | Нет сессии или она недействительна | — |
@@ -853,9 +881,9 @@ Portal API использует серверную сессию (`PortalSession`
 | listDevices | GET `{org}/devices` | PA, SM, T | cursor; фильтр `enrollmentTokenId` | 200 DevicePage |
 | updateDevice | PATCH `{org}/devices/{deviceId}` | PA, SM | Последняя запись выигрывает, аудит | 200 Device |
 | revokeDevice | POST `{org}/devices/{deviceId}/revoke` | PA, SM | Идемпотентно; сначала журнал | 204 |
-| requestDeviceScan | POST `{org}/devices/{deviceId}/scan-requests` | PA, SM, T | `idempotencyKey`, срок 24 ч, один pending на устройство | 202 ScanRequest |
+| requestDeviceScan | POST `{org}/devices/{deviceId}/scan-requests` | PA, SM, T | `idempotencyKey`, срок 24 ч, один незавершённый запрос на устройство; только вариант A | 202 ScanRequest |
 | listDeviceAssessments | GET `{org}/devices/{deviceId}/assessments` | PA, SM, T | cursor; `Accept-Language` | 200 AssessmentPage |
-| listFindings | GET `{org}/findings` | PA, SM, T | Фильтры `technicalState`, `freshness`, `deviceId`, `workflowState`; `Accept-Language` | 200 FindingPage |
+| listFindings | GET `{org}/findings` | PA, SM, T | Фильтры `technicalState`, `freshness`, `deviceId`, `workflowState` (несколько значений через запятую, `style=form`, `explode=false`); `Accept-Language` | 200 FindingPage |
 | getFinding | GET `{org}/findings/{findingId}` | PA, SM, T | `Accept-Language` | 200 Finding + ETag |
 | patchFinding | PATCH `{org}/findings/{findingId}` | PA, SM, T | `If-Match` обязателен; `Accept-Language` | 200 Finding + ETag |
 | decideFindingRisk | POST `{org}/findings/{findingId}/risk-decisions` | PA, SM | `If-Match` обязателен; `Accept-Language` | 200 Finding + ETag |
@@ -864,13 +892,13 @@ Portal API использует серверную сессию (`PortalSession`
 | createReport | POST `{org}/reports` | PA, SM | — | 202 Report |
 | downloadReport | GET `{org}/reports/{reportId}/download` | PA, SM, T | `x-audit-read: always` | 200 только `text/html` |
 
-Каждая мутация портала пишет `audit_event`; повтор с тем же `idempotencyKey` возвращает прежний результат, а тот же ключ с другим телом даёт 409 `idempotency_conflict`. Расширение `x-audit-read` есть у каждого портального GET и принимает одно из двух значений: `always` — каждое чтение пишет `audit_event` для любой роли (`downloadOrganizationExport`, `listAuditEvents` и `downloadReport`); `platform_admin` — чтение пишет `audit_event`, только если у субъекта есть `platform_role`, даже при наличии членства в организации (все остальные портальные GET). `listOrganizations` работает через функцию входа в контекст с теми же правилами. Кто создаёт организации в P1, решает вопрос 14 в `08`; по умолчанию — только PlatformAdmin. `createOrganization` требует `name`, `timezone` и `reportLanguage`; `updateOrganization` меняет любое из этих полей. `updateOrganization` введена потому, что без неё нельзя изменить `reportLanguage`.
+Каждая мутация портала пишет аудит: создание, отключение и удаление организации и изменения `platform_role` — в `platform_audit_event`, остальные мутации — в `audit_event` организации; повтор с тем же `idempotencyKey` возвращает прежний результат, а тот же ключ с другим телом даёт 409 `idempotency_conflict`. Расширение `x-audit-read` есть у каждого портального GET и принимает одно из двух значений: `always` — каждое чтение пишет `audit_event` для любой роли (`downloadOrganizationExport`, `listAuditEvents` и `downloadReport`); `platform_admin` — чтение пишет `audit_event`, только если у субъекта есть `platform_role`, даже при наличии членства в организации (все остальные портальные GET). `listOrganizations` работает через функцию входа в контекст с теми же правилами. Кто создаёт организации в P1, решает вопрос 14 в `08`; по умолчанию — только PlatformAdmin. `createOrganization` требует `name`, `timezone` и `reportLanguage`; `updateOrganization` меняет любое из этих полей. `updateOrganization` введена потому, что без неё нельзя изменить `reportLanguage`.
 
 Enrollment-токен создаётся в режиме `single_use` (срок — платформенный параметр, по умолчанию 30 мин, `maxUses` 1) или `batch` (`expiresInHours` 1…168, `maxUses` 1…100); `expiresInHours` и `maxUses` допустимы только при `batch`, необязательный `label` — SAFE_TEXT до 120 символов. Секрет показывается один раз в ответе `createEnrollmentToken` и в списке не возвращается. Устройства, зарегистрированные токеном, отбираются фильтром `listDevices?enrollmentTokenId=…`; массовый отзыв — RB-12. `updateDevice` принимает только `displayName` (SAFE_TEXT, 1…120). Отзыв устройства отзывает все его сертификаты, включая pending, и запрещает renew; finding устройства получают `resolved` с `object_retired`/`manual_action`.
 
 Языковые заголовки. `listDeviceAssessments`, `listFindings`, `getFinding`, `patchFinding` и `decideFindingRisk` принимают необязательный заголовок `Accept-Language` со значениями `nb`, `nn` или `en`; без заголовка или при другом значении используется nb, ошибки нет. Ответ 200 содержит `Content-Language`. На выбранном языке API отдаёт `Finding.title`, `Finding.recommendation` и `Assessment.explanation`; идентификаторы, коды, evidence и `Problem` не локализуются. Если перевода нет, API отдаёт текст на nb с `Content-Language: nb`, а SPA помечает его «перевод отсутствует».
 
-Запрос повторного сбора имеет idempotencyKey, срок 24 часа и только известное действие `verify_remediation`. Агент видит `pendingScanRequestId` в конфигурации, которую запрашивает при старте и не реже heartbeat. Результат включает `scanRequestId`; сервер проверяет принадлежность устройству и завершает запрос после сохранения пакета. Офлайн-устройство не обещает немедленную проверку: задание `scan_request_expiry` раз в час отмечает истёкшие запросы как expired. Один pending request на устройство объединяет повторные запросы; произвольные команды отсутствуют.
+Запрос повторной проверки (`requestDeviceScan`, FR-06) действует только в варианте A. Он хранится сущностью `scan_request` (раздел «Сущности и ограничения») и имеет idempotencyKey, срок 24 часа и только известное действие `verify_remediation`. Состояния: `requested` после создания, `delivered` после выдачи `pendingScanRequestId` в конфигурации, `completed` после сохранения пакета с этим `scanRequestId`, `expired` по истечении `expiresAt`. Агент видит `pendingScanRequestId` в конфигурации, которую запрашивает при старте и не реже heartbeat. Повторную проверку агент выполняет как полный сбор: пакет содержит наблюдения всех проверок из `activeCheckIds` своей `policyVersion`, как плановый сбор, и отличается только `scanRequestId` и отсутствием случайной задержки; частичных пакетов нет. Результат включает `scanRequestId`; сервер проверяет принадлежность запроса устройству и его срок. Пакет с чужим или просроченным `scanRequestId` принимается как обычный сбор: `scanRequestId` игнорируется, пишется запись диагностики, новых кодов ошибок нет. Если повторная проверка показывает, что проблема исправлена, finding получает `resolved` с `device_change`. Офлайн-устройство не обещает немедленную проверку: задание `scan_request_expiry` раз в час отмечает истёкшие запросы как `expired`. Один незавершённый запрос на устройство объединяет повторные запросы; произвольные команды отсутствуют. Запись `scan_request` хранится 90 суток от `createdAt`.
 
 Операции интеграций P2 описываются отдельным расширением после P0. Контракт P1 не допускает секретов в браузере, shell command и прямого изменения системных политик. Загрузка отчёта и экспорта идёт через авторизованный backend; Blob-контейнер приватный, постоянные публичные ссылки отсутствуют. `downloadReport` отвечает с заголовками `Content-Type: text/html; charset=utf-8`, `Content-Disposition: attachment; filename="report-<reportId>.html"`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:` и `Cache-Control: private, no-store`. `downloadOrganizationExport` отдаёт `application/zip` как attachment с `nosniff` и `no-store`. До состояния `ready` обе выдачи отвечают 409 `resource_not_ready`. CSP самого SPA и правила вывода недоверенных строк описаны в `04`, раздел «Недоверенные строки и выдача отчёта».
 
@@ -880,27 +908,27 @@ Enrollment-токен создаётся в режиме `single_use` (срок 
 
 В P1 отчёт формируется только в HTML: `ReportCreate.format` и `Report.format` принимают единственное значение `html`, а `downloadReport` отдаёт только `text/html`. Отчёт самодостаточен — без скриптов и внешних ресурсов, с print stylesheet; PDF клиент получает печатью из браузера. Серверный PDF рассматривается после пилота при подтверждённой потребности (условие пересмотра в `08`).
 
-Язык отчёта задаётся для каждой организации полем `Organization.reportLanguage` (nb, nn, en); оно обязательно при создании и меняется через `updateOrganization`. `Report.language` фиксируется при генерации, смешения языков нет. Если перевода правила нет, отчёт получает `state=failed` и `failureCode=translation_missing`; резервный язык в отчёте не используется до ответа на вопрос 13 в `08`. Портал по умолчанию работает на bokmål (nb), пользователь переключает язык на nb, nn или en; выбор хранится в браузере и не меняет API, а язык отчёта от него не зависит. Строки портала и отчёта с первого дня хранятся во внешних ресурсах. Тексты правил (title, recommendation, шаблоны explanation) — локализованные шаблоны по (`ruleId`, `ruleVersion`, язык); идентификаторы, коды и evidence не переводятся. До ответа на вопрос 13 в `08` новая `ruleVersion` вводится в действие только с текстами на nb, nn и en.
+Язык отчёта задаётся для каждой организации полем `Organization.reportLanguage` (nb, nn, en); оно обязательно при создании и меняется через `updateOrganization`. `Report.language` фиксируется при генерации, смешения языков нет. Если перевода правила нет, отчёт получает `state=failed` и `failureCode=translation_missing`; сбой генерации по иной причине даёт `state=failed` и `failureCode=generation_error`; резервный язык в отчёте не используется до ответа на вопрос 13 в `08`. Портал по умолчанию работает на bokmål (nb), пользователь переключает язык на nb, nn или en; выбор хранится в браузере и не меняет API, а язык отчёта от него не зависит. Строки портала и отчёта с первого дня хранятся во внешних ресурсах. Тексты правил (title, recommendation, шаблоны explanation) — локализованные шаблоны по (`ruleId`, `ruleVersion`, язык); идентификаторы, коды и evidence не переводятся. До ответа на вопрос 13 в `08` новая `ruleVersion` вводится в действие только с текстами на nb, nn и en.
 
-Период отчёта — ISO-неделя с понедельника 00:00 по понедельник 00:00 в timezone организации (по умолчанию Europe/Oslo); UTC-границы хранятся. Свежесть и `coverageAt` в отчёте считаются на `periodEnd`. Задание `weekly_report` создаёт отчёт автоматически; в P1 отчёт доставляется только через портал. Содержание: новые проблемы (`opened` и `reopened` с `device_change`); действительно исправленные (`resolved` с `device_change`); продолжающиеся; решения о риске (`risk_accepted` и `suppressed` раздельно); изменения правил и изменения политики — отдельными категориями, ни одна из них не считается исправлением на устройстве; выведенные объекты; недоступные данные с причинами; счётчики informational, not_applicable и «не настроено политикой»; устройства без свежего полного сбора (SYS-001) и `lastSeenAt`; `coveragePeriod`, `coverageAt` на `periodEnd`, доля stale и compliance; число активных устройств, дата измерения и источник данных (агент или импорт). Отчёт за период старше 90 дней строится из `assessment.basisSnapshot` и `finding_event`. Опубликованные отчёты не пересчитываются; истёкшие подробности помечаются «подробности удалены по сроку хранения».
+Период отчёта — ISO-неделя с понедельника 00:00 по понедельник 00:00 в timezone организации (`Organization.timezone`, обязательна при создании; портал предлагает Europe/Oslo); UTC-границы хранятся. Свежесть и `coverageAt` в отчёте считаются на `periodEnd`. Задание `weekly_report` создаёт отчёт автоматически; в P1 отчёт доставляется только через портал. Содержание: новые проблемы (`opened` и `reopened` с `device_change`); действительно исправленные (`resolved` с `device_change`); продолжающиеся; решения о риске: «принятые риски» (`risk_accepted`) и «подавленные срабатывания» (`suppressed`) раздельно; изменения правил, изменения политики и «стали неприменимыми по фактам устройства» (`resolved` с `applicability_change`) — отдельными категориями, ни одна из них не считается исправлением на устройстве; выведенные объекты; недоступные данные с причинами; счётчики informational, not_applicable и «не настроено политикой»; устройства без свежего полного сбора (SYS-001) и `lastSeenAt`; `coveragePeriod`, `coverageAt` на `periodEnd`, доля stale и compliance; число активных устройств, дата измерения и источник данных (агент или импорт). Отчёт за период старше 90 дней строится из `assessment.basisSnapshot` и `finding_event`. Опубликованные отчёты не пересчитываются; истёкшие подробности помечаются «подробности удалены по сроку хранения».
 
-Определения. Обязательная проверка — checkId, у которого в действующей `policy_revision` режим `assessed`; агентская проверка, кроме того, должна входить в `activeCheckIds`. SYS-002 обязательна, если её режим `assessed`; SYS-001 всегда informational и в coverage и compliance не входит. Активное устройство — `status=active`, зарегистрированное до момента измерения или до конца периода.
+Определения. Обязательная проверка — checkId, у которого в действующей `policy_revision` режим `assessed`; агентская проверка, кроме того, должна входить в `activeCheckIds`. SYS-002 обязательна, если её режим `assessed`; SYS-001 всегда informational и в coverage и compliance не входит. Активное устройство — `status=active`, зарегистрированное до момента измерения или до конца периода. «Не настроено политикой» — подмножество informational: пары в режиме informational из-за отсутствующих входных настроек политики (например, WIN-008 без `allowedSids`, WIN-010 без `expectedTenantId`); в отчёте этот счётчик показывается как часть informational. Полный сбор — принятый пакет, в котором есть наблюдение для каждой проверки из `activeCheckIds` своей `policyVersion` (с любым `collectionStatus`, включая `unavailable`), без признака часов. Агент выполняет повторную проверку как полный сбор всех `activeCheckIds`; частичных пакетов агент не отправляет. `device.lastFullScanAt` обновляет только полный сбор; оценку SYS-001 пересчитывают приём полного сбора и задание `freshness_sweep`.
 
 - **Покрытие на момент t** (`coverageAt`) = свежие pass и fail по обязательным применимым парам (объект, проверка) активных устройств / все обязательные применимые пары на момент t.
 - **Покрытие периода** (`coveragePeriod`) = пары, у которых есть хотя бы одна определённая оценка без признака часов с `observedAt` внутри периода / обязательные применимые пары устройств, активных в периоде, по политике на конец периода.
 - **Compliance** = свежие pass / (свежие pass + свежие fail) на момент; при нулевом знаменателе выводится «нет данных».
 
-Informational исключаются из числителя и знаменателя, not_applicable — из знаменателя; обе группы и «не настроено политикой» показываются отдельными счётчиками. Принятые риски остаются fail в compliance. NFR-02 и критерий достоверности пилота используют `coveragePeriod` за неделю. В недельном отчёте основной показатель — `coveragePeriod`; отдельно показываются `coverageAt` на `periodEnd`, доля stale и число устройств без свежего полного сбора. Портал показывает `coverageAt` на текущий момент. Backend и отчёт используют одну функцию расчёта.
+Informational исключаются из числителя и знаменателя, not_applicable — из знаменателя; обе группы показываются отдельными счётчиками, «не настроено политикой» — как часть informational. Принятые риски остаются fail в compliance. NFR-02 и критерий достоверности пилота используют `coveragePeriod` за неделю. В недельном отчёте основной показатель — `coveragePeriod`; отдельно показываются `coverageAt` на `periodEnd`, доля stale и число устройств без свежего полного сбора. Портал показывает `coverageAt` на текущий момент. Backend и отчёт используют одну функцию расчёта.
 
-Пример. Обязательные проверки: WIN-001, WIN-002, WIN-005, SYS-002. WIN-008 и SYS-001 — informational. Для Home WIN-002 — not_applicable. У WIN-005 в примере окно свежести 24 ч, а последний полный сбор D1 был 30 ч назад; у остальных проверок окно 72 ч.
+Пример. Обязательные проверки: WIN-001, WIN-002, WIN-005, SYS-002. WIN-008, WIN-011 и SYS-001 — informational; WIN-011 и SYS-001 informational всегда, WIN-008 — потому что `allowedSids` пуст. Для Home WIN-002 — not_applicable (по `editionId` из WIN-011), а SYS-002 — fail: редакция Home вне матрицы совместимости P1. У WIN-005 в примере окно свежести 24 ч, а последний полный сбор D1 был 30 ч назад; у остальных проверок, включая WIN-011, по которой вычисляется SYS-002, окно 72 ч.
 
 | Устройство | WIN-001 | WIN-002 | WIN-005 | SYS-002 |
 | --- | --- | --- | --- | --- |
 | D1 (Pro) | pass, свежий | fail, свежий | pass, stale | pass |
 | D2 (Pro) | unknown (`permission_denied`) | pass, свежий | pass, свежий | pass |
-| D3 (Home) | pass, свежий | not_applicable | fail, свежий | pass |
+| D3 (Home) | pass, свежий | not_applicable | fail, свежий | fail |
 
-Результат: знаменатель 11, числитель 9, `coverageAt` = 81,8%. Compliance = 7/9 = 77,8%. Счётчики: informational 6 (WIN-008 и SYS-001 на трёх устройствах), not_applicable 1, stale 1, unknown 1, устройств без свежего полного сбора 0.
+Результат: знаменатель 11, числитель 9, `coverageAt` = 81,8%. Compliance = 6/9 = 66,7%. Счётчики: informational 9 (WIN-008, WIN-011 и SYS-001 на трёх устройствах), из них «не настроено политикой» 3 (WIN-008 на трёх устройствах), not_applicable 1, stale 1, unknown 1, устройств без свежего полного сбора 0.
 
 Informational, not applicable и принятые риски не скрывают недостаток покрытия. Compliance не интерпретируется как вероятность безопасности и не сравнивается между разными версиями политик без пояснения.
 
@@ -966,6 +994,8 @@ Infrastructure as code — Bicep; CI — GitHub Actions либо текущая 
 
 Для каждого alert задать владельца и действие. Примеры: рост неоценённых пакетов → проверить worker/базу; периодические задания не создавались дольше двух периодов → проверить планировщик в репликах worker; пакет получил `processing_failed` через 7 суток после приёма → разобрать потерю данных; всплеск `certificate_unknown` → действовать по RB-01; рост Graph 403 → проверить consent; до истечения сертификата устройства меньше 30 дней, а продления не было → проверить продление по RB-04; ежечасная сверка журнала sign Key Vault CA с журналом Issuer и `device_certificate` нашла необъяснённую подпись → начать расследование, при подтверждённой компрометации — ротация CA по RB-05; объём доступа PlatformAdmin превысил ожидаемый → проверить по аудиту; доступ другого клиента → остановить выдачу затронутого пути и начать расследование.
 
+События аудита платформенного уровня (изменения `platform_role`, создание, отключение и удаление организаций) хранятся в отдельной таблице `platform_audit_event` без `organizationId` и без RLS, со сроком хранения аудита; очистку по сроку выполняет ежедневное задание `platform_audit_purge` (`organizationId` = null); право DELETE есть только у роли базы этого задания. Операции API для их чтения в P1 нет: читать их могут только отдельная роль базы для runbook (только SELECT) и Log Analytics. `audit_event` остаётся только клиентским (с `organizationId`, под RLS): доступ PlatformAdmin к данным конкретной организации пишется в `audit_event` этой организации и читается через `listAuditEvents`.
+
 ## Восстановление и удаление
 
 План P1: резервные копии базы 14 дней и измеренная процедура PITR; раз в месяц учебный restore в карантине (RB-09, см. «Журнал жизненного цикла и restore в карантине») в изолированное окружение без обращения к реальным клиентским Graph-интеграциям. Отдельно восстановить Blob, настройки инфраструктуры и ссылки на credentials. Возможность PITR не означает достижение целевого RTO без испытания. [Backups PostgreSQL](https://learn.microsoft.com/en-us/azure/postgresql/backup-restore/concepts-backup-restore).
@@ -974,17 +1004,17 @@ Infrastructure as code — Bicep; CI — GitHub Actions либо текущая 
 
 ## Журнал жизненного цикла и restore в карантине
 
-Restore из резервной копии не должен возвращать удалённые данные, обслуживаемый статус и отозванный доступ. Для этого сущность `lifecycle_journal` хранится вне PostgreSQL, append-only. Поля: `id`, `organizationId`; `targetType` (`organization`, `device`, `device_certificate`, `integration`, `enrollment_token`, `organization_member`); `targetId`, для `organization_member` — внутренний UUID строки, а не `entraUserId`; `action` (`disable`, `enable`, `schedule_deletion`, `cancel_deletion`, `delete`, `revoke`, `disconnect`, `token_revoke`), отзыв назначения записывается как `revoke` с `targetType=organization_member`; `occurredAt`, `correlationId`. `actorId` в журнале нет: исполнитель находится через `correlationId` и `audit_event`.
+Restore из резервной копии не должен возвращать удалённые данные, обслуживаемый статус и отозванный доступ. Для этого сущность `lifecycle_journal` хранится вне PostgreSQL, append-only. Поля: `id`, `organizationId`; `targetType` (`organization`, `device`, `device_certificate`, `integration`, `enrollment_token`, `organization_member`); `targetId`, для `organization_member` — внутренний UUID строки, а не `entraUserId`; `action` (`disable`, `enable`, `schedule_deletion`, `cancel_deletion`, `delete`, `revoke`, `disconnect`, `token_revoke`), отзыв назначения записывается как `revoke` с `targetType=organization_member`; `occurredAt`, `correlationId`. `actorId` в журнале нет: исполнитель находится через `correlationId` и `audit_event` либо, для отключения и удаления организации, `platform_audit_event`.
 
 Журнал хранится в отдельном storage account, в контейнере с locked time-based retention на 30 дней и protected append writes; Blob PITR выключен. Писать в журнал могут только identities Portal API, Worker и Issuer; права delete нет. Если срок backup увеличивается, сначала увеличивается срок журнала. Ограничивающие действия (`disable`, `schedule_deletion`, `delete`, `revoke`, `disconnect`, `token_revoke`, отзыв назначения) сначала пишутся в журнал, затем в базу. Разрешающие действия (`enable`, `cancel_deletion`) сначала выполняются в базе, затем пишутся в журнал: если запись потеряется, итог окажется строже, а не мягче. Повторное применение журнала идемпотентно.
 
-Restore выполняется в карантине по RB-09: (1) закрыть ingress Portal API и Agent API и остановить Worker — никаких заданий, обращений к Graph и выдачи отчётов; (2) применить журнал по порядку; (3) сверить статусы организаций, сертификатов, интеграций, enrollment-токенов и назначений; (4) удалить Blob удалённых организаций; (5) только после этого открыть доступ. Учебный restore выполняется ежемесячно.
+Restore выполняется в карантине по RB-09: (1) закрыть ingress Portal API и Agent API, остановить Worker, Graph-компонент (P2) и компонент импорта (при варианте B) до проверки журнала — никаких заданий, обращений к Graph, импорта и выдачи отчётов; (2) применить журнал по порядку; (3) сверить статусы организаций, сертификатов, интеграций, enrollment-токенов и назначений; (4) удалить Blob удалённых организаций; (5) только после этого открыть доступ. Учебный restore выполняется ежемесячно.
 
 ## Модель расходов
 
 До договора получить актуальную оценку Azure Calculator по выбранному региону. Отдельные позиции: постоянная база, работающие реплики worker/API и Issuer, второе Container Apps environment для Agent API и внутреннее VNet-environment Issuer, VNet и private endpoints, storage/requests, отдельный storage account журнала жизненного цикла, registry, Key Vault CA и Key Vault Graph (в варианте B — Key Vault импорта) с операциями, logs ingestion, backups, code signing и email. Источник подписи кода (Artifact Signing или OV-сертификат в HSM) выбирается по ответу на вопрос 8 в `08`; в модель записываются выбранный источник, его стоимость и срок оформления — у Artifact Signing он составляет 1–20 рабочих дней, поэтому оформление стартует в P0 и должно завершиться до WP-07a. Месячная стоимость делится на число оплачиваемых клиентов и устройств, но затраты onboarding и поддержки учитываются отдельно.
 
-Для расчётной модели 1 000 устройств и 10 наблюдений в сутки получается около 300 000 наблюдений за 30 дней до учёта повторов, объёмов дисков и облачных субъектов. Это арифметическое допущение для sizing, не оценка реальной нагрузки и не прайс Azure.
+Для расчётной модели 1 000 устройств и одного полного сбора в сутки (11 наблюдений — по одному на каждую WIN-проверку) получается около 330 000 наблюдений за 30 дней; вместе с серверными оценками SYS-001 и SYS-002 это 13 оценок на устройство в сутки, около 390 000 оценок за 30 дней. Расчёт сделан до учёта повторов, внеплановых проверок, объёмов дисков и облачных субъектов. Это арифметическое допущение для sizing, не оценка реальной нагрузки и не прайс Azure.
 
 
 Файл `07-delivery-plan-and-acceptance.md`
@@ -995,7 +1025,7 @@ Restore выполняется в карантине по RB-09: (1) закры�
 
 ## Правила P0 и старт P1
 
-P0 начинается после независимого одобрения версии 0.2.0 пакета. Эксперименты SP-01…SP-05 выполняются в P0. Из работ по реализации до G1 — независимого одобрения одного и того же артефакта двумя рецензентами — допустимы только работа над пакетом и validate-инструментом в блоке «P0 и закрепление контрактов»; серверный слой параллельно P0 не ведётся. WP-01 стартует после G1.
+P0 начинается после одобрения версии 0.2.0 пакета обоими независимыми рецензентами архитектуры. Эксперименты SP-01…SP-05 выполняются в P0. Из работ по реализации до G1 — независимого одобрения одного и того же артефакта двумя рецензентами — допустимы только работа над пакетом и validate-инструментом в блоке «P0 и закрепление контрактов»; серверный слой параллельно P0 не ведётся. WP-01 стартует после G1.
 
 Выход из P0 требует всех результатов: протоколов SP-01…SP-05; решения SP-05 (вариант A или вариант B), подписанного Product Owner и прошедшего G1; утверждённого PKI-дизайна (enrollment, Issuer и сетевой путь к нему, renewal, доверие ingress); записанного решения ADR-02; оценки каждого WP — диапазон, исполнитель (человек или агент, нужна ли лаборатория) и скорость, измеренная в P0; пересчитанных календаря и состава P1.
 
@@ -1008,7 +1038,7 @@ P0 начинается после независимого одобрения �
 | SP | Владелец | Лимит | Гипотеза и проверки | Успех | Провал |
 | --- | --- | --- | --- | --- | --- |
 | SP-01 | Windows Lead | 3 нед. | Гипотезы H-02 (сетевой Agent Host под виртуальной учётной записью службы без прав администратора, сборщики с повышенными правами — в privileged collector с фиксированным протоколом), H-WU1 (поля IUpdate и воспроизводимая точка отсчёта просрочки на WU, WSUS с одобрением и deadline, WUfB с отсрочкой), H-WU2 (офлайн-поиск WUA укладывается в p95 < 30 с, `LastSearchSuccessDate` свежий, результат совпадает с online-поиском) и H-KEY (неэкспортируемый ключ P-256 в Microsoft Platform Crypto Provider создаётся учётной записью службы вне `OnStart`, подписывает CSR и используется для mTLS из .NET; без TPM — Software KSP с ACL; проверяется вместе с SP-02). Для ADR-02 — таблица «collectorId → минимальная учётная запись → API → замер» для всех 11 WIN-проверок, модели угроз разделённого варианта и единой службы LocalSystem, стоимость разделения. `LastBootUpTime` и поведение при Fast Startup; источник WIN-010 из службы на ПК только с workplace registration, с hybrid join и с Entra join; лабораторная матрица WIN-003 из 5 конфигураций (только Defender; сторонний AV активен; сторонний AV плюс MDE или Smart App Control; сторонний AV истёк; snoozed) с ожидаемыми результатами pass/fail/fail/fail/fail при политике «одобрен только Defender» и pass/pass/pass/fail/fail при «Defender + VendorX»; стабильность SMBIOS UUID и MachineGuid после перезагрузки, sysprep и клонирования в Hyper-V и доступ к ним из службы; права и API каждой WIN-проверки без PowerShell — таблица «проверка → API → привилегия → время и память из контекста службы»; WIN-011, матрица совместимости и таблица жизненного цикла ОС с датой сверки. Лаборатория: хост Windows 11 Pro x64 с Hyper-V; VM второго поколения с vTPM и Secure Boot — 25H2, 26H2, 24H2 (негативный случай для SYS-002), другой язык ОС, сторонний AV; VM WSUS; не меньше 5 ПК для Windows Update, WSUS с deadline и WUfB с отсрочкой; одна физическая машина с TPM 2.0; Windows Sandbox только для smoke | У каждой WIN-проверки есть API, привилегия, время и память из службы; ожидаемые матрицы совпадают; ключ H-KEY работает на всех лабораторных ПК с TPM 2.0, задержка подписи не нарушает NFR-04; выбор провайдера ключа записан в ADR-05 | Проверка сужается до informational; WIN-006 и WIN-007 переходят на запасные пути, описанные в `03` (раздел «Проверки Windows»): узкая форма WIN-006 только по `firstSeenPendingAt`, фоновое задание поиска с лимитом 600 с вне бюджета сессии, при недостаточности — informational |
-| SP-02 | Operations (+ Security Owner) | 2 нед. (+1 на запасной вариант) | (а) в режиме require принимается сертификат внутреннего CA от клиента .NET 10 с CNG-ключом; (б) внешний поддельный XFCC перезаписывается; (в) запрос из соседнего приложения, Worker и Azure VM с поддельным XFCC получает 401; (г) дублированный XFCC — 401; (д) запрос без сертификата из сети Azure — 401; (е) TLS-inspection proxy. Дополнительно: два issuer в trust bundle; выпуск X.509 в .NET с подписью Key Vault ES256; 403 на sign для identities Portal API и Agent API; сетевой путь к Issuer; поведение ingress при истёкшем, отозванном и неизвестном сертификате (Problem-ответ или обрыв TLS-рукопожатия) как вход конечного автомата агента в `05`; TPM-ключ в mTLS | (а)–(д) пройдены, (е) задокументирован, путь к Issuer работает | Провал (а) или (в) — запасной вариант ADR-05: TCP ingress в VNet-environment и mTLS в Kestrel |
+| SP-02 | Operations (+ Security Owner) | 2 нед. (+1 на запасной вариант) | (а) в режиме require принимается сертификат внутреннего CA от клиента .NET 10 с CNG-ключом; (б) внешний поддельный XFCC перезаписывается; (в) запрос из соседнего приложения, Worker и Azure VM с поддельным XFCC получает 401; (г) дублированный XFCC — 401; (д) запрос без сертификата из сети Azure — 401; (е) TLS-inspection proxy. Дополнительно: два issuer в trust bundle; выпуск X.509 в .NET с подписью Key Vault ES256; 403 на sign для identities Portal API и Agent API; сетевой путь к Issuer; поведение ingress при истёкшем, отозванном и неизвестном сертификате (Problem-ответ или обрыв TLS-рукопожатия) как вход конечного автомата агента в `05`; TPM-ключ в mTLS | (а)–(д) пройдены, (е) задокументирован, путь к Issuer работает; записано, доходит ли до приложения истёкший по `validTo` `superseded`-сертификат, то есть открывается ли для него окно `reenrollAllowedUntil` | Провал (а) или (в) — запасной вариант ADR-05: TCP ingress в VNet-environment и mTLS в Kestrel |
 | SP-03 | Integration Lead | 2 нед. | Права по модулям: M365-001 — AuditLog.Read.All и User.Read.All; M365-002 и M365-003 — Policy.Read.All; M365-004 — DeviceManagementManagedDevices.Read.All. Policy.Read.ConditionalAccess для M365-003 не используется. Поведение без Entra P1/P2 (фактический ответ для `license_unconfirmed`); consent запрашивает только права включённых модулей; где живёт регистрация приложения и может ли компания отозвать credential без администратора клиента; какие назначения ролей отражает isAdmin; eligibility Lighthouse и GDAP у пилотных клиентов. Результат — датированная матрица «модуль → endpoint → право → лицензия → наблюдаемый ответ» | Каждый модуль даёт 200 и все обязательные свойства со своим минимумом прав и 403 (`permission_missing`) без него | Модуль сужается или откладывается. При варианте B части про managedDevices и лицензию Intune становятся входом WP-04B |
 | SP-04 | Backend Lead (+ Security Owner) | 2 нед. | Две организации: API, RLS с FORCE, 0 строк без контекста организации, функция выбора заданий `claim_jobs` и отказ обработки без контекста, сброс контекста в pool соединений, Blob, функция входа в контекст с аудитом PlatformAdmin | Межклиентского доступа нет, аудит PlatformAdmin неизбежен | Клиентские данные не хранятся до переработки |
 | SP-05 | Product Owner (+ Service Manager, Operations) | 3 нед. | Гипотеза H-05 (раздел «SP-05: выбор источника Windows-фактов»). Инвентаризация пилотных устройств по инструменту управления; матрица «проверка × источник × устройство»; ручной отчёт для 3 клиентов текущими средствами с замером времени — база для критерия экономии в пилоте; гипотеза цены и условия платного пилота как вход WP-09; eligibility Lighthouse и GDAP. Отдельный результат по каналу установки: задержка от назначения до установки, передача секретного параметра и его отсутствие в логах RMM, отклонение изменённого MSI и MSI чужого publisher, тихий upgrade с сохранением идентичности и очереди, rollback на предыдущую подписанную версию | Протокол и решение «вариант A» или «вариант B» подписаны | — |
@@ -1063,11 +1093,11 @@ P0 начинается после независимого одобрения �
 | ID | Сценарий | Ожидаемый результат | Ответственный WP |
 | --- | --- | --- | --- |
 | AT-01 | Подмена организации, deviceId, findingId, reportId, cursor и фонового job; отозванное назначение и отозванный enrollment-токен; чужой cursor; доступ PlatformAdmin к данным клиента, в том числе при наличии у него членства в организации; GET с `x-audit-read: always` и `x-audit-read: platform_admin` от разных ролей; запрос без контекста организации | Ни один ответ или файл не содержит данных другого клиента; отказ аудируется. Чужой cursor даёт `invalid_cursor`. Каждый доступ PlatformAdmin к данным клиента оставляет `audit_event` в той же транзакции. GET с `x-audit-read: always` аудируется для любой роли; GET с `x-audit-read: platform_admin` у ServiceManager и Technician аудита не создаёт. Запрос без контекста организации возвращает 0 строк | WP-02 |
-| AT-02 | 10 устройств регистрируются одним пакетным токеном; истёкший, отозванный, исчерпанный и повторный enrollment-токен; тот же `installationId` с другим CSR; `installationId` отозванного устройства; неизвестный сертификат; поддельный XFCC тремя способами — внешний, из соседнего приложения окружения и дублированный; синтетическая sign-операция без записи `device_certificate` | Все 10 устройств зарегистрированы. Истёкший, отозванный и исчерпанный токены отвергаются. Тот же `installationId` с другим CSR даёт 409; `installationId` отозванного устройства — 409 `installation_already_enrolled`. Идентичный повтор регистрации не создаёт второго устройства. Поддельный XFCC и неизвестный сертификат отклоняются. Sign-операция без записи `device_certificate` вызывает оповещение | WP-03 |
-| AT-03 | Обычный пользователь пытается подменить службу, helper, pipe или конфигурацию, вызывает сборщик или передаёт путь либо команду; удалённый клиент pipe и pipe-squatting; частые вызовы; зависший сборщик | Отказ; фиксированные чтения не меняют проверяемые политики. Удалённый клиент pipe и pipe-squatting отклоняются. Частота вызовов ограничена. Зависший сборщик завершается не дольше чем за 30 с, сессия укладывается в 120 с. Дочерние процессы (`powershell.exe`, `cmd.exe`) не появляются | WP-04 |
+| AT-02 | 10 устройств регистрируются одним пакетным токеном; истёкший, отозванный, исчерпанный и повторный enrollment-токен; тот же `installationId` с другим CSR; тот же `registrationRequestId` с другим CSR; повтор регистрации после исчерпания одноразового токена; уже зарегистрированный `installationId` с несовпадающим `machineFingerprint`; `installationId` отозванного устройства; неизвестный сертификат; поддельный XFCC тремя способами — внешний, из соседнего приложения окружения и дублированный; синтетическая sign-операция без записи `device_certificate` | Все 10 устройств зарегистрированы. Истёкший, отозванный и исчерпанный токены отвергаются. Тот же `installationId` с другим CSR даёт 409, кроме случая AT-17; тот же `registrationRequestId` с другим CSR — 409 `idempotency_conflict`; повтор с тем же `registrationRequestId` и CSR после исчерпания одноразового токена возвращает прежний ответ; зарегистрированный `installationId` с несовпадающим признаком машины — 409 `identity_conflict`, агент выполняет `identity_stop`, новое устройство не создаётся, `identityState` существующего устройства не меняется, есть аудит `device.enroll_identity_conflict`; `installationId` отозванного устройства — 409 `installation_already_enrolled`. Идентичный повтор регистрации не создаёт второго устройства. Поддельный XFCC и неизвестный сертификат отклоняются. Sign-операция без записи `device_certificate` вызывает оповещение | WP-03 |
+| AT-03 | Обычный пользователь пытается подменить службу, helper, pipe или конфигурацию, вызывает сборщик или передаёт путь либо команду; удалённый клиент pipe и pipe-squatting; частые вызовы; зависший сборщик | Отказ; фиксированные чтения не меняют проверяемые политики. Удалённый клиент pipe и pipe-squatting отклоняются. Частота вызовов ограничена. Ожидание зависшего сборщика прекращается через 30 с, наблюдение получает `collector_timeout`; зависшая привилегированная работа принудительно завершается не позже чем через 120 с; сессия укладывается в 120 с. Дочерние процессы (`powershell.exe`, `cmd.exe`) не появляются | WP-04 |
 | AT-04 | Офлайн; сбой после commit до HTTP-ответа; повтор пакета; поздний старый пакет; постоянный и временный (429/503) отказ; противоречащий дубль в пакете; отсутствующая ожидаемая пара; повтор после границы окна `maxBatchAgeDays`; пакеты возрастом `maxBufferDays + 1` и `maxBufferDays + 3` сутки; восстановление VM из checkpoint с откатом sequence и клон VM с тем же сертификатом; часы переведены назад, затем исправлены; скачок часов вперёд больше 5 мин | Один пакет и один эффект; изменённый payload с тем же `Idempotency-Key` получает 409 `idempotency_conflict`; новое состояние не отменяется старым. При постоянном отказе пакет удалён, `droppedBatchCount` растёт, бесконечных повторов нет; при временном — повтор после `Retry-After`. Противоречащий дубль в любом порядке даёт 422. Отсутствующая ожидаемая пара даёт unknown. Потеря ответа и повтор после границы окна возвращают исходный receipt без второй оценки. Пакет возрастом `maxBufferDays + 1` сутки принят и помечен `late`; возрастом `maxBufferDays + 3` сутки — 422 `batch_too_old`, агент удаляет пакет. Восстановление из checkpoint — однократная ресинхронизация sequence, клон получает `identity_conflict`. Часы назад: пакет в истории, текущее состояние не меняется, оценка unknown/`clock_inconsistent`. После исправления часов следующий пакет обрабатывается нормально без ручных действий. Скачок вперёд больше 5 мин: 422 | WP-05 |
-| AT-05 | Missing check, denied, unsupported, stale pass, нулевое покрытие; WIN-008 без allowlist SID и WIN-010 без политики tenant; WIN-006: одинаковое количество обновлений при разной просрочке, неуспешный или устаревший поиск, несоответствие источника, усечённый список; WIN-003 по таблице решений; WIN-002 и WIN-004 без входа применимости в том же пакете; версия ОС вне обслуживания и неизвестная версия; Home; unknown без прежнего finding; устройство без новых пакетов; перезагрузка между двумя `rebootRequired=true`, пропуск данных и переустановка; эталонный отрицательный тест BitLocker | Unknown с причиной либо явная применимость; зелёная текущая оценка отсутствует. WIN-008 и WIN-010 получают informational, finding не создаётся, проверки видны в счётчике «не настроено политикой». WIN-006: одинаковое количество при разной просрочке даёт разные результаты; неуспешный или устаревший поиск и несоответствие источника — unknown, а не pass; усечённый список без просрочки среди переданных элементов — unknown/`update_list_truncated`, с просрочкой — fail. WIN-003: Defender в passive при стороннем AV и несопоставленный код WSC не дают pass; off и unknown у одобренных продуктов без единого on — unknown; ни одного одобренного продукта — fail. WIN-002 без пригодного WIN-011 и WIN-004 без пригодного WIN-003 в том же пакете — unknown/`applicability_input_missing`, а не not_applicable. SYS-002 даёт fail для версии вне обслуживания и unknown для неизвестной версии. Home даёт WIN-002 not_applicable по политике. Unknown снижает coverage и не создаёт finding. Устройство без пакетов становится stale через окно свежести; SYS-001 показывает «нет свежего полного сбора», finding не создаётся, compliance не меняется. Ложной просрочки WIN-007 нет. Эталонный тест BitLocker (`fully_encrypted`, `protectionStatus=off`, `encryptionPercentage=100` при `encryptionRequired=true`) даёт fail, а не pass | WP-05 |
-| AT-06 | Fail → pass → fail, затем unknown, смена правила и смена политики; ужесточение политики и свежий пакет со старой `policyVersion`; reopen при действующем решении о риске; два ПК с томом C:, смена буквы тома ОС и повторная регистрация; перезагрузка между двумя `rebootRequired=true` | Resolve и reopen только по фактам. `rule_change` и `policy_change` выделены отдельно и не входят в исправления. Свежий пакет со старой `policyVersion` даёт текущий результат по новой политике. Reopen при действующем решении о риске сохраняет это решение. История устройств и томов не смешивается; агент не может подставить чужой объект. Ложного fail по WIN-007 нет | WP-05 |
+| AT-05 | Missing check, denied, unsupported, stale pass, нулевое покрытие; WIN-008 без allowlist SID и WIN-010 без политики tenant; WIN-006 в режиме assessed (политика с `expectedSource`): одинаковое количество обновлений при разной просрочке, неуспешный или устаревший поиск, несоответствие источника, усечённый список; WIN-003 в режиме assessed (политика с `approvedProviders` или `defenderApproved`) по таблице решений; WIN-002 и WIN-004 без входа применимости в том же пакете; WIN-004 с `signatureLastUpdatedAt` позже `observedAt`; версия ОС вне обслуживания; устройство вне матрицы совместимости (редакция, версия или архитектура); нет свежего WIN-011; Home; unknown без прежнего finding; устройство без новых пакетов; перезагрузка между двумя `rebootRequired=true`, пропуск данных и переустановка; эталонный отрицательный тест BitLocker; fail проверок с порогом и без него; в варианте A — повторная проверка `requestDeviceScan` после исправления проблемы, пакет с чужим и пакет с просроченным `scanRequestId` | Unknown с причиной либо явная применимость; зелёная текущая оценка отсутствует. WIN-008 и WIN-010 получают informational, finding не создаётся, проверки видны в счётчике «не настроено политикой». WIN-006: одинаковое количество при разной просрочке даёт разные результаты; неуспешный или устаревший поиск и несоответствие источника — unknown, а не pass; усечённый список без просрочки среди переданных элементов — unknown/`update_list_truncated`, с просрочкой — fail. WIN-003: Defender в passive при стороннем AV и несопоставленный код WSC не дают pass; off и unknown у одобренных продуктов без единого on — unknown; ни одного одобренного продукта — fail. WIN-002 без пригодного WIN-011 и WIN-004 без пригодного WIN-003 в том же пакете — unknown/`applicability_input_missing`, а не not_applicable. WIN-004 с `signatureLastUpdatedAt` позже `observedAt` — unknown/`evidence_time_invalid`, пакет принят. SYS-002 даёт fail для версии вне обслуживания и для устройства вне матрицы совместимости (редакция, версия или архитектура); без свежего WIN-011 — unknown/`os_inventory_missing`. Home даёт WIN-002 not_applicable/`policy_not_applicable`. Unknown снижает coverage и не создаёт finding. Устройство без пакетов становится stale через окно свежести; SYS-001 показывает «нет свежего полного сбора», finding не создаётся, compliance не меняется. Ложной просрочки WIN-007 нет. Эталонный тест BitLocker (`fully_encrypted`, `protectionStatus=off`, `encryptionPercentage=100` при `encryptionRequired=true`) даёт fail, а не pass. Finding получает severity только `critical` или `warning` — по колонке «Severity при fail» в `03`, у пороговых проверок по порогу. Повторная проверка после исправления закрывает проблему: событие `resolved` с cause `device_change`. Пакет с чужим или просроченным `scanRequestId` обрабатывается как обычный сбор: `scanRequestId` игнорируется, запрос не меняет состояние, пишется запись диагностики | WP-05 |
+| AT-06 | Fail → pass → fail, затем unknown, смена правила и смена политики; ужесточение политики и свежий пакет со старой `policyVersion`; смена `editionId` на Core при открытом finding WIN-002 и той же ревизии политики, затем снова применимая WIN-002 с fail; reopen при действующем решении о риске; два ПК с томом C:, смена буквы тома ОС и повторная регистрация; перезагрузка между двумя `rebootRequired=true` | Resolve и reopen только по фактам. `rule_change` и `policy_change` выделены отдельно и не входят в исправления. Смена `editionId` на Core при той же ревизии политики даёт `resolved`/`applicability_change`, это событие тоже не входит в исправления; снова применимая проверка с fail даёт `reopened`/`device_change`. Свежий пакет со старой `policyVersion` даёт текущий результат по новой политике. Reopen при действующем решении о риске сохраняет это решение. История устройств и томов не смешивается; агент не может подставить чужой объект. Ложного fail по WIN-007 нет | WP-05 |
 | AT-07 | Период Europe/Oslo, смена летнего времени, неполные данные и чужая ссылка отчёта; язык отчёта организации и отсутствующий перевод; язык портала; недоверенные строки: (а) через API в `RiskDecision.reason` (выводится как `Finding.workflowReason`) подаются `<script>`, `"><img src=x onerror=…>`, `javascript:`, `file:///`, `http://169.254.169.254/`; (б) в полях с SAFE_TEXT (имя организации, label токена, `displayName` устройства) — строки с `<` или `>` и без них, а также фикстура с `<>`, записанная в БД в обход API; печать HTML в PDF из браузера; сбор в пятницу 16:00; устройство молчит с понедельника 09:00 | Правильные границы периода, покрытие и авторизация файла. Отчёт формируется на `reportLanguage` организации; при отсутствующем переводе — `state=failed`, `failureCode=translation_missing`. Портал: первый вход — nb; переключение на nn и en меняет строки интерфейса и тексты правил (запрос с `Accept-Language`, ответ с `Content-Language`); выбор сохраняется после перезагрузки страницы; язык отчёта от выбора в портале не зависит. Строки (а) в портале и отчёте выводятся как текст. Строки (б) с `<` или `>` через API получают 422 `schema_violation`, строки без них принимаются и выводятся как текст; фикстура в обход API экранируется. Заголовки выдачи присутствуют. Генератор не делает сетевых обращений. HTML печатается в PDF из Edge и Chrome без потери таблиц. Coverage у backend и отчёта считается одной функцией. Данные сбора в пятницу 16:00 в отчёте за неделю (свежесть на `periodEnd`, понедельник 00:00) свежие. Молчащее с понедельника 09:00 устройство в портале stale с четверга 09:00 | WP-06 |
 | AT-08 | Risk accepted и suppressed, отсутствие причины, истечение срока и конкурирующее редактирование; Technician меняет `assigneeId` принятого риска и вызывает `decideFindingRisk`; PATCH с `workflowState=risk_accepted`; решение о риске для `technicalState=resolved`; `reviewAt` позже now + 365 сут; устаревший и отсутствующий `If-Match` | Fail сохраняется; обязательные поля проверяются. Смена `assigneeId` не меняет `workflowState`. `decideFindingRisk` от Technician → 403. PATCH с `workflowState=risk_accepted` → 422 `schema_violation`. `decideFindingRisk` для `technicalState=resolved` → 409 `workflow_transition_forbidden`; `reviewAt` позже now + 365 сут → 422 `validation_failed`. Устаревший `If-Match` → 412, отсутствующий → 428. По наступлении `reviewAt` — `new` и одно событие `review_expired` | WP-06 |
 | AT-09 | P2. Отзыв consent, неверный tenant, ротация credential и отсутствие доступа Key Vault; чтение Graph-сертификата identities Portal API, Agent API и генератора отчётов; учения массового отзыва Graph credentials; offboarding приложения; consent сверх включённых модулей | Интеграция явно недоступна; данные не объявляются исправленными; секретов в логах нет. Identities Portal API, Agent API и генератора отчётов получают отказ при чтении Graph-сертификата. Учения массового отзыва пройдены по RB-14. После offboarding токен не выдаётся, сертификат удалён. Consent не запрашивает права сверх включённых модулей | WP-08 |
@@ -1078,7 +1108,7 @@ P0 начинается после независимого одобрения �
 | AT-14 | Worker падает после захвата или оценки; два worker; lease истекает у живого worker (пауза); рестарт в момент расписания; rollback и повторное использование соединения из pool; отказ базы | Lease восстанавливается. Нет дублей событий и периодических заданий, нет чужого контекста. До записи API не подтверждает приём | WP-05 |
 | AT-15 | P2. Graph pagination, 403 разных причин, 429 Retry-After и отсутствующее поле в 200 | Все страницы либо partial; причины не угадываются; задержка соблюдается | WP-08 |
 | AT-16 | Расчётная нагрузка и Windows resource budget; утренний всплеск — 70% устройств включаются за 30 мин; сбой API с массовыми 429/503; устройства с коротким сеансом | Измерены NFR-03…NFR-06; память и CPU считаются суммарно по всем процессам агента. p95 обработки соответствует NFR-03, синхронных повторов нет, агент соблюдает `Retry-After`, суточный сбор выполняется на устройствах с коротким сеансом. Результаты приложены к решению о пилоте | WP-07b |
-| AT-17 | Ротация сертификата со значениями 365 дней и окном 60 дней на тестовом профиле CA (срок 1 день, окно 6 ч); первый запрос новым (pending) сертификатом; потеря ответа и повтор с тем же id и CSR; тот же id с другим CSR; сбой после подписи до commit; конкурентные renew; отзыв во время ротации; ПК офлайн дольше срока; синтетическая sign-операция без записи `device_certificate` | Первый запрос pending-сертификатом принимается и активирует его; старый принимается ещё 24 ч. Повтор с тем же id и CSR не создаёт второго сертификата; тот же id с другим CSR → 409. Одновременно действуют не больше двух сертификатов. Истёкший сертификат не принимается: `certificate_expired` или обрыв TLS при истёкшем локальном сертификате переводят агент в `ReenrollRequired`, требуется безопасная повторная регистрация. Sign-операция без записи `device_certificate` вызывает оповещение | WP-03 |
+| AT-17 | Ротация сертификата со значениями 365 дней и окном 60 дней на тестовом профиле CA (срок 1 день, окно 6 ч); первый запрос новым (pending) сертификатом; потеря ответа и повтор с тем же id и CSR; тот же id с другим CSR; сбой после подписи до commit; конкурентные renew; отзыв во время ротации; ПК офлайн дольше срока; ПК восстановлен из образа старше ротации и предъявляет сертификат `superseded` после окончания перекрытия, затем регистрируется повторно до и после истечения `reenrollAllowedUntil`; тот же образ, когда `superseded`-сертификат истёк и по `validTo`; повторная регистрация при неактивированном `pending` от продления; регистрация поверх `active` в окне `reenrollAllowedUntil`; отозванный сертификат после окончания перекрытия; синтетическая sign-операция без записи `device_certificate` | Первый запрос pending-сертификатом принимается и активирует его; старый принимается ещё 24 ч. Повтор с тем же id и CSR не создаёт второго сертификата; тот же id с другим CSR → 409. Одновременно действуют не больше двух сертификатов (определение действующего — `04`, «Профиль и продление сертификата»). Истёкший сертификат не принимается: `certificate_expired` или обрыв TLS при истёкшем локальном сертификате переводят агент в `ReenrollRequired`, требуется безопасная повторная регистрация. Сертификат `superseded` после окончания перекрытия получает 401 `certificate_expired`, сервер в той же транзакции записывает `device.reenrollAllowedUntil` = now + 7 суток (аудит `device.reenroll_allowed`), агент выполняет `reenroll_required`. Окно открывается и для `superseded`-сертификата с наступившим `validTo`, если запрос дошёл до приложения; при обрыве TLS на ingress окно не открывается, и при `active` с `validTo` > now регистрация даёт 409 `installation_already_enrolled` (вариант устанавливает SP-02). Пока `reenrollAllowedUntil` > now, повторная регистрация с тем же `installationId` и совпадающим признаком машины сохраняет `deviceId` и историю: новый сертификат выдаётся как `pending`, перекрытие прежних `superseded` заканчивается в момент выдачи, прежний `active` переходит в `superseded` при первом mTLS-запросе новым, `reenrollAllowedUntil` обнуляется в транзакции выдачи, `previousCertificateValidUntil` = null. Повторная регистрация, с окном и без, переводит неактивированный `pending` от продления в `revoked` (аудит `device.pending_revoked`), увеличивает `useCount` токена и создаёт запись `enrollment`; регистрация поверх `active` пишет аудит `device.reenroll_over_active` и поднимает оповещение. После истечения `reenrollAllowedUntil` регистрация при `active` с `validTo` > now даёт 409 `installation_already_enrolled`; неактивированный `pending` ей не мешает. ПК офлайн дольше срока сертификата регистрируется повторно и получает новый сертификат тому же `deviceId`. Отозванный сертификат или отозванное устройство `reenrollAllowedUntil` не выставляют. Sign-операция без записи `device_certificate` вызывает оповещение | WP-03 |
 
 При варианте B заменяются AT-02, AT-03, AT-04, AT-13, AT-17 и агентские части AT-16 (ресурсы агента, суточный сбор на устройстве, соблюдение `Retry-After` агентом): их место занимают сценарии импорта из пакета 0.3.0 (раздел «SP-05: выбор источника Windows-фактов»).
 
@@ -1104,7 +1134,7 @@ Cloud integration tests используют отдельные test tenants с 
 
 ## Условия допуска
 
-До P1: выполнены условия выхода из P0 (раздел «Правила P0 и старт P1»); версия 0.2.0 независимо одобрена, устранение замечаний проверено независимо; подтверждены канал установки и источник подписи кода (вопросы 2 и 8 в `08`); SP-01, SP-02 и SP-04 закрыты до использования клиентских данных.
+До P1: выполнены условия выхода из P0 (раздел «Правила P0 и старт P1»); версия 0.2.0 одобрена обоими независимыми рецензентами архитектуры, устранение замечаний проверено независимо; подтверждены канал установки и источник подписи кода (вопросы 2 и 8 в `08`); SP-01, SP-02 и SP-04 закрыты до использования клиентских данных.
 
 Пилот допускается, когда пройдены AT-01, AT-05…AT-08, AT-12, AT-14 и AT-16; в варианте A также AT-02…AT-04, AT-13 и AT-17; в варианте B — сценарии импорта из пакета 0.3.0. RB-01…RB-12 имеют назначенных владельцев и рабочее время поддержки до установки клиентам. Все critical и major дефекты идентификации, межклиентского доступа, обновления и скрытия неизвестного результата закрыты. Ни одно условие не смягчается за счёт изоляции клиентов, достоверности unknown, отзыва или восстановления.
 
@@ -1116,7 +1146,7 @@ Cloud integration tests используют отдельные test tenants с 
 | --- | --- | --- | --- |
 | RB-01 | Отказ агента, включая всплеск `certificate_unknown` | Operations | P1 |
 | RB-02 | Потеря или переполнение буфера | Operations | P1 |
-| RB-03 | Отзыв устройства и разбор identity_conflict | Service Manager | P1 |
+| RB-03 | Отзыв устройства, разбор identity_conflict и оповещения reenroll_over_active | Service Manager | P1 |
 | RB-04 | Сертификаты устройств: ротация и истечение | Operations | P1 |
 | RB-05 | Ротация ключа и сертификата CA | Security Owner | P1 |
 | RB-06 | Неудачное обновление, остановка выпуска и rollback | Operations | P1 |
@@ -1129,7 +1159,7 @@ Cloud integration tests используют отдельные test tenants с 
 | RB-13 | Graph consent, onboarding и offboarding приложения в tenant клиента | Integration Lead | P2, при B — до WP-04B |
 | RB-14 | Массовый отзыв Graph credentials | Security Owner | P2, при B — до WP-04B |
 
-RB-09 включает карантин: ingress Portal API и Agent API закрыт, Worker остановлен, журнал жизненного цикла применяется по порядку, статусы сверяются, и только после этого доступ открывается; учебный restore выполняется ежемесячно (порядок — `06`, раздел «Журнал жизненного цикла и restore в карантине»). RB-13 содержит: назначенного владельца; tenant, в котором регистрируется приложение; привязку `entraTenantId` и `clientId`; период и порядок ротации сертификата; отключение, отзыв consent и удаление service principal или приложения; очистку Key Vault; остаточную область воздействия общего Graph-компонента (R-14).
+RB-09 включает карантин: ingress Portal API и Agent API закрыт, Worker, Graph-компонент (P2) и компонент импорта (при варианте B) остановлены до проверки журнала, журнал жизненного цикла применяется по порядку, статусы сверяются, и только после этого доступ открывается; учебный restore выполняется ежемесячно (порядок — `06`, раздел «Журнал жизненного цикла и restore в карантине»). RB-13 содержит: назначенного владельца; tenant, в котором регистрируется приложение; привязку `entraTenantId` и `clientId`; период и порядок ротации сертификата; отключение, отзыв consent и удаление service principal или приложения; очистку Key Vault; остаточную область воздействия общего Graph-компонента (R-14).
 
 
 Файл `08-risks-and-decisions.md`
@@ -1519,6 +1549,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
 
 Версия 0.2.0, дата 2026-10-13. Проверку выполняет `scripts/validate_package.py`; он ничего не записывает. `scripts/build_package.py` вызывает его первым и пишет этот файл, `REVIEW-BUNDLE.md`, `manifest.json` и архив только после успешной проверки.
 
+- Состав каталога соответствует белому списку путей пакета, скрытые файлы и `__pycache__` в пакет не входят; версия совпадает в `build_package.py`, `contract_catalog.py`, `README.md` и `09`.
 - Прочитаны все JSON-файлы и разрешены локальные ссылки `$ref`; в `openapi.json` нет внешних ссылок, у отдельных схем агента есть `$id`.
 - Каталог: уникальных check IDs — 18, из них WIN-* — 11; у каждой проверки есть строка в `03`, объект и режим по умолчанию совпадают с каталогом.
 - Документы: функциональных требований с колонкой «Контракт» — 13, приёмочных сценариев — 17, runbooks — 14; ссылки на ID разрешаются в определения.
@@ -1526,8 +1557,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
 - Отклонены все отрицательные варианты (всего 24); положительные варианты SAFE_TEXT приняты (всего 1).
 - Операции OpenAPI: всего 34 (агентских 5, портальных 29); проверены path parameters, security, CSRF, отдельный mTLS host, `x-audit-read`, `Accept-Language`, роли и заголовки выдачи отчёта.
 - Ответы: коды `Problem.code` (всего 36) совпадают с таблицей `05`, действия агента (всего 14) образуют закрытый перечень; наборы статусов операций соответствуют правилам.
-- `Assessment.reasonCode`: значений — 15; события `finding_event` совпадают с таблицей `05`.
-- Реестр инвариантов: записей — 81 (P1 — 76, P2 — 5); поля, формы `expectedError`, разделы источников и покрытие проверены.
+- `Assessment.reasonCode`: значений — 16; события `finding_event` совпадают с таблицей `05`.
+- Реестр инвариантов: записей — 88 (P1 — 83, P2 — 5); поля, формы `expectedError`, разделы источников и покрытие проверены.
 - Проверены локальные Markdown-ссылки, закрытие code fences и число сообщений исходной переписки (12).
 
 Стандартная проверка не выполнена: jsonschema и openapi-spec-validator не установлены. Выполнена только встроенная проверка подмножества JSON Schema. Полная стандартная проверка, пробная генерация клиентов C# и TypeScript и CI — первый результат WP-01.
@@ -1860,7 +1891,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-011",
-      "rule": "completedAt не раньше startedAt, observedAt не позже completedAt, время не позже receivedAt + 5 мин.",
+      "rule": "completedAt не раньше startedAt, observedAt не позже completedAt; startedAt, completedAt и observations[].observedAt не позже receivedAt + 5 мин. Метки времени внутри evidence при приёме не проверяются.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
         "section": "Время и часы устройства"
@@ -2003,7 +2034,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-020",
-      "rule": "Пакет с признаком часов сохраняется в истории; его оценки unknown и не меняют текущую проекцию.",
+      "rule": "Пакет с признаком часов сохраняется в истории и не меняет текущую проекцию. Признак действует на все оценки пакета: assessed получают unknown, informational — result=null, обе с clock_inconsistent.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
         "section": "Время и часы устройства"
@@ -2050,14 +2081,14 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-023",
-      "rule": "installationId отозванного устройства или активного устройства с другим CSR не регистрируется повторно.",
+      "rule": "Порядок проверок enrollAgent: неизвестный, истёкший или отозванный токен; идемпотентный повтор того же registrationRequestId с тем же CSR, в том числе при исчерпанном токене (с другим CSR — 409 idempotency_conflict); исчерпанный токен; новый installationId — новое устройство; отозванное устройство — 409 installation_already_enrolled; несовпадающий признак машины — 409 identity_conflict; active сертификат с validTo > now при reenrollAllowedUntil, который не задан или истёк, — 409 installation_already_enrolled (неактивированный pending не учитывается); иначе новый сертификат тому же deviceId, useCount увеличивается, создаётся запись enrollment, неактивированный pending отзывается.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
-        "section": "Канонический объект и идентичность устройства"
+        "section": "API агента"
       },
       "phase": "P1",
       "enforcement": "portal_api",
-      "negativeExample": "enrollAgent с installationId отозванного устройства.",
+      "negativeExample": "enrollAgent с installationId активного устройства с действующим active-сертификатом, новым registrationRequestId и reenrollAllowedUntil=null.",
       "expectedError": {
         "http": 409,
         "code": "installation_already_enrolled"
@@ -2559,14 +2590,14 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-055",
-      "rule": "Зависший сборщик завершается не дольше чем за 30 с, сессия укладывается в 120 с; дочерние процессы не запускаются.",
+      "rule": "Ожидание результата сборщика — 30 с, по истечении collector_timeout; зависшая привилегированная работа принудительно завершается не позже 120 с; дочерние процессы не запускаются.",
       "sourceDoc": {
         "file": "02-architecture-and-stack.md",
         "section": "Выполнение локальной проверки"
       },
       "phase": "P1",
       "enforcement": "agent",
-      "negativeExample": "Сборщик WIN-006 не отвечает 60 с.",
+      "negativeExample": "Сборщик WIN-005 не отвечает 60 с.",
       "expectedError": {
         "result": "unknown",
         "reasonCode": "collector_timeout"
@@ -2590,7 +2621,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-057",
-      "rule": "WIN-003: ни один одобренный продукт не активен, а у одного одобренного productState=unknown.",
+      "rule": "WIN-003 в режиме assessed: ни один одобренный продукт не активен, а у одного одобренного productState=unknown.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
@@ -2606,7 +2637,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-058",
-      "rule": "WIN-006: неуспешный поиск обновлений даёт unknown.",
+      "rule": "WIN-006 в режиме assessed: неуспешный поиск обновлений даёт unknown.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
@@ -2622,7 +2653,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-059",
-      "rule": "WIN-006: основа свежести поиска старше maxSearchAgeHours даёт unknown.",
+      "rule": "WIN-006 в режиме assessed: основа свежести поиска старше maxSearchAgeHours даёт unknown.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
@@ -2638,7 +2669,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-060",
-      "rule": "WIN-006: configuredSource отличается от expectedSource.",
+      "rule": "WIN-006 в режиме assessed: configuredSource отличается от expectedSource.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
@@ -2654,7 +2685,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-061",
-      "rule": "WIN-006: усечённый список без просрочки среди переданных элементов даёт unknown.",
+      "rule": "WIN-006 в режиме assessed: усечённый список без просрочки среди переданных элементов даёт unknown.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
@@ -2670,7 +2701,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-062",
-      "rule": "WIN-006: просрочка хотя бы одного переданного обновления даёт fail независимо от truncated.",
+      "rule": "WIN-006 в режиме assessed: просрочка хотя бы одного переданного обновления даёт fail независимо от truncated.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
@@ -2685,7 +2716,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-063",
-      "rule": "SYS-002: версии нет в таблице жизненного цикла.",
+      "rule": "SYS-002: версия, редакция или архитектура вне матрицы совместимости даёт fail.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Матрица совместимости и жизненный цикл ОС"
@@ -2694,8 +2725,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
       "enforcement": "worker",
       "negativeExample": "WIN-011 displayVersion=27H1.",
       "expectedError": {
-        "result": "unknown",
-        "reasonCode": "os_version_unknown"
+        "result": "fail"
       },
       "acceptance": "AT-05"
     },
@@ -2717,7 +2747,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-065",
-      "rule": "Межпроверочная применимость берётся из того же пакета; без пригодного входа зависимая проверка unknown.",
+      "rule": "Межпроверочная применимость берётся из того же пакета; без пригодного входа зависимая проверка unknown. Правило применяется, только если у пакета нет признака часов.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Семантика результата"
@@ -2733,7 +2763,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-066",
-      "rule": "Редакция из notApplicableEditionIds даёт not_applicable по политике.",
+      "rule": "Редакция из notApplicableEditionIds даёт not_applicable.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Семантика результата"
@@ -2956,14 +2986,14 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-079",
-      "rule": "Регистрация MFA не означает требования MFA политикой доступа.",
+      "rule": "Регистрация MFA не означает требования MFA политикой доступа: если политики Conditional Access не прочитаны из-за неподтверждённой лицензии, вывод о требовании MFA не делается.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Microsoft 365"
       },
       "phase": "P2",
       "enforcement": "worker",
-      "negativeExample": "isMfaRegistered=true без политики CA, требующей MFA.",
+      "negativeExample": "isMfaRegistered=true, политики CA не читаются: лицензия Entra ID P1 не подтверждена.",
       "expectedError": {
         "capabilityStatus": "license_unconfirmed"
       },
@@ -2986,18 +3016,136 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     },
     {
       "id": "INV-081",
-      "rule": "Consent запрашивается только для включённых модулей.",
+      "rule": "Consent запрашивается только для включённых модулей; модуль, включённый после consent, не расширяет выданные права сам и до нового consent работает без своего права.",
       "sourceDoc": {
         "file": "04-security-and-privacy.md",
         "section": "Разрешения интеграций"
       },
       "phase": "P2",
       "enforcement": "infra",
-      "negativeExample": "Запрос права модуля M365-005 при выключенном модуле.",
+      "negativeExample": "Модуль M365-004 включён после consent без DeviceManagementManagedDevices.Read.All.",
       "expectedError": {
         "capabilityStatus": "permission_missing"
       },
       "acceptance": "AT-09"
+    },
+    {
+      "id": "INV-082",
+      "rule": "Зарегистрированный сертификат устройства в состоянии superseded после окончания перекрытия, например в образе старше ротации, получает 401 certificate_expired; в той же транзакции сервер записывает device.reenrollAllowedUntil = now + 7 суток и аудит device.reenroll_allowed, независимо от validTo, если запрос дошёл до приложения. Отозванный сертификат или отозванное устройство это поле не выставляют. Повторная регистрация при reenrollAllowedUntil > now, том же installationId и совпадающем признаке машины выдаёт pending-сертификат тому же deviceId, история сохраняется; неактивированный pending отзывается (аудит device.pending_revoked), useCount увеличивается, создаётся запись enrollment, перекрытие прежних superseded заканчивается в момент выдачи, пишутся аудит device.reenroll_over_active и оповещение; прежний active переходит в superseded при первом mTLS-запросе новым; reenrollAllowedUntil обнуляется в транзакции выдачи, previousCertificateValidUntil = null.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Профиль и продление сертификата"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Восстановленный образ старше ротации отправляет heartbeat старым сертификатом после перекрытия.",
+      "expectedError": {
+        "http": 401,
+        "code": "certificate_expired"
+      },
+      "acceptance": "AT-17"
+    },
+    {
+      "id": "INV-083",
+      "rule": "enrollAgent с уже зарегистрированным installationId и несовпадающим признаком машины отклоняется; агент переходит в IdentityConflict; identityState существующего устройства не меняется, пишется аудит device.enroll_identity_conflict.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Канонический объект и идентичность устройства"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Повторная регистрация после истечения сертификата с installationId другой машины.",
+      "expectedError": {
+        "http": 409,
+        "code": "identity_conflict"
+      },
+      "acceptance": "AT-02"
+    },
+    {
+      "id": "INV-084",
+      "rule": "Проверка, ставшая not_applicable по фактам устройства в пакете без смены policy_revision, закрывает finding событием resolved с applicability_change; это не исправление.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Таблица переходов finding"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "WIN-011 editionId сменился на Core при открытом finding WIN-002 и той же ревизии политики.",
+      "expectedError": {
+        "event": {
+          "eventType": "resolved",
+          "cause": "applicability_change"
+        }
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-085",
+      "rule": "WIN-004: signatureLastUpdatedAt позже observedAt этого наблюдения даёт unknown/evidence_time_invalid; пакет не отклоняется.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Проверки Windows"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "signatureLastUpdatedAt на двое суток позже observedAt.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "evidence_time_invalid"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-086",
+      "rule": "Пакет с чужим или просроченным scanRequestId принимается как обычный сбор: scanRequestId игнорируется, пишется запись диагностики, новых кодов нет.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "API портала"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Пакет с scanRequestId другого устройства и свежим pass WIN-005 после исправления.",
+      "expectedError": {
+        "event": {
+          "eventType": "resolved",
+          "cause": "device_change"
+        }
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-087",
+      "rule": "Повторная проверка по requestDeviceScan (только вариант A) закрывает исправленную проблему событием resolved с device_change.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "API портала"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Пакет с действующим scanRequestId и pass WIN-005 после исправления.",
+      "expectedError": {
+        "event": {
+          "eventType": "resolved",
+          "cause": "device_change"
+        }
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-088",
+      "rule": "SYS-002: версия из матрицы совместимости, которой нет в таблице жизненного цикла, даёт unknown.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Матрица совместимости и жизненный цикл ОС"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Тестовая версия данных правила: матрица расширена версией 27H1, строки 27H1 в таблице жизненного цикла ещё нет; WIN-011 displayVersion=27H1.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "os_version_unknown"
+      },
+      "acceptance": "AT-05"
     }
   ]
 }
@@ -4335,7 +4483,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             }
           }
         },
-        "description": "Идемпотентно по registrationRequestId и CSR: повтор возвращает исходный ответ и не увеличивает useCount.",
+        "description": "Порядок проверок, первая сработавшая определяет ответ: (1) токен неизвестен, истёк или отозван либо организация не active — 401 enrollment_token_invalid; (2) тот же registrationRequestId с тем же CSR — идемпотентный повтор прежнего ответа, даже при исчерпанном токене, useCount не увеличивается; тот же registrationRequestId с другим CSR — 409 idempotency_conflict; (3) токен исчерпан — 401 enrollment_token_invalid; (4) новый installationId — новое устройство; (5) устройство с этим installationId отозвано — 409 installation_already_enrolled; (6) machineFingerprint не совпадает — 409 identity_conflict, identityState существующего устройства не меняется; (7) у устройства есть active сертификат с validTo > now (неактивированный pending не учитывается) и reenrollAllowedUntil не задан или истёк — 409 installation_already_enrolled; (8) иначе новый сертификат тому же deviceId; с окном и без в транзакции выдачи увеличивается useCount, создаётся запись enrollment, а неактивированный pending переводится в revoked (аудит device.pending_revoked). Агент сохраняет registrationRequestId и новый ключ до отправки запроса и повторяет его с тем же id. reenrollAllowedUntil = now + 7 суток сервер записывает в той же транзакции, в которой отвечает 401 certificate_expired на mTLS-запрос зарегистрированным сертификатом устройства в состоянии superseded после окончания перекрытия, независимо от validTo. В случае (8) при reenrollAllowedUntil > now новый сертификат выдаётся как pending, перекрытие прежних superseded заканчивается в момент выдачи, прежний active переходит в superseded при первом mTLS-запросе новым, reenrollAllowedUntil обнуляется, пишется аудит device.reenroll_over_active и поднимается оповещение. previousCertificateValidUntil при enroll = null.",
         "requestBody": {
           "required": true,
           "content": {
@@ -8012,7 +8160,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             }
           }
         },
-        "description": "idempotencyKey, срок 24 ч, не больше одного pending-запроса на устройство.",
+        "description": "Только вариант A. idempotencyKey, срок 24 ч, не больше одного незавершённого запроса (requested или delivered) на устройство.",
         "requestBody": {
           "required": true,
           "content": {
@@ -8225,13 +8373,10 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "nb",
-                "nn",
-                "en"
-              ]
+              "minLength": 1,
+              "maxLength": 35
             },
-            "description": "Язык title, recommendation и explanation; без заголовка или при другом значении используется nb."
+            "description": "Язык title, recommendation и explanation. Принимаются nb, nn и en; без заголовка или при любом другом значении используется nb, ошибки нет."
           }
         ]
       }
@@ -8423,15 +8568,24 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
           {
             "name": "workflowState",
             "in": "query",
+            "style": "form",
+            "explode": false,
             "schema": {
-              "type": "string",
-              "enum": [
-                "new",
-                "in_progress",
-                "risk_accepted",
-                "suppressed"
-              ]
-            }
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "new",
+                  "in_progress",
+                  "risk_accepted",
+                  "suppressed"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 4,
+              "uniqueItems": true
+            },
+            "description": "Несколько значений через запятую, например workflowState=new,in_progress. Очередь по умолчанию — technicalState=open&workflowState=new,in_progress."
           },
           {
             "name": "Accept-Language",
@@ -8439,13 +8593,10 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "nb",
-                "nn",
-                "en"
-              ]
+              "minLength": 1,
+              "maxLength": 35
             },
-            "description": "Язык title, recommendation и explanation; без заголовка или при другом значении используется nb."
+            "description": "Язык title, recommendation и explanation. Принимаются nb, nn и en; без заголовка или при любом другом значении используется nb, ошибки нет."
           }
         ]
       }
@@ -8608,13 +8759,10 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "nb",
-                "nn",
-                "en"
-              ]
+              "minLength": 1,
+              "maxLength": 35
             },
-            "description": "Язык title, recommendation и explanation; без заголовка или при другом значении используется nb."
+            "description": "Язык title, recommendation и explanation. Принимаются nb, nn и en; без заголовка или при любом другом значении используется nb, ошибки нет."
           }
         ]
       },
@@ -8857,13 +9005,10 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "nb",
-                "nn",
-                "en"
-              ]
+              "minLength": 1,
+              "maxLength": 35
             },
-            "description": "Язык title, recommendation и explanation; без заголовка или при другом значении используется nb."
+            "description": "Язык title, recommendation и explanation. Принимаются nb, nn и en; без заголовка или при любом другом значении используется nb, ошибки нет."
           }
         ]
       }
@@ -9107,13 +9252,10 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "nb",
-                "nn",
-                "en"
-              ]
+              "minLength": 1,
+              "maxLength": 35
             },
-            "description": "Язык title, recommendation и explanation; без заголовка или при другом значении используется nb."
+            "description": "Язык title, recommendation и explanation. Принимаются nb, nn и en; без заголовка или при любом другом значении используется nb, ошибки нет."
           }
         ]
       }
@@ -9840,7 +9982,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             "minLength": 1,
             "maxLength": 36,
             "format": "uuid",
-            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "Только вариант A. Чужой или просроченный scanRequestId не отклоняет пакет: он принимается как обычный сбор, scanRequestId игнорируется, пишется запись диагностики."
           },
           "observations": {
             "type": "array",
@@ -9863,7 +10006,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
           "completedAt",
           "observations"
         ],
-        "description": "DeviceId и OrganizationId определяются сертификатом, а не телом пакета. Лимит байтов, idempotency, sequence, окна и время проверяются сервером дополнительно."
+        "description": "DeviceId и OrganizationId определяются сертификатом, а не телом пакета. Лимит байтов, idempotency, sequence, окна и время проверяются сервером дополнительно. Правило «не позже receivedAt + 5 мин» при приёме проверяет только startedAt, completedAt и observations[].observedAt; метки времени внутри evidence при приёме не проверяются и оцениваются по правилам проверки (03)."
       },
       "Observation": {
         "title": "Sikkerheit Agent Observation",
@@ -11569,7 +11712,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
           "timezone": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 80
+            "maxLength": 80,
+            "description": "Часовой пояс IANA; обязателен при создании, портал предлагает Europe/Oslo."
           },
           "reportLanguage": {
             "type": "string",
@@ -11703,6 +11847,19 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             },
             "minItems": 1,
             "maxItems": 11,
+            "default": [
+              "WIN-001",
+              "WIN-002",
+              "WIN-003",
+              "WIN-004",
+              "WIN-005",
+              "WIN-006",
+              "WIN-007",
+              "WIN-008",
+              "WIN-009",
+              "WIN-010",
+              "WIN-011"
+            ],
             "uniqueItems": true
           },
           "schedule": {
@@ -11769,7 +11926,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -11787,6 +11945,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -11839,7 +11998,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -11857,6 +12017,12 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [
+                      "Core",
+                      "CoreN",
+                      "CoreSingleLanguage",
+                      "CoreCountrySpecific"
+                    ],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -11888,7 +12054,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "informational"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -11906,6 +12073,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -11951,7 +12119,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -11969,6 +12138,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -12007,7 +12177,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -12025,6 +12196,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -12071,7 +12243,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "informational"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -12089,6 +12262,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -12105,7 +12279,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                           "wsus",
                           "other_approved",
                           null
-                        ]
+                        ],
+                        "default": null
                       },
                       "maxSearchAgeHours": {
                         "type": "integer",
@@ -12155,7 +12330,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                         "enum": [
                           "deadline",
                           "first_seen"
-                        ]
+                        ],
+                        "default": "first_seen"
                       }
                     },
                     "required": [
@@ -12181,7 +12357,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -12199,6 +12376,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -12231,7 +12409,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "informational"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -12249,6 +12428,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -12289,7 +12469,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -12307,6 +12488,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -12338,7 +12520,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "informational"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -12356,6 +12539,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -12390,7 +12574,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                 "additionalProperties": false,
                 "properties": {
                   "assessmentMode": {
-                    "const": "informational"
+                    "const": "informational",
+                    "default": "informational"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -12408,6 +12593,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -12428,7 +12614,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                 "additionalProperties": false,
                 "properties": {
                   "assessmentMode": {
-                    "const": "informational"
+                    "const": "informational",
+                    "default": "informational"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -12446,6 +12633,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -12470,7 +12658,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -12488,6 +12677,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -12527,7 +12717,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
           "buffer",
           "checks"
         ],
-        "description": "Закрытая конфигурация policy_revision. WIN-011 обязательна в activeCheckIds; assessed без входных настроек, отсутствие WIN-011 и активная WIN-004 без WIN-003 дают 422 policy_inputs_missing. maxBatchAgeDays >= maxBufferDays + 1, иначе 422 schema_violation. Политика v1 по умолчанию: все WIN активны, режимы равны defaultAssessmentMode каталога, значения default этой схемы."
+        "description": "Закрытая конфигурация policy_revision. WIN-011 обязательна в activeCheckIds; assessed без входных настроек, отсутствие WIN-011 и активная WIN-004 без WIN-003 дают 422 policy_inputs_missing. maxBatchAgeDays >= maxBufferDays + 1, иначе 422 schema_violation. У каждого обязательного поля-значения есть default; объект по умолчанию составляется из default вложенных полей. Политика v1 по умолчанию: значения default этой схемы — все WIN активны, режимы равны defaultAssessmentMode каталога."
       },
       "PolicyRevision": {
         "type": "object",
@@ -12598,7 +12788,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
           "reason": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 1000
+            "maxLength": 1000,
+            "description": "Обязательный свободный текст; недоверенная строка, выводится только в аудите с экранированием."
           },
           "idempotencyKey": {
             "type": "string",
@@ -13126,7 +13317,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
           "state": {
             "type": "string",
             "enum": [
-              "pending",
+              "requested",
+              "delivered",
               "completed",
               "expired"
             ]
@@ -13283,6 +13475,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
               "os_inventory_missing",
               "applicability_input_missing",
               "policy_not_applicable",
+              "evidence_time_invalid",
               null
             ]
           },
@@ -13359,6 +13552,22 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
               "properties": {
                 "result": {
                   "type": "null"
+                },
+                "reasonCode": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "permission_denied",
+                    "unsupported",
+                    "collector_timeout",
+                    "temporary_error",
+                    "missing_observation",
+                    "clock_inconsistent",
+                    "applicability_input_missing",
+                    null
+                  ]
                 }
               }
             },
@@ -13369,9 +13578,31 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "result": {
+                  "enum": [
+                    "pass",
+                    "fail"
+                  ]
+                }
+              },
+              "required": [
+                "result"
+              ]
+            },
+            "then": {
+              "properties": {
+                "reasonCode": {
+                  "type": "null"
+                }
+              }
+            }
           }
         ],
-        "description": "reasonCode заполняется только при result unknown или not_applicable."
+        "description": "Режим informational: result всегда null, finding не создаётся. reasonCode допускается при result unknown или not_applicable, а также у informational-оценки с result=null, когда данных нет: коды недоступности наблюдения, missing_observation, clock_inconsistent, applicability_input_missing; такая оценка получает result=null с той же причиной. Остальные причины правил (unmapped_state, update_*, os_version_unknown, os_inventory_missing, evidence_time_invalid, policy_not_applicable) informational-оценке не присваиваются: result=null, reasonCode=null. Признак часов действует на все оценки пакета: assessed — unknown и clock_inconsistent, informational — null и clock_inconsistent; applicability_input_missing применяется, только если у пакета нет признака часов."
       },
       "Finding": {
         "type": "object",
@@ -13438,8 +13669,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             "type": "string",
             "enum": [
               "critical",
-              "warning",
-              "information"
+              "warning"
             ]
           },
           "revision": {
@@ -13569,6 +13799,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
               "device_change",
               "rule_change",
               "policy_change",
+              "applicability_change",
               "data_quality",
               "manual_action",
               "review_expired"
@@ -13675,7 +13906,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                   "enum": [
                     "device_change",
                     "rule_change",
-                    "policy_change"
+                    "policy_change",
+                    "applicability_change"
                   ]
                 },
                 "assessmentId": {
@@ -14013,7 +14245,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
               "translation_missing",
               "generation_error",
               null
-            ]
+            ],
+            "description": "translation_missing — нет перевода; generation_error — сбой генерации по иной причине, чем translation_missing."
           }
         },
         "required": [
@@ -14356,7 +14589,8 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
       "minLength": 1,
       "maxLength": 36,
       "format": "uuid",
-      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      "description": "Только вариант A. Чужой или просроченный scanRequestId не отклоняет пакет: он принимается как обычный сбор, scanRequestId игнорируется, пишется запись диагностики."
     },
     "observations": {
       "type": "array",
@@ -14379,7 +14613,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
     "completedAt",
     "observations"
   ],
-  "description": "DeviceId и OrganizationId определяются сертификатом, а не телом пакета. Лимит байтов, idempotency, sequence, окна и время проверяются сервером дополнительно."
+  "description": "DeviceId и OrganizationId определяются сертификатом, а не телом пакета. Лимит байтов, idempotency, sequence, окна и время проверяются сервером дополнительно. Правило «не позже receivedAt + 5 мин» при приёме проверяет только startedAt, completedAt и observations[].observedAt; метки времени внутри evidence при приёме не проверяются и оцениваются по правилам проверки (03)."
 }
 ```
 
