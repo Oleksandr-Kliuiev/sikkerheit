@@ -1,9 +1,9 @@
 """Agent schemas, evidence, policy configuration and portal API schemas (one dictionary source)."""
 import copy
 
-from contract_catalog import (AGENT_IDS, ALWAYS_INFORMATIONAL, COLLECTOR_REASONS, EVENT_CAUSES,
-                              EVENT_TABLE, LANGUAGES, P1_IDS, PROBLEM_CODES, REASON_CODES, RESULTS,
-                              SUBJECT_TYPES, VOLUME_IDS, WORKFLOW_STATES)
+from contract_catalog import (AGENT_IDS, ALWAYS_INFORMATIONAL, CHECKS, COLLECTOR_REASONS, EVENT_CAUSES,
+                              EVENT_TABLE, INFORMATIONAL_REASONS, LANGUAGES, P1_IDS, PROBLEM_CODES,
+                              REASON_CODES, RESULTS, SUBJECT_TYPES, VOLUME_IDS, WORKFLOW_STATES)
 
 DRAFT = 'https://json-schema.org/draft/2020-12/schema'
 CONTRACT_BASE = 'https://contracts.sikkerheit.example.invalid/agent/'
@@ -54,6 +54,8 @@ EDITION_ID = string(64, pattern=r'^[A-Za-z]+$')
 CSR = string(8192, pattern='^-----BEGIN CERTIFICATE REQUEST-----')
 BOOL = {'type': 'boolean'}
 ETAG = string(40, pattern=r'^"[0-9]+"$')
+TIMEZONE_CREATE = string(80, description='Часовой пояс IANA; обязателен при создании, портал предлагает '
+                                         'Europe/Oslo.')
 
 
 def safe_text(maximum, **extra):
@@ -165,7 +167,9 @@ def batch_schema():
         **obj({'schemaVersion': {'const': '1.0'}, 'scanId': UUID, 'sequence': integer(1),
                'agentVersion': VERSION, 'policyVersion': integer(1, description='Версия политики источника.'),
                'machineFingerprint': FINGERPRINT, 'startedAt': TIME_UTC, 'completedAt': TIME_UTC,
-               'scanRequestId': nullable(UUID),
+               'scanRequestId': {**nullable(UUID), 'description': (
+                   'Только вариант A. Чужой или просроченный scanRequestId не отклоняет пакет: он '
+                   'принимается как обычный сбор, scanRequestId игнорируется, пишется запись диагностики.')},
                'observations': array({'$ref': 'observation.schema.json'}, 200, 1,
                                      description='Ключ (checkId, subject.type, localKey) уникален внутри '
                                                  'пакета; localKey = device для устройства и volumeId '
@@ -173,15 +177,24 @@ def batch_schema():
               ['schemaVersion', 'scanId', 'sequence', 'agentVersion', 'policyVersion',
                'machineFingerprint', 'startedAt', 'completedAt', 'observations']),
         'description': 'DeviceId и OrganizationId определяются сертификатом, а не телом пакета. Лимит '
-                       'байтов, idempotency, sequence, окна и время проверяются сервером дополнительно.',
+                       'байтов, idempotency, sequence, окна и время проверяются сервером дополнительно. '
+                       'Правило «не позже receivedAt + 5 мин» при приёме проверяет только startedAt, '
+                       'completedAt и observations[].observedAt; метки времени внутри evidence при приёме '
+                       'не проверяются и оцениваются по правилам проверки (03).',
     }
+
+
+DEFAULT_MODES = {c[0]: c[3] for c in CHECKS}
+# Starting notApplicableEditionIds that differ from the general default [] (05 «Политика клиента»).
+DEFAULT_EDITIONS = {'WIN-002': ['Core', 'CoreN', 'CoreSingleLanguage', 'CoreCountrySpecific']}
 
 
 def _check_policy(cid, parameters):
     mode = {'const': 'informational'} if cid in ALWAYS_INFORMATIONAL else enum('assessed', 'informational')
-    return obj({'assessmentMode': mode,
+    return obj({'assessmentMode': {**mode, 'default': DEFAULT_MODES[cid]},
                 'freshnessWindowHours': integer(1, maximum=720, default=72),
-                'notApplicableEditionIds': array(EDITION_ID, 64, unique=True),
+                'notApplicableEditionIds': array(EDITION_ID, 64, unique=True,
+                                                 default=DEFAULT_EDITIONS.get(cid, [])),
                 'parameters': parameters},
                ['assessmentMode', 'freshnessWindowHours', 'parameters'])
 
@@ -199,10 +212,11 @@ def policy_configuration():
         'WIN-004': obj({'warnDays': integer(1, default=3), 'criticalDays': integer(1, default=7)}),
         'WIN-005': obj({'requiredProfiles': array(enum('domain', 'private', 'public'), 3, unique=True,
                                                   default=['domain', 'private', 'public'])}),
-        'WIN-006': obj({'expectedSource': nullable(enum('windows_update', 'wsus', 'other_approved')),
+        'WIN-006': obj({'expectedSource': {**nullable(enum('windows_update', 'wsus', 'other_approved')),
+                                           'default': None},
                         'maxSearchAgeHours': integer(1, default=72),
                         'graceDaysBySeverity': obj({k: integer(0, default=v) for k, v in days.items()}),
-                        'referenceTimeBasis': enum('deadline', 'first_seen')}),
+                        'referenceTimeBasis': {**enum('deadline', 'first_seen'), 'default': 'first_seen'}}),
         'WIN-007': obj({'warnDays': integer(1, default=3)}),
         'WIN-008': obj({'allowedSids': array(SID, 100, unique=True, default=[])}),
         'WIN-009': obj({'secureBootRequired': {**BOOL, 'default': True}}),
@@ -210,7 +224,8 @@ def policy_configuration():
     }
     checks = {cid: _check_policy(cid, parameters.get(cid, obj({}))) for cid in P1_IDS}
     return {
-        **obj({'activeCheckIds': array({'type': 'string', 'enum': AGENT_IDS}, len(AGENT_IDS), 1, unique=True),
+        **obj({'activeCheckIds': array({'type': 'string', 'enum': AGENT_IDS}, len(AGENT_IDS), 1, unique=True,
+                                       default=list(AGENT_IDS)),
                'schedule': obj({'scanIntervalHours': integer(1, maximum=168, default=24),
                                 'heartbeatIntervalHours': integer(1, maximum=24, default=4),
                                 'scanJitterMinutes': integer(0, maximum=60, default=10)}),
@@ -220,8 +235,9 @@ def policy_configuration():
         'description': 'Закрытая конфигурация policy_revision. WIN-011 обязательна в activeCheckIds; '
                        'assessed без входных настроек, отсутствие WIN-011 и активная WIN-004 без WIN-003 '
                        'дают 422 policy_inputs_missing. maxBatchAgeDays >= maxBufferDays + 1, иначе 422 '
-                       'schema_violation. Политика v1 по умолчанию: все WIN активны, режимы равны '
-                       'defaultAssessmentMode каталога, значения default этой схемы.',
+                       'schema_violation. У каждого обязательного поля-значения есть default; объект по умолчанию '
+                       'составляется из default вложенных полей. Политика v1 по умолчанию: значения default '
+                       'этой схемы — все WIN активны, режимы равны defaultAssessmentMode каталога.',
     }
 
 
@@ -283,7 +299,7 @@ def api_schemas(observation, batch):
             'allOf': [{'if': {'properties': {'status': {'const': 'deletion_scheduled'}}, 'required': ['status']},
                        'then': {'properties': {'deletionDueAt': {'type': 'string'}}},
                        'else': {'properties': {'deletionDueAt': {'type': 'null'}}}}]},
-        'OrganizationCreate': obj({'name': safe_text(120), 'timezone': string(80),
+        'OrganizationCreate': obj({'name': safe_text(120), 'timezone': TIMEZONE_CREATE,
                                    'reportLanguage': enum(*LANGUAGES)}),
         'OrganizationUpdate': {**obj({'name': safe_text(120), 'timezone': string(80),
                                       'reportLanguage': enum(*LANGUAGES)}, []), 'minProperties': 1},
@@ -297,7 +313,9 @@ def api_schemas(observation, batch):
         'PolicyRevisionCreate': obj({'configuration': ref('PolicyConfiguration')}),
         'OrganizationLifecycleChange': {
             **obj({'action': enum('disable', 'enable', 'schedule_deletion', 'cancel_deletion'),
-                   'reason': string(1000), 'idempotencyKey': UUID, 'exportWaived': BOOL},
+                   'reason': string(1000, description='Обязательный свободный текст; недоверенная строка, '
+                                                     'выводится только в аудите с экранированием.'),
+                   'idempotencyKey': UUID, 'exportWaived': BOOL},
                   ['action', 'reason', 'idempotencyKey']),
             'allOf': [{'if': {'properties': {'action': {'const': 'schedule_deletion'}}, 'required': ['action']},
                        'else': {'not': {'required': ['exportWaived']}}}]},
@@ -334,7 +352,8 @@ def api_schemas(observation, batch):
                        'lastFullScanAt': nullable(TIME), 'enrollmentTokenId': nullable(UUID)}),
         'DeviceUpdate': obj({'displayName': safe_text(120)}),
         'ScanRequestCreate': obj({'idempotencyKey': UUID, 'reason': enum('verify_remediation')}),
-        'ScanRequest': obj({'id': UUID, 'state': enum('pending', 'completed', 'expired'), 'expiresAt': TIME}),
+        'ScanRequest': obj({'id': UUID, 'state': enum('requested', 'delivered', 'completed', 'expired'),
+                            'expiresAt': TIME}),
         'Subject': subject,
         'Assessment': {
             **obj({'id': UUID, 'deviceId': nullable(UUID), 'subject': ref('Subject'),
@@ -348,13 +367,22 @@ def api_schemas(observation, batch):
                    'evidenceAvailability': enum('available', 'expired'), 'explanation': string(2000)}),
             'allOf': [{'if': {'properties': {'assessmentMode': {'const': 'informational'}},
                               'required': ['assessmentMode']},
-                       'then': {'properties': {'result': {'type': 'null'}}},
-                       'else': {'properties': {'result': {'type': 'string'}}}}],
-            'description': 'reasonCode заполняется только при result unknown или not_applicable.'},
+                       'then': {'properties': {'result': {'type': 'null'},
+                                               'reasonCode': nullable(enum(*INFORMATIONAL_REASONS))}},
+                       'else': {'properties': {'result': {'type': 'string'}}}},
+                      {'if': {'properties': {'result': {'enum': ['pass', 'fail']}}, 'required': ['result']},
+                       'then': {'properties': {'reasonCode': {'type': 'null'}}}}],
+            'description': 'Режим informational: result всегда null, finding не создаётся. reasonCode '
+                           'допускается при result unknown или not_applicable, а также у informational-оценки '
+                           'с result=null, когда данных нет: коды недоступности наблюдения, '
+                           'missing_observation, clock_inconsistent, applicability_input_missing. Признак '
+                           'часов действует на все оценки пакета: assessed — unknown и clock_inconsistent, '
+                           'informational — null и clock_inconsistent; applicability_input_missing '
+                           'применяется, только если у пакета нет признака часов.'},
         'Finding': obj({'id': UUID, 'checkId': string(40), 'deviceId': nullable(UUID), 'subject': ref('Subject'),
                         'technicalState': enum('open', 'resolved'), 'workflowState': workflow,
                         'assessmentResult': enum(*RESULTS), 'freshness': enum('fresh', 'stale'),
-                        'severity': enum('critical', 'warning', 'information'),
+                        'severity': enum('critical', 'warning'),
                         'revision': integer(1), 'title': string(200), 'recommendation': string(2000),
                         'latestObservedAt': TIME, 'assigneeId': nullable(UUID), 'dueAt': nullable(TIME),
                         'workflowReason': nullable(string(1000)), 'reviewAt': nullable(TIME),
@@ -376,7 +404,9 @@ def api_schemas(observation, batch):
         'Report': obj({'id': UUID, 'periodStart': TIME, 'periodEnd': TIME, 'timezone': string(80),
                        'language': enum(*LANGUAGES), 'state': enum('queued', 'ready', 'failed'),
                        'format': enum('html'),
-                       'failureCode': nullable(enum('translation_missing', 'generation_error'))}),
+                       'failureCode': {**nullable(enum('translation_missing', 'generation_error')),
+                                       'description': 'translation_missing — нет перевода; generation_error — '
+                                                      'сбой генерации по иной причине, чем translation_missing.'}}),
     }
     for entity in ['Organization', 'Device', 'Finding', 'Report', 'Assessment', 'FindingEvent',
                    'OrganizationMember', 'PolicyRevision', 'AuditEvent', 'EnrollmentTokenSummary']:

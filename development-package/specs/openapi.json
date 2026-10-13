@@ -132,7 +132,7 @@
             }
           }
         },
-        "description": "Идемпотентно по registrationRequestId и CSR: повтор возвращает исходный ответ и не увеличивает useCount.",
+        "description": "Идемпотентно по registrationRequestId и CSR: повтор возвращает исходный ответ и не увеличивает useCount. Уже зарегистрированный installationId с несовпадающим machineFingerprint: 409 identity_conflict.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3809,7 +3809,7 @@
             }
           }
         },
-        "description": "idempotencyKey, срок 24 ч, не больше одного pending-запроса на устройство.",
+        "description": "Только вариант A. idempotencyKey, срок 24 ч, не больше одного незавершённого запроса (requested или delivered) на устройство.",
         "requestBody": {
           "required": true,
           "content": {
@@ -4022,13 +4022,10 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "nb",
-                "nn",
-                "en"
-              ]
+              "minLength": 1,
+              "maxLength": 35
             },
-            "description": "Язык title, recommendation и explanation; без заголовка или при другом значении используется nb."
+            "description": "Язык title, recommendation и explanation. Принимаются nb, nn и en; без заголовка или при любом другом значении используется nb, ошибки нет."
           }
         ]
       }
@@ -4236,13 +4233,10 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "nb",
-                "nn",
-                "en"
-              ]
+              "minLength": 1,
+              "maxLength": 35
             },
-            "description": "Язык title, recommendation и explanation; без заголовка или при другом значении используется nb."
+            "description": "Язык title, recommendation и explanation. Принимаются nb, nn и en; без заголовка или при любом другом значении используется nb, ошибки нет."
           }
         ]
       }
@@ -4405,13 +4399,10 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "nb",
-                "nn",
-                "en"
-              ]
+              "minLength": 1,
+              "maxLength": 35
             },
-            "description": "Язык title, recommendation и explanation; без заголовка или при другом значении используется nb."
+            "description": "Язык title, recommendation и explanation. Принимаются nb, nn и en; без заголовка или при любом другом значении используется nb, ошибки нет."
           }
         ]
       },
@@ -4654,13 +4645,10 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "nb",
-                "nn",
-                "en"
-              ]
+              "minLength": 1,
+              "maxLength": 35
             },
-            "description": "Язык title, recommendation и explanation; без заголовка или при другом значении используется nb."
+            "description": "Язык title, recommendation и explanation. Принимаются nb, nn и en; без заголовка или при любом другом значении используется nb, ошибки нет."
           }
         ]
       }
@@ -4904,13 +4892,10 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "nb",
-                "nn",
-                "en"
-              ]
+              "minLength": 1,
+              "maxLength": 35
             },
-            "description": "Язык title, recommendation и explanation; без заголовка или при другом значении используется nb."
+            "description": "Язык title, recommendation и explanation. Принимаются nb, nn и en; без заголовка или при любом другом значении используется nb, ошибки нет."
           }
         ]
       }
@@ -5637,7 +5622,8 @@
             "minLength": 1,
             "maxLength": 36,
             "format": "uuid",
-            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "Только вариант A. Чужой или просроченный scanRequestId не отклоняет пакет: он принимается как обычный сбор, scanRequestId игнорируется, пишется запись диагностики."
           },
           "observations": {
             "type": "array",
@@ -5660,7 +5646,7 @@
           "completedAt",
           "observations"
         ],
-        "description": "DeviceId и OrganizationId определяются сертификатом, а не телом пакета. Лимит байтов, idempotency, sequence, окна и время проверяются сервером дополнительно."
+        "description": "DeviceId и OrganizationId определяются сертификатом, а не телом пакета. Лимит байтов, idempotency, sequence, окна и время проверяются сервером дополнительно. Правило «не позже receivedAt + 5 мин» при приёме проверяет только startedAt, completedAt и observations[].observedAt; метки времени внутри evidence при приёме не проверяются и оцениваются по правилам проверки (03)."
       },
       "Observation": {
         "title": "Sikkerheit Agent Observation",
@@ -7366,7 +7352,8 @@
           "timezone": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 80
+            "maxLength": 80,
+            "description": "Часовой пояс IANA; обязателен при создании, портал предлагает Europe/Oslo."
           },
           "reportLanguage": {
             "type": "string",
@@ -7500,6 +7487,19 @@
             },
             "minItems": 1,
             "maxItems": 11,
+            "default": [
+              "WIN-001",
+              "WIN-002",
+              "WIN-003",
+              "WIN-004",
+              "WIN-005",
+              "WIN-006",
+              "WIN-007",
+              "WIN-008",
+              "WIN-009",
+              "WIN-010",
+              "WIN-011"
+            ],
             "uniqueItems": true
           },
           "schedule": {
@@ -7566,7 +7566,8 @@
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -7584,6 +7585,7 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -7636,7 +7638,8 @@
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -7654,6 +7657,12 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [
+                      "Core",
+                      "CoreN",
+                      "CoreSingleLanguage",
+                      "CoreCountrySpecific"
+                    ],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -7685,7 +7694,8 @@
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "informational"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -7703,6 +7713,7 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -7748,7 +7759,8 @@
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -7766,6 +7778,7 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -7804,7 +7817,8 @@
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -7822,6 +7836,7 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -7868,7 +7883,8 @@
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "informational"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -7886,6 +7902,7 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -7902,7 +7919,8 @@
                           "wsus",
                           "other_approved",
                           null
-                        ]
+                        ],
+                        "default": null
                       },
                       "maxSearchAgeHours": {
                         "type": "integer",
@@ -7952,7 +7970,8 @@
                         "enum": [
                           "deadline",
                           "first_seen"
-                        ]
+                        ],
+                        "default": "first_seen"
                       }
                     },
                     "required": [
@@ -7978,7 +7997,8 @@
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -7996,6 +8016,7 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -8028,7 +8049,8 @@
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "informational"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -8046,6 +8068,7 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -8086,7 +8109,8 @@
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -8104,6 +8128,7 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -8135,7 +8160,8 @@
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "informational"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -8153,6 +8179,7 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -8187,7 +8214,8 @@
                 "additionalProperties": false,
                 "properties": {
                   "assessmentMode": {
-                    "const": "informational"
+                    "const": "informational",
+                    "default": "informational"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -8205,6 +8233,7 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -8225,7 +8254,8 @@
                 "additionalProperties": false,
                 "properties": {
                   "assessmentMode": {
-                    "const": "informational"
+                    "const": "informational",
+                    "default": "informational"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -8243,6 +8273,7 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -8267,7 +8298,8 @@
                     "enum": [
                       "assessed",
                       "informational"
-                    ]
+                    ],
+                    "default": "assessed"
                   },
                   "freshnessWindowHours": {
                     "type": "integer",
@@ -8285,6 +8317,7 @@
                     },
                     "minItems": 0,
                     "maxItems": 64,
+                    "default": [],
                     "uniqueItems": true
                   },
                   "parameters": {
@@ -8324,7 +8357,7 @@
           "buffer",
           "checks"
         ],
-        "description": "Закрытая конфигурация policy_revision. WIN-011 обязательна в activeCheckIds; assessed без входных настроек, отсутствие WIN-011 и активная WIN-004 без WIN-003 дают 422 policy_inputs_missing. maxBatchAgeDays >= maxBufferDays + 1, иначе 422 schema_violation. Политика v1 по умолчанию: все WIN активны, режимы равны defaultAssessmentMode каталога, значения default этой схемы."
+        "description": "Закрытая конфигурация policy_revision. WIN-011 обязательна в activeCheckIds; assessed без входных настроек, отсутствие WIN-011 и активная WIN-004 без WIN-003 дают 422 policy_inputs_missing. maxBatchAgeDays >= maxBufferDays + 1, иначе 422 schema_violation. У каждого обязательного поля-значения есть default; объект по умолчанию составляется из default вложенных полей. Политика v1 по умолчанию: значения default этой схемы — все WIN активны, режимы равны defaultAssessmentMode каталога."
       },
       "PolicyRevision": {
         "type": "object",
@@ -8395,7 +8428,8 @@
           "reason": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 1000
+            "maxLength": 1000,
+            "description": "Обязательный свободный текст; недоверенная строка, выводится только в аудите с экранированием."
           },
           "idempotencyKey": {
             "type": "string",
@@ -8923,7 +8957,8 @@
           "state": {
             "type": "string",
             "enum": [
-              "pending",
+              "requested",
+              "delivered",
               "completed",
               "expired"
             ]
@@ -9080,6 +9115,7 @@
               "os_inventory_missing",
               "applicability_input_missing",
               "policy_not_applicable",
+              "evidence_time_invalid",
               null
             ]
           },
@@ -9156,6 +9192,22 @@
               "properties": {
                 "result": {
                   "type": "null"
+                },
+                "reasonCode": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "permission_denied",
+                    "unsupported",
+                    "collector_timeout",
+                    "temporary_error",
+                    "missing_observation",
+                    "clock_inconsistent",
+                    "applicability_input_missing",
+                    null
+                  ]
                 }
               }
             },
@@ -9166,9 +9218,31 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "result": {
+                  "enum": [
+                    "pass",
+                    "fail"
+                  ]
+                }
+              },
+              "required": [
+                "result"
+              ]
+            },
+            "then": {
+              "properties": {
+                "reasonCode": {
+                  "type": "null"
+                }
+              }
+            }
           }
         ],
-        "description": "reasonCode заполняется только при result unknown или not_applicable."
+        "description": "Режим informational: result всегда null, finding не создаётся. reasonCode допускается при result unknown или not_applicable, а также у informational-оценки с result=null, когда данных нет: коды недоступности наблюдения, missing_observation, clock_inconsistent, applicability_input_missing. Признак часов действует на все оценки пакета: assessed — unknown и clock_inconsistent, informational — null и clock_inconsistent; applicability_input_missing применяется, только если у пакета нет признака часов."
       },
       "Finding": {
         "type": "object",
@@ -9235,8 +9309,7 @@
             "type": "string",
             "enum": [
               "critical",
-              "warning",
-              "information"
+              "warning"
             ]
           },
           "revision": {
@@ -9366,6 +9439,7 @@
               "device_change",
               "rule_change",
               "policy_change",
+              "applicability_change",
               "data_quality",
               "manual_action",
               "review_expired"
@@ -9472,7 +9546,8 @@
                   "enum": [
                     "device_change",
                     "rule_change",
-                    "policy_change"
+                    "policy_change",
+                    "applicability_change"
                   ]
                 },
                 "assessmentId": {
@@ -9810,7 +9885,8 @@
               "translation_missing",
               "generation_error",
               null
-            ]
+            ],
+            "description": "translation_missing — нет перевода; generation_error — сбой генерации по иной причине, чем translation_missing."
           }
         },
         "required": [

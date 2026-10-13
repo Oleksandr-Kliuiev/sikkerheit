@@ -58,7 +58,8 @@
       "minLength": 1,
       "maxLength": 36,
       "format": "uuid",
-      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      "description": "Только вариант A. Чужой или просроченный scanRequestId не отклоняет пакет: он принимается как обычный сбор, scanRequestId игнорируется, пишется запись диагностики."
     },
     "observations": {
       "type": "array",
@@ -81,5 +82,5 @@
     "completedAt",
     "observations"
   ],
-  "description": "DeviceId и OrganizationId определяются сертификатом, а не телом пакета. Лимит байтов, idempotency, sequence, окна и время проверяются сервером дополнительно."
+  "description": "DeviceId и OrganizationId определяются сертификатом, а не телом пакета. Лимит байтов, idempotency, sequence, окна и время проверяются сервером дополнительно. Правило «не позже receivedAt + 5 мин» при приёме проверяет только startedAt, completedAt и observations[].observedAt; метки времени внутри evidence при приёме не проверяются и оцениваются по правилам проверки (03)."
 }
