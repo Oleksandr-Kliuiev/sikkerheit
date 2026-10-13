@@ -132,7 +132,7 @@
             }
           }
         },
-        "description": "Идемпотентно по registrationRequestId и CSR: повтор возвращает исходный ответ и не увеличивает useCount. Уже зарегистрированный installationId с несовпадающим machineFingerprint: 409 identity_conflict.",
+        "description": "Идемпотентно по registrationRequestId и CSR: повтор возвращает исходный ответ и не увеличивает useCount. Порядок проверок: (1) токен недействителен — 401 enrollment_token_invalid; (2) тот же registrationRequestId с тем же телом — идемпотентный повтор прежнего ответа; (3) installationId известен и устройство отозвано — 409 installation_already_enrolled; (4) machineFingerprint не совпадает — 409 identity_conflict; (5) у устройства есть pending или active сертификат и reenrollAllowedUntil не задан или истёк — 409 installation_already_enrolled; (6) иначе новый сертификат тому же deviceId. reenrollAllowedUntil = now + 7 суток сервер записывает в той же транзакции, в которой отвечает 401 certificate_expired на mTLS-запрос зарегистрированным сертификатом устройства в состоянии superseded после окончания перекрытия. В случае (6) при reenrollAllowedUntil > now новый сертификат выдаётся как pending, прежний active переходит в superseded при первом mTLS-запросе новым, reenrollAllowedUntil обнуляется в транзакции выдачи, previousCertificateValidUntil = null.",
         "requestBody": {
           "required": true,
           "content": {
@@ -4217,15 +4217,24 @@
           {
             "name": "workflowState",
             "in": "query",
+            "style": "form",
+            "explode": false,
             "schema": {
-              "type": "string",
-              "enum": [
-                "new",
-                "in_progress",
-                "risk_accepted",
-                "suppressed"
-              ]
-            }
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "new",
+                  "in_progress",
+                  "risk_accepted",
+                  "suppressed"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 4,
+              "uniqueItems": true
+            },
+            "description": "Несколько значений через запятую, например workflowState=new,in_progress. Очередь по умолчанию — technicalState=open&workflowState=new,in_progress."
           },
           {
             "name": "Accept-Language",
@@ -9242,7 +9251,7 @@
             }
           }
         ],
-        "description": "Режим informational: result всегда null, finding не создаётся. reasonCode допускается при result unknown или not_applicable, а также у informational-оценки с result=null, когда данных нет: коды недоступности наблюдения, missing_observation, clock_inconsistent, applicability_input_missing. Признак часов действует на все оценки пакета: assessed — unknown и clock_inconsistent, informational — null и clock_inconsistent; applicability_input_missing применяется, только если у пакета нет признака часов."
+        "description": "Режим informational: result всегда null, finding не создаётся. reasonCode допускается при result unknown или not_applicable, а также у informational-оценки с result=null, когда данных нет: коды недоступности наблюдения, missing_observation, clock_inconsistent, applicability_input_missing; такая оценка получает result=null с той же причиной. Остальные причины правил (unmapped_state, update_*, os_version_unknown, os_inventory_missing, evidence_time_invalid, policy_not_applicable) informational-оценке не присваиваются: result=null, reasonCode=null. Признак часов действует на все оценки пакета: assessed — unknown и clock_inconsistent, informational — null и clock_inconsistent; applicability_input_missing применяется, только если у пакета нет признака часов."
       },
       "Finding": {
         "type": "object",

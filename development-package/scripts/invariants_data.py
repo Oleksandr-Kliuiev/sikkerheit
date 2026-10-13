@@ -103,9 +103,14 @@ P1 = [
     ('Истёкший, отозванный или исчерпанный enrollment-токен и токен неактивной организации не регистрируют '
      'устройство; не больше maxUses устройств при конкурентных запросах.', ENROLL, 'portal_api',
      'Одиннадцатая регистрация пакетным токеном с maxUses 10.', http(401, 'enrollment_token_invalid'), 'AT-02'),
-    ('installationId отозванного устройства или активного устройства с действующим сертификатом не '
-     'регистрируется повторно.',
-     IDENTITY, 'portal_api', 'enrollAgent с installationId отозванного устройства.',
+    ('Порядок проверок enrollAgent: недействительный токен; идемпотентный повтор того же registrationRequestId '
+     'с тем же телом; отозванное устройство с этим installationId — 409 installation_already_enrolled; '
+     'несовпадающий признак машины — 409 identity_conflict; pending или active сертификат у устройства при '
+     'reenrollAllowedUntil, который не задан или истёк, — 409 installation_already_enrolled; иначе новый '
+     'сертификат тому же deviceId.',
+     IDENTITY, 'portal_api',
+     'enrollAgent с installationId активного устройства с active-сертификатом, другим CSR и '
+     'reenrollAllowedUntil=null.',
      http(409, 'installation_already_enrolled'), 'AT-02'),
     ('Agent API принимает ровно один X-Forwarded-Client-Cert с зарегистрированным hash и цепочкой '
      'внутреннего CA.', XFCC, 'agent_api', 'Дублированный XFCC или XFCC из соседнего приложения.',
@@ -180,34 +185,35 @@ P1 = [
     ('Временная ошибка сборщика даёт unknown.', SEMANTICS, 'worker', 'WIN-005 unavailable/temporary_error.',
      result('unknown', 'temporary_error'), 'AT-05'),
     ('Ожидание результата сборщика — 30 с, по истечении collector_timeout; зависшая привилегированная работа '
-     'принудительно завершается не позже 120 с; дочерние процессы не запускаются.', LOCAL, 'agent', 'Сборщик WIN-006 не отвечает 60 с.', result('unknown', 'collector_timeout'),
+     'принудительно завершается не позже 120 с; дочерние процессы не запускаются.', LOCAL, 'agent',
+     'Сборщик WIN-005 не отвечает 60 с.', result('unknown', 'collector_timeout'),
      'AT-03'),
     ('Эталонный отрицательный тест BitLocker: fully_encrypted при protectionStatus=off и encryptionRequired=true '
      'даёт fail.', WINDOWS, 'worker', 'WIN-002 из examples/scan-batch.json.', result('fail'), 'AT-05'),
-    ('WIN-003: ни один одобренный продукт не активен, а у одного одобренного productState=unknown.', WINDOWS,
+    ('WIN-003 в режиме assessed: ни один одобренный продукт не активен, а у одного одобренного productState=unknown.', WINDOWS,
      'worker', 'Одобренный VendorX с productState=unknown и rawState без сопоставления.',
      result('unknown', 'unmapped_state'), 'AT-05'),
-    ('WIN-006: неуспешный поиск обновлений даёт unknown.', WINDOWS, 'worker', 'agentSearch.resultCode=failed.',
+    ('WIN-006 в режиме assessed: неуспешный поиск обновлений даёт unknown.', WINDOWS, 'worker', 'agentSearch.resultCode=failed.',
      result('unknown', 'update_search_failed'), 'AT-05'),
-    ('WIN-006: основа свежести поиска старше maxSearchAgeHours даёт unknown.', WINDOWS, 'worker',
+    ('WIN-006 в режиме assessed: основа свежести поиска старше maxSearchAgeHours даёт unknown.', WINDOWS, 'worker',
      'auLastSearchSuccessAt 100 ч назад при offline_cache.', result('unknown', 'update_search_outdated'), 'AT-05'),
-    ('WIN-006: configuredSource отличается от expectedSource.', WINDOWS, 'worker',
+    ('WIN-006 в режиме assessed: configuredSource отличается от expectedSource.', WINDOWS, 'worker',
      'configuredSource=wsus при expectedSource=windows_update.', result('unknown', 'update_source_mismatch'),
      'AT-05'),
-    ('WIN-006: усечённый список без просрочки среди переданных элементов даёт unknown.', WINDOWS, 'worker',
+    ('WIN-006 в режиме assessed: усечённый список без просрочки среди переданных элементов даёт unknown.', WINDOWS, 'worker',
      'truncated=true, все переданные обновления в пределах grace.', result('unknown', 'update_list_truncated'),
      'AT-05'),
-    ('WIN-006: просрочка хотя бы одного переданного обновления даёт fail независимо от truncated.', WINDOWS,
+    ('WIN-006 в режиме assessed: просрочка хотя бы одного переданного обновления даёт fail независимо от truncated.', WINDOWS,
      'worker', 'truncated=true и одно Critical обновление старше 7 суток.', result('fail'), 'AT-05'),
-    ('SYS-002: версии нет в таблице жизненного цикла.', OS_MATRIX, 'worker', 'WIN-011 displayVersion=27H1.',
-     result('unknown', 'os_version_unknown'), 'AT-05'),
+    ('SYS-002: версия, редакция или архитектура вне матрицы совместимости даёт fail.', OS_MATRIX, 'worker',
+     'WIN-011 displayVersion=27H1.', result('fail'), 'AT-05'),
     ('SYS-002: нет свежего WIN-011.', OS_MATRIX, 'worker', 'Последний WIN-011 старше окна свежести.',
      result('unknown', 'os_inventory_missing'), 'AT-05'),
     ('Межпроверочная применимость берётся из того же пакета; без пригодного входа зависимая проверка unknown. '
      'Правило применяется, только если у пакета нет признака часов.',
      SEMANTICS, 'worker', 'WIN-002 в пакете без WIN-011.', result('unknown', 'applicability_input_missing'),
      'AT-05'),
-    ('Редакция из notApplicableEditionIds даёт not_applicable по политике.', SEMANTICS, 'worker',
+    ('Редакция из notApplicableEditionIds даёт not_applicable.', SEMANTICS, 'worker',
      'WIN-011 editionId=Core, WIN-002 при стартовой политике.', result('not_applicable', 'policy_not_applicable'),
      'AT-05'),
     ('WIN-007: перезагрузка между двумя rebootRequired=true начинает новый эпизод и не даёт ложного fail.',
@@ -258,9 +264,13 @@ P2 = [
 
 # P1 records added after the P2 block; numbering continues after P2.
 P1_ADDED = [
-    ('Сертификат superseded после окончания перекрытия, например в образе старше ротации, не принимается; '
-     'агент выполняет повторную регистрацию, и при том же installationId и совпадающем признаке машины '
-     'deviceId и история сохраняются.', CERT, 'agent_api',
+    ('Зарегистрированный сертификат устройства в состоянии superseded после окончания перекрытия, например в '
+     'образе старше ротации, получает 401 certificate_expired; в той же транзакции сервер записывает '
+     'device.reenrollAllowedUntil = now + 7 суток и аудит device.reenroll_allowed. Отозванный сертификат или '
+     'отозванное устройство это поле не выставляют. Повторная регистрация при reenrollAllowedUntil > now, том же '
+     'installationId и совпадающем признаке машины выдаёт pending-сертификат тому же deviceId, история '
+     'сохраняется; прежний active переходит в superseded при первом mTLS-запросе новым; reenrollAllowedUntil '
+     'обнуляется в транзакции выдачи, previousCertificateValidUntil = null.', CERT, 'agent_api',
      'Восстановленный образ старше ротации отправляет heartbeat старым сертификатом после перекрытия.',
      http(401, 'certificate_expired'), 'AT-17'),
     ('enrollAgent с уже зарегистрированным installationId и несовпадающим признаком машины отклоняется; '
@@ -271,17 +281,21 @@ P1_ADDED = [
      'finding событием resolved с applicability_change; это не исправление.', TRANSITIONS, 'worker',
      'WIN-011 editionId сменился на Core при открытом finding WIN-002 и той же ревизии политики.',
      event('resolved', 'applicability_change'), 'AT-06'),
-    ('WIN-004: signatureLastUpdatedAt в будущем относительно receivedAt даёт unknown; пакет не отклоняется.',
-     WINDOWS, 'worker', 'signatureLastUpdatedAt через двое суток после receivedAt.',
+    ('WIN-004: signatureLastUpdatedAt позже observedAt этого наблюдения даёт unknown/evidence_time_invalid; '
+     'пакет не отклоняется.',
+     WINDOWS, 'worker', 'signatureLastUpdatedAt на двое суток позже observedAt.',
      result('unknown', 'evidence_time_invalid'), 'AT-05'),
     ('Пакет с чужим или просроченным scanRequestId принимается как обычный сбор: scanRequestId игнорируется, '
-     'пишется запись диагностики, новых кодов нет.', INTAKE, 'agent_api',
+     'пишется запись диагностики, новых кодов нет.', PORTAL, 'agent_api',
      'Пакет с scanRequestId другого устройства и свежим pass WIN-005 после исправления.',
      event('resolved', 'device_change'), 'AT-05'),
     ('Повторная проверка по requestDeviceScan (только вариант A) закрывает исправленную проблему событием '
      'resolved с device_change.', PORTAL, 'worker',
      'Пакет с действующим scanRequestId и pass WIN-005 после исправления.',
      event('resolved', 'device_change'), 'AT-05'),
+    ('SYS-002: версия из матрицы совместимости, которой нет в таблице жизненного цикла, даёт unknown.',
+     OS_MATRIX, 'worker', 'WIN-011 displayVersion=26H2, а строки 26H2 в таблице жизненного цикла нет.',
+     result('unknown', 'os_version_unknown'), 'AT-05'),
 ]
 
 

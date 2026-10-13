@@ -375,7 +375,11 @@ def api_schemas(observation, batch):
             'description': 'Режим informational: result всегда null, finding не создаётся. reasonCode '
                            'допускается при result unknown или not_applicable, а также у informational-оценки '
                            'с result=null, когда данных нет: коды недоступности наблюдения, '
-                           'missing_observation, clock_inconsistent, applicability_input_missing. Признак '
+                           'missing_observation, clock_inconsistent, applicability_input_missing; такая '
+                           'оценка получает result=null с той же причиной. Остальные причины правил '
+                           '(unmapped_state, update_*, os_version_unknown, os_inventory_missing, '
+                           'evidence_time_invalid, policy_not_applicable) informational-оценке не '
+                           'присваиваются: result=null, reasonCode=null. Признак '
                            'часов действует на все оценки пакета: assessed — unknown и clock_inconsistent, '
                            'informational — null и clock_inconsistent; applicability_input_missing '
                            'применяется, только если у пакета нет признака часов.'},

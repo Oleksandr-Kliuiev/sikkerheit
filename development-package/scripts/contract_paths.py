@@ -1,7 +1,8 @@
 """OpenAPI operations of the P1 contract: paths, security, responses and headers."""
 from contract_catalog import (ACCEPT_LANGUAGE_MAX, AUDIT_ALWAYS, DOWNLOAD_OPERATIONS, LANGUAGES,
-                              LOCALIZED_OPERATIONS, MANAGE_ROLES, PLATFORM_ROLES, READ_ROLES)
-from contract_schemas import ETAG, UUID, enum, integer, ref, string
+                              LOCALIZED_OPERATIONS, MANAGE_ROLES, PLATFORM_ROLES, READ_ROLES,
+                              WORKFLOW_STATES)
+from contract_schemas import ETAG, UUID, array, enum, integer, ref, string
 
 AGENT_HOST = 'https://agent.example.invalid'
 PORTAL_HOST = 'https://portal.example.invalid'
@@ -26,6 +27,18 @@ SECURITY = {
                        'and unrevoked. Organization and device IDs come only from the certificate.'},
 }
 
+ENROLL_DESCRIPTION = (
+    'Идемпотентно по registrationRequestId и CSR: повтор возвращает исходный ответ и не увеличивает useCount. '
+    'Порядок проверок: (1) токен недействителен — 401 enrollment_token_invalid; (2) тот же '
+    'registrationRequestId с тем же телом — идемпотентный повтор прежнего ответа; (3) installationId известен '
+    'и устройство отозвано — 409 installation_already_enrolled; (4) machineFingerprint не совпадает — 409 '
+    'identity_conflict; (5) у устройства есть pending или active сертификат и reenrollAllowedUntil не задан '
+    'или истёк — 409 installation_already_enrolled; (6) иначе новый сертификат тому же deviceId. '
+    'reenrollAllowedUntil = now + 7 суток сервер записывает в той же транзакции, в которой отвечает 401 '
+    'certificate_expired на mTLS-запрос зарегистрированным сертификатом устройства в состоянии superseded '
+    'после окончания перекрытия. В случае (6) при reenrollAllowedUntil > now новый сертификат выдаётся как '
+    'pending, прежний active переходит в superseded при первом mTLS-запросе новым, reenrollAllowedUntil '
+    'обнуляется в транзакции выдачи, previousCertificateValidUntil = null.')
 ERROR_DESCRIPTION = 'Problem с безопасным кодом из каталога Problem.code (05) и correlationId.'
 AGENT_SETS = {
     'enrollAgent': ['400', '401', '409', '413', '415', '422', '429', '503'],
@@ -139,10 +152,7 @@ def build_paths():
     paths = {
         '/api/v1/agent/enroll': {'post': operation(
             'enrollAgent', 'Регистрация по токену организации', 'bootstrap', 201, 'DeviceCertificate',
-            'EnrollmentRequest', description='Идемпотентно по registrationRequestId и CSR: повтор возвращает '
-                                             'исходный ответ и не увеличивает useCount. Уже '
-                                             'зарегистрированный installationId с несовпадающим '
-                                             'machineFingerprint: 409 identity_conflict.')},
+            'EnrollmentRequest', description=ENROLL_DESCRIPTION)},
         '/api/v1/agent/configuration': {'get': operation(
             'getAgentConfiguration', 'Конфигурация устройства', 'device', 200, 'Configuration',
             description='Доступна агенту в состояниях VersionBlocked, Suspended и TrustFailed.')},
@@ -228,8 +238,10 @@ def build_paths():
                 {'name': 'technicalState', 'in': 'query', 'schema': enum('open', 'resolved')},
                 {'name': 'freshness', 'in': 'query', 'schema': enum('fresh', 'stale')},
                 {'name': 'deviceId', 'in': 'query', 'schema': UUID},
-                {'name': 'workflowState', 'in': 'query',
-                 'schema': enum('new', 'in_progress', 'risk_accepted', 'suppressed')}])},
+                {'name': 'workflowState', 'in': 'query', 'style': 'form', 'explode': False,
+                 'schema': array(enum(*WORKFLOW_STATES), len(WORKFLOW_STATES), 1, unique=True),
+                 'description': 'Несколько значений через запятую, например workflowState=new,in_progress. '
+                                'Очередь по умолчанию — technicalState=open&workflowState=new,in_progress.'}])},
         o + '/findings/{findingId}': {
             'get': _add_etag(operation('getFinding', 'Проблема клиента', 'portal', 200, 'Finding',
                                        roles=READ_ROLES, parameters=ORG + finding_id)),
