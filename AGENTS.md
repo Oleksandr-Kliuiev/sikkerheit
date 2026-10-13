@@ -10,7 +10,7 @@
 
 - `development-package/` — версионируемый пакет: документы `01`–`10`, `specs/`, `examples/`, `scripts/`.
 - `sikkerheit-app-chat-transcript.md` — первоисточник идеи: переписка начальника с ChatGPT на нюнорске. Не редактировать.
-- `sikkerheit-development-package-v0.1.0.zip` — архив пакета для рецензентов, результат сборки.
+- `sikkerheit-development-package-v0.1.0.zip` — архив пакета для рецензентов, результат сборки. Не под git: содержимое воспроизводится из тега `package-v0.1.0`, а хэш архива — нет; sha256 записан в `docs/WORKFLOW.md`.
 - `AGENTS.md` — правила для всех агентов, Codex и Claude Code читают его сами. `docs/` — навигация и отчёты (`docs/reports/`). В пакет и архив они не входят: сборка берёт только содержимое `development-package/`.
 - Не создавать `CLAUDE.md`, `.claude/CLAUDE.md` или `CLAUDE.local.md` ни в проекте, ни в родительских каталогах — в том числе командой `/init`. Если такой файл есть, Claude Code перестаёт читать `AGENTS.md`, включая `~/AGENTS.md`; глобальный `~/.claude/CLAUDE.md` на это не влияет. Заметки только для Claude добавлять в этот файл.
 
