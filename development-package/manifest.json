@@ -110,8 +110,8 @@
     },
     {
       "path": "scripts/invariants_data.py",
-      "bytes": 53875,
-      "sha256": "615a47075544e48fd785abd89aca7a14221b68379f07950856d319e6b31a6239"
+      "bytes": 53884,
+      "sha256": "5c6db42e19e8472e9ac9e4542eb0fa52245bb129369c3a1feba2453cb3838fdd"
     },
     {
       "path": "scripts/schema_check.py",

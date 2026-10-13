@@ -449,7 +449,7 @@ P1_ADDED = [
      'обслуживания fail не даёт.', OS_MATRIX, 'worker',
      'SYS-002 в политике в режиме assessed; WIN-011 Professional x64 displayVersion=25H2 с '
      'observedAt=2027-10-13T07:00:00Z (servicingEndsAt версии 25H2).', result('assessed', 'fail'), 'AT-05'),
-    # Clock jump forward and minor contract rules.
+    # Clock jump forward, timezone and report period rules.
     ('Пакет, у которого startedAt, completedAt или какое-либо observedAt позже receivedAt + 5 мин, не отклоняется: '
      'он принимается с признаком часов, его оценки исторические, текущая проекция не меняется, droppedBatchCount '
      'не растёт.', CLOCK, 'agent_api',
