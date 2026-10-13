@@ -20,7 +20,7 @@
 | `specs/check-catalog.json` | 18 check IDs (11 WIN-*): фаза, `defaultAssessmentMode`, source, subjectType |
 | `specs/scan-batch.schema.json`, `specs/observation.schema.json` | Пакет агента и evidence каждой WIN-проверки |
 | `specs/openapi.json` | 34 операции P1 (5 агентских, 29 портальных) |
-| `specs/invariants.json` | 116 инвариантов вне JSON Schema (P1 — 111, P2 — 5) |
+| `specs/invariants.json` | 124 инварианта вне JSON Schema (P1 — 119, P2 — 5) |
 | `examples/scan-batch.json`, `examples/scan-batch-unavailable.json` | Синтетические пакеты; содержат ровно все WIN-* |
 | `scripts/contract_catalog.py`, `contract_schemas.py`, `contract_paths.py`, `invariants_data.py` | Источники контракта (см. AGENTS.md → «Сгенерированные файлы») |
 | `scripts/generate_contracts.py` | Пишет `specs/` и `examples/` |
