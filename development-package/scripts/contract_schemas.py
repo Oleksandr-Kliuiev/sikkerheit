@@ -1,9 +1,10 @@
 """Agent schemas, evidence, policy configuration and portal API schemas (one dictionary source)."""
 import copy
 
-from contract_catalog import (AGENT_IDS, ALWAYS_INFORMATIONAL, CHECKS, COLLECTOR_REASONS, EVENT_CAUSES,
-                              EVENT_TABLE, INFORMATIONAL_REASONS, LANGUAGES, P1_IDS, PROBLEM_CODES,
-                              REASON_CODES, RESULTS, SUBJECT_TYPES, VOLUME_IDS, WORKFLOW_STATES)
+from contract_catalog import (AGENT_IDS, ALWAYS_INFORMATIONAL, AUDIT_DETAILS, CHECKS, COLLECTOR_REASONS,
+                              EVENT_CAUSES, EVENT_TABLE, INFORMATIONAL_REASONS, LANGUAGES, LIFECYCLE_ACTIONS,
+                              P1_IDS, PROBLEM_CODES, REASON_CODES, RESULTS, RETENTION_PURGE_ORDER,
+                              SUBJECT_TYPES, VOLUME_IDS, WORKFLOW_STATES)
 
 DRAFT = 'https://json-schema.org/draft/2020-12/schema'
 CONTRACT_BASE = 'https://contracts.sikkerheit.example.invalid/agent/'
@@ -47,15 +48,19 @@ UUID = string(36, format='uuid', pattern=UUID_PATTERN)
 TIME_UTC = string(40, format='date-time', pattern=DATE_TIME + 'Z$')
 TIME = string(40, format='date-time', pattern=DATE_TIME + '(Z|[+-][0-9]{2}:[0-9]{2})$')
 VERSION = string(40, pattern=r'^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$')
-SAFE_TEXT_PATTERN = r'^[^\u0000-\u001F\u007F-\u009F​-‏‪-‮⁦-⁩<>]+$'
+SAFE_TEXT_PATTERN = r'^[^\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069<>]+$'
 FINGERPRINT = string(64, pattern=r'^[0-9a-f]{64}$')
 SID = string(184, pattern=r'^S-[0-9]+(?:-[0-9]+)+$')
 EDITION_ID = string(64, pattern=r'^[A-Za-z]+$')
 CSR = string(8192, pattern='^-----BEGIN CERTIFICATE REQUEST-----')
 BOOL = {'type': 'boolean'}
 ETAG = string(40, pattern=r'^"[0-9]+"$')
-TIMEZONE_CREATE = string(80, description='Часовой пояс IANA; обязателен при создании, портал предлагает '
-                                         'Europe/Oslo.')
+TIMEZONE_RULE = 'Идентификатор часового пояса IANA; неизвестная зона — 422 validation_failed.'
+TIMEZONE = string(80, description=TIMEZONE_RULE)
+TIMEZONE_CREATE = string(80, description=TIMEZONE_RULE + ' Обязателен при создании, портал предлагает '
+                                                         'Europe/Oslo.')
+ASSIGNEE = {**nullable(UUID), 'description': 'entraUserId участника организации (OrganizationMember.entraUserId), '
+                                             'не organization_member.id; null — без ответственного.'}
 
 
 def safe_text(maximum, **extra):
@@ -85,7 +90,16 @@ def _pending_update():
                 'categoryIds': array(UUID, 10, unique=True),
                 'msrcSeverity': nullable(enum('Critical', 'Important', 'Moderate', 'Low')),
                 'lastDeploymentChangeAt': nullable(TIME_UTC), 'deadlineAt': nullable(TIME_UTC),
-                'firstSeenPendingAt': TIME_UTC})
+                'firstSeenPendingAt': {**TIME_UTC, 'description': 'observedAt первого сбора, в котором агент нашёл '
+                                                                  'обновление; не позже observedAt наблюдения.'}})
+
+
+def _agent_search():
+    search = obj({'mode': enum('offline_cache', 'online'), 'completedAt': nullable(TIME_UTC),
+                  'resultCode': enum('not_started', 'succeeded', 'succeeded_with_errors', 'failed', 'aborted')})
+    search['allOf'] = [{'if': {'properties': {'resultCode': {'const': 'succeeded'}}, 'required': ['resultCode']},
+                        'then': {'properties': {'completedAt': TIME_UTC}}}]
+    return search
 
 
 EVIDENCE = {
@@ -95,20 +109,24 @@ EVIDENCE = {
                     'encryptionPercentage': integer(0, maximum=100)}),
     'WIN-003': obj({'products': _products(),
                     'defender': nullable(obj({
-                        'amRunningMode': enum('normal', 'passive', 'edr_block', 'sxs_passive', 'other'),
+                        'amRunningMode': enum('normal', 'passive', 'edr_block', 'sxs_passive', 'not_running',
+                                              'other'),
                         'realTimeProtectionEnabled': BOOL}))}),
     'WIN-004': obj({'signatureLastUpdatedAt': TIME_UTC}),
     'WIN-005': obj({'domainEnabled': BOOL, 'privateEnabled': BOOL, 'publicEnabled': BOOL}),
     'WIN-006': obj({
         'configuredSource': enum('windows_update', 'wsus', 'other_approved'),
-        'auLastSearchSuccessAt': nullable(TIME_UTC),
-        'agentSearch': obj({'mode': enum('offline_cache', 'online'), 'completedAt': nullable(TIME_UTC),
-                            'resultCode': enum('not_started', 'succeeded', 'succeeded_with_errors',
-                                               'failed', 'aborted')}),
+        'auLastSearchSuccessAt': {**nullable(TIME_UTC), 'description': (
+            'LastSearchSuccessDate, прочитанный до начала agentSearch; основа свежести при offline_cache, '
+            'null — основы нет (03, «Правило WIN-006»).')},
+        'agentSearch': _agent_search(),
         'pendingSecurityUpdates': array(_pending_update(), 50, unique=True,
                                         description='Только Security Updates по CategoryID, по возрастанию '
                                                     'min(deadlineAt, firstSeenPendingAt); без заголовков.'),
-        'pendingSecurityUpdatesTotal': integer(0), 'truncated': BOOL}),
+        'pendingSecurityUpdatesTotal': integer(0, description='Длина pendingSecurityUpdates = min(total, 50); '
+                                                              'иначе 422 schema_violation.'),
+        'truncated': {**BOOL, 'description': 'true тогда и только тогда, когда pendingSecurityUpdatesTotal > 50; '
+                                             'иначе 422 schema_violation.'}}),
     'WIN-007': obj({'rebootRequired': BOOL, 'lastBootAt': TIME_UTC,
                     'statusSource': enum('windows_update_api')}),
     'WIN-008': obj({'memberSids': array(SID, 100, unique=True), 'membershipScope': enum('direct_members')}),
@@ -154,7 +172,8 @@ def observation_schema():
         ],
         'description': 'Закрытые allowlisted evidence-структуры P1 для каждого checkId. Применимость '
                        'определяет сервер: агент не передаёт not_applicable. Межполевые и семантические '
-                       'инварианты (freeBytes <= totalBytes, ожидаемые объекты, время) проверяет backend '
+                       'инварианты (freeBytes <= totalBytes, согласованность списка WIN-006, ожидаемые '
+                       'объекты, время) проверяет backend '
                        'по 05-data-and-api.md и specs/invariants.json.',
     }
     return schema
@@ -178,9 +197,11 @@ def batch_schema():
                'machineFingerprint', 'startedAt', 'completedAt', 'observations']),
         'description': 'DeviceId и OrganizationId определяются сертификатом, а не телом пакета. Лимит '
                        'байтов, idempotency, sequence, окна и время проверяются сервером дополнительно. '
-                       'Правило «не позже receivedAt + 5 мин» при приёме проверяет только startedAt, '
-                       'completedAt и observations[].observedAt; метки времени внутри evidence при приёме '
-                       'не проверяются и оцениваются по правилам проверки (03).',
+                       'Внутренне противоречивый пакет (completedAt раньше startedAt, observedAt вне '
+                       '[startedAt, completedAt]) отклоняется 422 batch_time_inconsistent. startedAt, completedAt '
+                       'или observedAt позже receivedAt + 5 мин пакет не отклоняют: он принимается с признаком '
+                       'часов clock_inconsistent (05, «Время и часы устройства»). Метки времени внутри evidence '
+                       'при приёме не проверяются и оцениваются по правилам проверки (03).',
     }
 
 
@@ -257,6 +278,14 @@ def _event_branches():
     return branches
 
 
+def _audit_details_branches():
+    branch = {'properties': {'details': {'type': 'null'}}}
+    for action, schema in reversed(list(AUDIT_DETAILS.items())):
+        branch = {'if': {'properties': {'action': {'const': action}}, 'required': ['action']},
+                  'then': {'properties': {'details': ref(schema)}}, 'else': branch}
+    return [branch]
+
+
 def api_schemas(observation, batch):
     workflow = enum(*WORKFLOW_STATES)
     subject = obj({'type': enum(*SUBJECT_TYPES), 'key': string(200), 'displayName': nullable(safe_text(200))})
@@ -292,7 +321,7 @@ def api_schemas(observation, batch):
         'ScanReceipt': obj({'scanId': UUID, 'acceptedAt': TIME_UTC, 'duplicate': BOOL,
                             'state': enum('queued', 'processed')}),
         'Organization': {
-            **obj({'id': UUID, 'name': safe_text(120), 'timezone': string(80),
+            **obj({'id': UUID, 'name': safe_text(120), 'timezone': TIMEZONE,
                    'reportLanguage': enum(*LANGUAGES),
                    'status': enum('active', 'disabled', 'deletion_scheduled'),
                    'deletionDueAt': nullable(TIME)}),
@@ -301,9 +330,11 @@ def api_schemas(observation, batch):
                        'else': {'properties': {'deletionDueAt': {'type': 'null'}}}}]},
         'OrganizationCreate': obj({'name': safe_text(120), 'timezone': TIMEZONE_CREATE,
                                    'reportLanguage': enum(*LANGUAGES)}),
-        'OrganizationUpdate': {**obj({'name': safe_text(120), 'timezone': string(80),
+        'OrganizationUpdate': {**obj({'name': safe_text(120), 'timezone': TIMEZONE,
                                       'reportLanguage': enum(*LANGUAGES)}, []), 'minProperties': 1},
-        'OrganizationMember': obj({'entraUserId': UUID, 'role': enum('ServiceManager', 'Technician'),
+        'OrganizationMember': obj({'entraUserId': {**UUID, 'description': (
+                                       'Object id сотрудника в Entra tenant компании; значение '
+                                       'FindingPatch.assigneeId и параметра пути entraUserId.')}, 'role': enum('ServiceManager', 'Technician'),
                                    'displayName': nullable(safe_text(120)), 'grantedAt': TIME,
                                    'grantedBy': UUID}),
         'OrganizationMemberPut': obj({'role': enum('ServiceManager', 'Technician')}),
@@ -312,9 +343,11 @@ def api_schemas(observation, batch):
                                'createdBy': UUID, 'configuration': ref('PolicyConfiguration')}),
         'PolicyRevisionCreate': obj({'configuration': ref('PolicyConfiguration')}),
         'OrganizationLifecycleChange': {
-            **obj({'action': enum('disable', 'enable', 'schedule_deletion', 'cancel_deletion'),
-                   'reason': string(1000, description='Обязательный свободный текст; недоверенная строка, '
-                                                     'выводится только в аудите с экранированием.'),
+            **obj({'action': enum(*LIFECYCLE_ACTIONS),
+                   'reason': string(1000, description='Обязательный свободный текст; недоверенная строка. '
+                                                     'Сохраняется без изменений в details.reason записей аудита '
+                                                     'organization.lifecycle_change и выдаётся только как '
+                                                     'AuditEvent.details.reason.'),
                    'idempotencyKey': UUID, 'exportWaived': BOOL},
                   ['action', 'reason', 'idempotencyKey']),
             'allOf': [{'if': {'properties': {'action': {'const': 'schedule_deletion'}}, 'required': ['action']},
@@ -322,12 +355,32 @@ def api_schemas(observation, batch):
         'OrganizationExportCreate': obj({'idempotencyKey': UUID}),
         'OrganizationExport': obj({'id': UUID, 'state': enum('queued', 'ready', 'failed', 'expired'),
                                    'createdAt': TIME, 'expiresAt': nullable(TIME), 'requestedBy': UUID}),
-        'AuditEvent': obj({'id': UUID, 'occurredAt': TIME,
-                           'actorType': enum('user', 'platform_admin', 'device', 'system'),
-                           'actorId': nullable(UUID),
-                           'action': string(80, pattern=r'^[a-z_]+(\.[a-z_]+)+$'),
-                           'targetType': string(40), 'targetId': string(100),
-                           'outcome': enum('success', 'denied', 'failed'), 'correlationId': string(100)}),
+        'OrganizationLifecycleAuditDetails': {
+            **obj({'lifecycleAction': enum(*LIFECYCLE_ACTIONS),
+                   'reason': string(1000, description='Недоверенная строка из OrganizationLifecycleChange.reason; '
+                                                     'выводится только как текст.'),
+                   'exportWaived': BOOL}),
+            'allOf': [{'if': {'properties': {'lifecycleAction': {'const': 'schedule_deletion'}},
+                              'required': ['lifecycleAction']},
+                       'else': {'properties': {'exportWaived': {'const': False}}}}]},
+        'FindingAssignmentAuditDetails': {
+            **obj({'assigneeId': obj({'from': nullable(UUID), 'to': nullable(UUID)}),
+                   'dueAt': obj({'from': nullable(TIME), 'to': nullable(TIME)})}, []),
+            'minProperties': 1, 'description': 'Только изменившиеся поля.'},
+        'RetentionPurgeAuditDetails': obj({
+            'deleted': obj({name: integer(0) for name in RETENTION_PURGE_ORDER}),
+            'snapshotted': integer(0, description='Оценки, у которых evidence заменён basisSnapshot.')}),
+        'AuditEvent': {
+            **obj({'id': UUID, 'occurredAt': TIME,
+                   'actorType': enum('user', 'platform_admin', 'device', 'system'),
+                   'actorId': {**nullable(UUID), 'description': 'entraUserId при actorType user или '
+                                                                'platform_admin; deviceId при device; null при '
+                                                                'system.'},
+                   'action': string(80, pattern=r'^[a-z_]+(\.[a-z_]+)+$'),
+                   'targetType': string(40), 'targetId': string(100),
+                   'outcome': enum('success', 'denied', 'failed'), 'correlationId': string(100),
+                   'details': {'type': ['object', 'null']}}),
+            'allOf': _audit_details_branches()},
         'EnrollmentTokenRequest': {
             **obj({'mode': enum('single_use', 'batch'),
                    'expiresInHours': integer(1, maximum=168, default=72),
@@ -388,7 +441,7 @@ def api_schemas(observation, batch):
                         'assessmentResult': enum(*RESULTS), 'freshness': enum('fresh', 'stale'),
                         'severity': enum('critical', 'warning'),
                         'revision': integer(1), 'title': string(200), 'recommendation': string(2000),
-                        'latestObservedAt': TIME, 'assigneeId': nullable(UUID), 'dueAt': nullable(TIME),
+                        'latestObservedAt': TIME, 'assigneeId': ASSIGNEE, 'dueAt': nullable(TIME),
                         'workflowReason': nullable(string(1000)), 'reviewAt': nullable(TIME),
                         'workflowDecidedBy': nullable(UUID)}),
         'FindingEvent': {
@@ -396,7 +449,7 @@ def api_schemas(observation, batch):
                    'cause': enum(*EVENT_CAUSES), 'assessmentId': nullable(UUID), 'actorId': nullable(UUID),
                    'fromWorkflowState': nullable(workflow), 'toWorkflowState': nullable(workflow)}),
             'allOf': _event_branches()},
-        'FindingPatch': {**obj({'workflowState': enum('new', 'in_progress'), 'assigneeId': nullable(UUID),
+        'FindingPatch': {**obj({'workflowState': enum('new', 'in_progress'), 'assigneeId': ASSIGNEE,
                                 'dueAt': nullable(TIME)}, []), 'minProperties': 1},
         'RiskDecision': {
             **obj({'decision': enum('risk_accepted', 'suppressed', 'withdrawn'), 'reason': string(1000),
@@ -404,7 +457,10 @@ def api_schemas(observation, batch):
             'allOf': [{'if': {'properties': {'decision': {'const': 'withdrawn'}}, 'required': ['decision']},
                        'then': {'not': {'required': ['reviewAt']}},
                        'else': {'required': ['reason', 'reviewAt']}}]},
-        'ReportCreate': obj({'periodStart': TIME, 'periodEnd': TIME, 'format': enum('html')}),
+        'ReportCreate': {**obj({'periodStart': TIME, 'periodEnd': TIME, 'format': enum('html')}),
+                         'description': 'Только границы ISO-недели в timezone организации: periodStart — '
+                                        'понедельник 00:00, periodEnd — следующий понедельник 00:00; иные '
+                                        'границы — 422 validation_failed (05, «Отчёт и покрытие»).'},
         'Report': obj({'id': UUID, 'periodStart': TIME, 'periodEnd': TIME, 'timezone': string(80),
                        'language': enum(*LANGUAGES), 'state': enum('queued', 'ready', 'failed'),
                        'format': enum('html'),

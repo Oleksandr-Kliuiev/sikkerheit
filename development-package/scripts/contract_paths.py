@@ -23,29 +23,22 @@ SECURITY = {
                        'not an environment-level route target. The app accepts exactly one '
                        'X-Forwarded-Client-Cert header, checks Hash = SHA-256 of Cert, builds the chain to the '
                        'internal CA with its own trust (not the system store), requires the hash to be a '
-                       'registered device_certificate (pending, active, or superseded within overlap), unexpired '
-                       'and unrevoked. Organization and device IDs come only from the certificate.'},
+                       'registered, unrevoked device_certificate that is pending or active with validTo in the '
+                       'future, or superseded with overlapEndsAt in the future (24 h after the successor\'s first '
+                       'use, its validTo or the next issuance, whichever is first). Certificate state and '
+                       'revocation are read from the database on every request, without an authorization cache. '
+                       'A hash of a deleted organization\'s certificate is answered 401 certificate_revoked until '
+                       'its validTo. Organization and device IDs come only from the certificate.'},
 }
 
 ENROLL_DESCRIPTION = (
-    'Порядок проверок, первая сработавшая определяет ответ: (1) токен неизвестен, истёк или отозван либо '
-    'организация не active — 401 enrollment_token_invalid; (2) тот же registrationRequestId с тем же CSR — '
-    'идемпотентный повтор прежнего ответа, даже при исчерпанном токене, useCount не увеличивается; тот же '
-    'registrationRequestId с другим CSR — 409 idempotency_conflict; (3) токен исчерпан — 401 '
-    'enrollment_token_invalid; (4) новый installationId — новое устройство; (5) устройство с этим installationId '
-    'отозвано — 409 installation_already_enrolled; (6) machineFingerprint не совпадает — 409 identity_conflict, '
-    'identityState существующего устройства не меняется; (7) у устройства есть active сертификат с validTo > now '
-    '(неактивированный pending не учитывается) и reenrollAllowedUntil не задан или истёк — 409 '
-    'installation_already_enrolled; (8) иначе новый сертификат тому же deviceId; с окном и без в транзакции '
-    'выдачи увеличивается useCount, создаётся запись enrollment, а неактивированный pending переводится в '
-    'revoked (аудит device.pending_revoked). Агент сохраняет registrationRequestId и новый ключ до отправки '
-    'запроса и повторяет его с тем же id. reenrollAllowedUntil = now + 7 '
-    'суток сервер записывает в той же транзакции, в которой отвечает 401 certificate_expired на mTLS-запрос '
-    'зарегистрированным сертификатом устройства в состоянии superseded после окончания перекрытия, независимо '
-    'от validTo. В случае (8) при reenrollAllowedUntil > now новый сертификат выдаётся как pending, перекрытие '
-    'прежних superseded заканчивается в момент выдачи, прежний active переходит в superseded при первом mTLS-запросе новым, reenrollAllowedUntil '
-    'обнуляется, пишется аудит device.reenroll_over_active и поднимается оповещение. '
-    'previousCertificateValidUntil при enroll = null.')
+    'Порядок проверок и коды отказа — 05, раздел «API агента»; первая сработавшая проверка определяет ответ. '
+    'Тело больше 16384 байт — 413 payload_too_large до разбора JSON и до проверки токена. Идемпотентно по '
+    'registrationRequestId: идентичный повтор (тот же токен, CSR и installationId) в течение 7 суток от '
+    'регистрации возвращает прежний ответ независимо от срока, отзыва и исчерпания токена и не расходует токен. '
+    'Регистрация и выпуск сертификата — две транзакции (04, «Граница транзакций выдачи»); при недоступности '
+    'Issuer — 503 temporarily_unavailable, повтор с тем же registrationRequestId выпускает недостающий '
+    'сертификат. previousCertificateValidUntil при enroll = null.')
 ERROR_DESCRIPTION = 'Problem с безопасным кодом из каталога Problem.code (05) и correlationId.'
 AGENT_SETS = {
     'enrollAgent': ['400', '401', '409', '413', '415', '422', '429', '503'],
@@ -84,6 +77,8 @@ PAGE = [{'name': 'cursor', 'in': 'query', 'schema': string(2048),
          'description': 'Непрозрачный cursor, связанный с организацией и фильтром; иначе 400 invalid_cursor.'},
         {'name': 'limit', 'in': 'query', 'schema': integer(1, maximum=100, default=50)}]
 ORG = [pathparam('organizationId')]
+SUBJECT_CURSOR = {'name': 'cursor', 'in': 'query', 'schema': string(2048),
+                  'description': 'Непрозрачный cursor, связанный с субъектом; иначе 400 invalid_cursor.'}
 
 
 def _error_codes(operation_id, kind, has_body, if_match):
@@ -172,17 +167,28 @@ def build_paths():
             description='Порядок приёма и коды отказа — 05, раздел «Порядок приёма пакета».')},
         '/api/v1/agent/certificate/renew': {'post': operation(
             'renewDeviceCertificate', 'Продление сертификата устройства', 'device', 200, 'DeviceCertificate',
-            'RenewalRequest', description='Идемпотентно по renewalRequestId и CSR; другой CSR с тем же id: '
-                                          '409 renewal_request_conflict.')},
+            'RenewalRequest', description=(
+                'Идемпотентно по renewalRequestId и CSR; другой CSR с тем же id: 409 renewal_request_conflict. '
+                'Новый renewalRequestId — новый выпуск в транзакции Issuer: неактивированный pending отзывается, '
+                'перекрытие superseded заканчивается, поэтому действующих сертификатов не больше двух; при '
+                'недоступности Issuer — 503 temporarily_unavailable, повтор с тем же id. Правила — 04, «Профиль и '
+                'продление сертификата».'))},
         '/api/v1/organizations': {
             'get': operation('listOrganizations', 'Доступные клиенты', 'portal', 200, 'OrganizationPage',
-                             roles=READ_ROLES, parameters=PAGE),
+                             roles=READ_ROLES, parameters=[SUBJECT_CURSOR, PAGE[1]], description=(
+                                 'Не входит в контекст организации; строки возвращает '
+                                 'app.list_accessible_organizations: субъекту с platform_role — все неудалённые '
+                                 'организации, остальным — организации с членством. Чтение субъектом с '
+                                 'platform_role пишет одну запись platform_audit_event (platform.access) на '
+                                 'запрос; audit_event не пишется.')),
             'post': operation('createOrganization', 'Создание клиента и политики v1 по умолчанию',
                               'portal_mutation', 201, 'Organization', 'OrganizationCreate', PLATFORM_ROLES)},
         o: {'patch': operation('updateOrganization', 'Изменение имени, timezone или языка отчёта',
                                'portal_mutation', 200, 'Organization', 'OrganizationUpdate', MANAGE_ROLES, ORG)},
         o + '/members': {'get': operation('listOrganizationMembers', 'Назначенные сотрудники', 'portal', 200,
-                                          'OrganizationMemberPage', roles=READ_ROLES, parameters=ORG + PAGE)},
+                                          'OrganizationMemberPage', roles=READ_ROLES, parameters=ORG + PAGE,
+                                          description='Участники организации; entraUserId участника — значение '
+                                                      'FindingPatch.assigneeId.')},
         o + '/members/{entraUserId}': {
             'put': operation('putOrganizationMember', 'Назначение сотрудника', 'portal_mutation', 200,
                              'OrganizationMember', 'OrganizationMemberPut', PLATFORM_ROLES, ORG + entra),
@@ -213,7 +219,9 @@ def build_paths():
              'X-Content-Type-Options': _const_header('nosniff', 'Запрет MIME sniffing.'),
              'Cache-Control': _const_header('private, no-store', 'Без кэширования.')})},
         o + '/audit-events': {'get': operation('listAuditEvents', 'Журнал аудита клиента', 'portal', 200,
-                                               'AuditEventPage', roles=PLATFORM_ROLES, parameters=ORG + PAGE)},
+                                               'AuditEventPage', roles=PLATFORM_ROLES, parameters=ORG + PAGE,
+                                               description='Записи audit_event организации, включая details; '
+                                                           'записи platform_audit_event не возвращаются.')},
         o + '/enrollment-tokens': {
             'post': operation('createEnrollmentToken', 'Токен регистрации организации', 'portal_mutation', 201,
                               'EnrollmentToken', 'EnrollmentTokenRequest', MANAGE_ROLES, ORG),
@@ -221,7 +229,7 @@ def build_paths():
                              'EnrollmentTokenSummaryPage', roles=MANAGE_ROLES, parameters=ORG + PAGE)},
         o + '/enrollment-tokens/{tokenId}/revoke': {'post': operation(
             'revokeEnrollmentToken', 'Отзыв токена регистрации', 'portal_mutation', 204, roles=MANAGE_ROLES,
-            parameters=ORG + token_id, description='Идемпотентно; сначала журнал жизненного цикла, затем БД.')},
+            parameters=ORG + token_id, description='Идемпотентно.')},
         o + '/devices': {'get': operation(
             'listDevices', 'Устройства клиента', 'portal', 200, 'DevicePage', roles=READ_ROLES,
             parameters=ORG + PAGE + [{'name': 'enrollmentTokenId', 'in': 'query', 'schema': UUID}])},

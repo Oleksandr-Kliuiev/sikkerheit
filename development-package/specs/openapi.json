@@ -4,7 +4,7 @@
   "info": {
     "title": "Sikkerheit P1 Proposed API",
     "version": "0.2.0",
-    "description": "Проект контракта. Example hosts не являются развёрнутыми сервисами. Бизнес-инварианты (specs/invariants.json) и полномочия проверяются дополнительно к схемам; форматы uuid и date-time сервер проверяет явно. P2-интеграции требуют отдельного расширения после SP-03."
+    "description": "Проект контракта. Example hosts не являются развёрнутыми сервисами. Бизнес-инварианты (specs/invariants.json) и полномочия проверяются дополнительно к схемам; форматы uuid и date-time сервер проверяет явно. P2-интеграции требуют отдельного расширения после части P2 SP-03."
   },
   "servers": [
     {
@@ -132,7 +132,7 @@
             }
           }
         },
-        "description": "Порядок проверок, первая сработавшая определяет ответ: (1) токен неизвестен, истёк или отозван либо организация не active — 401 enrollment_token_invalid; (2) тот же registrationRequestId с тем же CSR — идемпотентный повтор прежнего ответа, даже при исчерпанном токене, useCount не увеличивается; тот же registrationRequestId с другим CSR — 409 idempotency_conflict; (3) токен исчерпан — 401 enrollment_token_invalid; (4) новый installationId — новое устройство; (5) устройство с этим installationId отозвано — 409 installation_already_enrolled; (6) machineFingerprint не совпадает — 409 identity_conflict, identityState существующего устройства не меняется; (7) у устройства есть active сертификат с validTo > now (неактивированный pending не учитывается) и reenrollAllowedUntil не задан или истёк — 409 installation_already_enrolled; (8) иначе новый сертификат тому же deviceId; с окном и без в транзакции выдачи увеличивается useCount, создаётся запись enrollment, а неактивированный pending переводится в revoked (аудит device.pending_revoked). Агент сохраняет registrationRequestId и новый ключ до отправки запроса и повторяет его с тем же id. reenrollAllowedUntil = now + 7 суток сервер записывает в той же транзакции, в которой отвечает 401 certificate_expired на mTLS-запрос зарегистрированным сертификатом устройства в состоянии superseded после окончания перекрытия, независимо от validTo. В случае (8) при reenrollAllowedUntil > now новый сертификат выдаётся как pending, перекрытие прежних superseded заканчивается в момент выдачи, прежний active переходит в superseded при первом mTLS-запросе новым, reenrollAllowedUntil обнуляется, пишется аудит device.reenroll_over_active и поднимается оповещение. previousCertificateValidUntil при enroll = null.",
+        "description": "Порядок проверок и коды отказа — 05, раздел «API агента»; первая сработавшая проверка определяет ответ. Тело больше 16384 байт — 413 payload_too_large до разбора JSON и до проверки токена. Идемпотентно по registrationRequestId: идентичный повтор (тот же токен, CSR и installationId) в течение 7 суток от регистрации возвращает прежний ответ независимо от срока, отзыва и исчерпания токена и не расходует токен. Регистрация и выпуск сертификата — две транзакции (04, «Граница транзакций выдачи»); при недоступности Issuer — 503 temporarily_unavailable, повтор с тем же registrationRequestId выпускает недостающий сертификат. previousCertificateValidUntil при enroll = null.",
         "requestBody": {
           "required": true,
           "content": {
@@ -672,7 +672,7 @@
             }
           }
         },
-        "description": "Идемпотентно по renewalRequestId и CSR; другой CSR с тем же id: 409 renewal_request_conflict.",
+        "description": "Идемпотентно по renewalRequestId и CSR; другой CSR с тем же id: 409 renewal_request_conflict. Новый renewalRequestId — новый выпуск в транзакции Issuer: неактивированный pending отзывается, перекрытие superseded заканчивается, поэтому действующих сертификатов не больше двух; при недоступности Issuer — 503 temporarily_unavailable, повтор с тем же id. Правила — 04, «Профиль и продление сертификата».",
         "requestBody": {
           "required": true,
           "content": {
@@ -790,6 +790,7 @@
             }
           }
         },
+        "description": "Не входит в контекст организации; строки возвращает app.list_accessible_organizations: субъекту с platform_role — все неудалённые организации, остальным — организации с членством. Чтение субъектом с platform_role пишет одну запись platform_audit_event (platform.access) на запрос; audit_event не пишется.",
         "x-allowed-roles": [
           "PlatformAdmin",
           "ServiceManager",
@@ -805,7 +806,7 @@
               "minLength": 1,
               "maxLength": 2048
             },
-            "description": "Непрозрачный cursor, связанный с организацией и фильтром; иначе 400 invalid_cursor."
+            "description": "Непрозрачный cursor, связанный с субъектом; иначе 400 invalid_cursor."
           },
           {
             "name": "limit",
@@ -1242,6 +1243,7 @@
             }
           }
         },
+        "description": "Участники организации; entraUserId участника — значение FindingPatch.assigneeId.",
         "x-allowed-roles": [
           "PlatformAdmin",
           "ServiceManager",
@@ -2695,6 +2697,7 @@
             }
           }
         },
+        "description": "Записи audit_event организации, включая details; записи platform_audit_event не возвращаются.",
         "x-allowed-roles": [
           "PlatformAdmin"
         ],
@@ -3156,7 +3159,7 @@
             }
           }
         },
-        "description": "Идемпотентно; сначала журнал жизненного цикла, затем БД.",
+        "description": "Идемпотентно.",
         "x-allowed-roles": [
           "PlatformAdmin",
           "ServiceManager"
@@ -5569,7 +5572,7 @@
       },
       "DeviceCertificate": {
         "type": "mutualTLS",
-        "description": "Agent API runs in a dedicated Container Apps environment without other apps and is not an environment-level route target. The app accepts exactly one X-Forwarded-Client-Cert header, checks Hash = SHA-256 of Cert, builds the chain to the internal CA with its own trust (not the system store), requires the hash to be a registered device_certificate (pending, active, or superseded within overlap), unexpired and unrevoked. Organization and device IDs come only from the certificate."
+        "description": "Agent API runs in a dedicated Container Apps environment without other apps and is not an environment-level route target. The app accepts exactly one X-Forwarded-Client-Cert header, checks Hash = SHA-256 of Cert, builds the chain to the internal CA with its own trust (not the system store), requires the hash to be a registered, unrevoked device_certificate that is pending or active with validTo in the future, or superseded with overlapEndsAt in the future (24 h after the successor's first use, its validTo or the next issuance, whichever is first). Certificate state and revocation are read from the database on every request, without an authorization cache. A hash of a deleted organization's certificate is answered 401 certificate_revoked until its validTo. Organization and device IDs come only from the certificate."
       }
     },
     "schemas": {
@@ -5655,7 +5658,7 @@
           "completedAt",
           "observations"
         ],
-        "description": "DeviceId и OrganizationId определяются сертификатом, а не телом пакета. Лимит байтов, idempotency, sequence, окна и время проверяются сервером дополнительно. Правило «не позже receivedAt + 5 мин» при приёме проверяет только startedAt, completedAt и observations[].observedAt; метки времени внутри evidence при приёме не проверяются и оцениваются по правилам проверки (03)."
+        "description": "DeviceId и OrganizationId определяются сертификатом, а не телом пакета. Лимит байтов, idempotency, sequence, окна и время проверяются сервером дополнительно. Внутренне противоречивый пакет (completedAt раньше startedAt, observedAt вне [startedAt, completedAt]) отклоняется 422 batch_time_inconsistent. startedAt, completedAt или observedAt позже receivedAt + 5 мин пакет не отклоняют: он принимается с признаком часов clock_inconsistent (05, «Время и часы устройства»). Метки времени внутри evidence при приёме не проверяются и оцениваются по правилам проверки (03)."
       },
       "Observation": {
         "title": "Sikkerheit Agent Observation",
@@ -6218,7 +6221,7 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 120,
-                            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+                            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
                           },
                           "productState": {
                             "type": "string",
@@ -6292,6 +6295,7 @@
                             "passive",
                             "edr_block",
                             "sxs_passive",
+                            "not_running",
                             "other"
                           ]
                         },
@@ -6426,7 +6430,8 @@
                       "minLength": 1,
                       "maxLength": 40,
                       "format": "date-time",
-                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
+                      "description": "LastSearchSuccessDate, прочитанный до начала agentSearch; основа свежести при offline_cache, null — основы нет (03, «Правило WIN-006»)."
                     },
                     "agentSearch": {
                       "type": "object",
@@ -6464,6 +6469,31 @@
                         "mode",
                         "completedAt",
                         "resultCode"
+                      ],
+                      "allOf": [
+                        {
+                          "if": {
+                            "properties": {
+                              "resultCode": {
+                                "const": "succeeded"
+                              }
+                            },
+                            "required": [
+                              "resultCode"
+                            ]
+                          },
+                          "then": {
+                            "properties": {
+                              "completedAt": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40,
+                                "format": "date-time",
+                                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+                              }
+                            }
+                          }
+                        }
                       ]
                     },
                     "pendingSecurityUpdates": {
@@ -6546,7 +6576,8 @@
                             "minLength": 1,
                             "maxLength": 40,
                             "format": "date-time",
-                            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+                            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
+                            "description": "observedAt первого сбора, в котором агент нашёл обновление; не позже observedAt наблюдения."
                           }
                         },
                         "required": [
@@ -6567,10 +6598,12 @@
                     },
                     "pendingSecurityUpdatesTotal": {
                       "type": "integer",
-                      "minimum": 0
+                      "minimum": 0,
+                      "description": "Длина pendingSecurityUpdates = min(total, 50); иначе 422 schema_violation."
                     },
                     "truncated": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "true тогда и только тогда, когда pendingSecurityUpdatesTotal > 50; иначе 422 schema_violation."
                     }
                   },
                   "required": [
@@ -6841,7 +6874,7 @@
             }
           }
         ],
-        "description": "Закрытые allowlisted evidence-структуры P1 для каждого checkId. Применимость определяет сервер: агент не передаёт not_applicable. Межполевые и семантические инварианты (freeBytes <= totalBytes, ожидаемые объекты, время) проверяет backend по 05-data-and-api.md и specs/invariants.json."
+        "description": "Закрытые allowlisted evidence-структуры P1 для каждого checkId. Применимость определяет сервер: агент не передаёт not_applicable. Межполевые и семантические инварианты (freeBytes <= totalBytes, согласованность списка WIN-006, ожидаемые объекты, время) проверяет backend по 05-data-and-api.md и specs/invariants.json."
       },
       "Problem": {
         "type": "object",
@@ -6955,7 +6988,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 120,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
           },
           "csrPem": {
             "type": "string",
@@ -7277,12 +7310,13 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 120,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
           },
           "timezone": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 80
+            "maxLength": 80,
+            "description": "Идентификатор часового пояса IANA; неизвестная зона — 422 validation_failed."
           },
           "reportLanguage": {
             "type": "string",
@@ -7356,13 +7390,13 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 120,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
           },
           "timezone": {
             "type": "string",
             "minLength": 1,
             "maxLength": 80,
-            "description": "Часовой пояс IANA; обязателен при создании, портал предлагает Europe/Oslo."
+            "description": "Идентификатор часового пояса IANA; неизвестная зона — 422 validation_failed. Обязателен при создании, портал предлагает Europe/Oslo."
           },
           "reportLanguage": {
             "type": "string",
@@ -7387,12 +7421,13 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 120,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
           },
           "timezone": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 80
+            "maxLength": 80,
+            "description": "Идентификатор часового пояса IANA; неизвестная зона — 422 validation_failed."
           },
           "reportLanguage": {
             "type": "string",
@@ -7415,7 +7450,8 @@
             "minLength": 1,
             "maxLength": 36,
             "format": "uuid",
-            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "Object id сотрудника в Entra tenant компании; значение FindingPatch.assigneeId и параметра пути entraUserId."
           },
           "role": {
             "type": "string",
@@ -7431,7 +7467,7 @@
             ],
             "minLength": 1,
             "maxLength": 120,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
           },
           "grantedAt": {
             "type": "string",
@@ -7735,7 +7771,7 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 120,
-                          "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+                          "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
                         },
                         "minItems": 0,
                         "maxItems": 50,
@@ -8438,7 +8474,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 1000,
-            "description": "Обязательный свободный текст; недоверенная строка, выводится только в аудите с экранированием."
+            "description": "Обязательный свободный текст; недоверенная строка. Сохраняется без изменений в details.reason записей аудита organization.lifecycle_change и выдаётся только как AuditEvent.details.reason."
           },
           "idempotencyKey": {
             "type": "string",
@@ -8547,6 +8583,203 @@
           "requestedBy"
         ]
       },
+      "OrganizationLifecycleAuditDetails": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lifecycleAction": {
+            "type": "string",
+            "enum": [
+              "disable",
+              "enable",
+              "schedule_deletion",
+              "cancel_deletion"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Недоверенная строка из OrganizationLifecycleChange.reason; выводится только как текст."
+          },
+          "exportWaived": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "lifecycleAction",
+          "reason",
+          "exportWaived"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "lifecycleAction": {
+                  "const": "schedule_deletion"
+                }
+              },
+              "required": [
+                "lifecycleAction"
+              ]
+            },
+            "else": {
+              "properties": {
+                "exportWaived": {
+                  "const": false
+                }
+              }
+            }
+          }
+        ]
+      },
+      "FindingAssignmentAuditDetails": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "assigneeId": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 36,
+                "format": "uuid",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              },
+              "to": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 36,
+                "format": "uuid",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ]
+          },
+          "dueAt": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 40,
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$"
+              },
+              "to": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 40,
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ]
+          }
+        },
+        "required": [],
+        "minProperties": 1,
+        "description": "Только изменившиеся поля."
+      },
+      "RetentionPurgeAuditDetails": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "finding_event": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "assessment": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "finding": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "observation": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "pending_update_episode": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "scan_batch": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "scan_request": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "device_certificate": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "enrollment": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "enrollment_token": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "device": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "finding_event",
+              "assessment",
+              "finding",
+              "observation",
+              "pending_update_episode",
+              "scan_batch",
+              "scan_request",
+              "device_certificate",
+              "enrollment",
+              "enrollment_token",
+              "device"
+            ]
+          },
+          "snapshotted": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Оценки, у которых evidence заменён basisSnapshot."
+          }
+        },
+        "required": [
+          "deleted",
+          "snapshotted"
+        ]
+      },
       "AuditEvent": {
         "type": "object",
         "additionalProperties": false,
@@ -8582,7 +8815,8 @@
             "minLength": 1,
             "maxLength": 36,
             "format": "uuid",
-            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "entraUserId при actorType user или platform_admin; deviceId при device; null при system."
           },
           "action": {
             "type": "string",
@@ -8612,6 +8846,12 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 100
+          },
+          "details": {
+            "type": [
+              "object",
+              "null"
+            ]
           }
         },
         "required": [
@@ -8623,7 +8863,74 @@
           "targetType",
           "targetId",
           "outcome",
-          "correlationId"
+          "correlationId",
+          "details"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "organization.lifecycle_change"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "properties": {
+                "details": {
+                  "$ref": "#/components/schemas/OrganizationLifecycleAuditDetails"
+                }
+              }
+            },
+            "else": {
+              "if": {
+                "properties": {
+                  "action": {
+                    "const": "finding.assignment_change"
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "details": {
+                    "$ref": "#/components/schemas/FindingAssignmentAuditDetails"
+                  }
+                }
+              },
+              "else": {
+                "if": {
+                  "properties": {
+                    "action": {
+                      "const": "retention.purge_summary"
+                    }
+                  },
+                  "required": [
+                    "action"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "details": {
+                      "$ref": "#/components/schemas/RetentionPurgeAuditDetails"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "details": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            }
+          }
         ]
       },
       "EnrollmentTokenRequest": {
@@ -8653,7 +8960,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 120,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
           }
         },
         "required": [
@@ -8741,7 +9048,7 @@
             ],
             "minLength": 1,
             "maxLength": 120,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
           }
         },
         "required": [
@@ -8779,7 +9086,7 @@
             ],
             "minLength": 1,
             "maxLength": 120,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
           },
           "expiresAt": {
             "type": "string",
@@ -8849,7 +9156,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 120,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
           },
           "status": {
             "type": "string",
@@ -8922,7 +9229,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 120,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
           }
         },
         "required": [
@@ -9012,7 +9319,7 @@
             ],
             "minLength": 1,
             "maxLength": 200,
-            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
           }
         },
         "required": [
@@ -9120,6 +9427,7 @@
               "update_search_outdated",
               "update_source_mismatch",
               "update_list_truncated",
+              "update_age_unconfirmed",
               "os_version_unknown",
               "os_inventory_missing",
               "applicability_input_missing",
@@ -9350,7 +9658,8 @@
             "minLength": 1,
             "maxLength": 36,
             "format": "uuid",
-            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "entraUserId участника организации (OrganizationMember.entraUserId), не organization_member.id; null — без ответственного."
           },
           "dueAt": {
             "type": [
@@ -9730,7 +10039,8 @@
             "minLength": 1,
             "maxLength": 36,
             "format": "uuid",
-            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "entraUserId участника организации (OrganizationMember.entraUserId), не organization_member.id; null — без ответственного."
           },
           "dueAt": {
             "type": [
@@ -9831,7 +10141,8 @@
           "periodStart",
           "periodEnd",
           "format"
-        ]
+        ],
+        "description": "Только границы ISO-недели в timezone организации: periodStart — понедельник 00:00, periodEnd — следующий понедельник 00:00; иные границы — 422 validation_failed (05, «Отчёт и покрытие»)."
       },
       "Report": {
         "type": "object",

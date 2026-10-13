@@ -3,8 +3,9 @@ import copy
 import json
 import re
 
-from contract_catalog import (ACCEPT_LANGUAGE_MAX, AUDIT_ALWAYS, DOWNLOAD_OPERATIONS, LANGUAGES,
-                              LOCALIZED_OPERATIONS, MANAGE_ROLES, PROBLEM_CODES, PROBLEM_HTTP, REASON_CODES)
+from contract_catalog import (ACCEPT_LANGUAGE_MAX, AUDIT_ALWAYS, AUDIT_DETAILS, DOWNLOAD_OPERATIONS, LANGUAGES,
+                              LOCALIZED_OPERATIONS, MANAGE_ROLES, PLATFORM_AUDIT_READS, PROBLEM_CODES,
+                              PROBLEM_HTTP, REASON_CODES, RETENTION_PURGE_ORDER)
 from schema_check import SchemaError, is_valid, read_json, resolve_ref, unsupported_keywords, validate
 
 METHODS = ['get', 'post', 'patch', 'put', 'delete']
@@ -36,6 +37,10 @@ def load(root):
                          for method, op in item.items() if method in METHODS]
     ctx['operation_ids'] = [op['operationId'] for _, _, op in ctx['operations']]
     ctx['max_batch_bytes'] = ctx['schemas']['Configuration']['properties']['maxBatchBytes']['maximum']
+    evidence = {b['if']['properties']['checkId']['const']: b['then']['properties']['evidence']
+                for b in ctx['observation'].get('allOf', []) if 'evidence' in b['then']['properties']}
+    ctx['pending_max'] = evidence['WIN-006']['properties']['pendingSecurityUpdates']['maxItems']
+    ctx['products_max'] = evidence['WIN-003']['properties']['products']['maxItems']
     return ctx
 
 
@@ -111,9 +116,16 @@ def check_schemas(report, ctx):
 
 
 def semantic_errors(batch, ctx):
-    """Server-side semantic rules for a batch with all WIN-* active: unique key and expected pairs."""
+    """Server-side semantic rules for a batch with all WIN-* active: unique key, expected pairs and the
+    WIN-006 list consistency."""
     keys, errors = set(), []
     for item in batch.get('observations', []):
+        if item.get('checkId') == 'WIN-006' and item.get('collectionStatus') == 'collected':
+            update = item.get('evidence', {})
+            total = update.get('pendingSecurityUpdatesTotal', 0)
+            if len(update.get('pendingSecurityUpdates', [])) != min(total, ctx['pending_max']) \
+                    or update.get('truncated') != (total > ctx['pending_max']):
+                errors.append('WIN-006 list inconsistent with pendingSecurityUpdatesTotal and truncated')
         subject = item.get('subject', {})
         key = (item.get('checkId'), subject.get('type'),
                subject.get('volumeId') if subject.get('type') == 'volume' else 'device')
@@ -195,6 +207,12 @@ def _negatives(good, ctx):
         variant(lambda b: by(b, 'WIN-010')['evidence'].update(joinType='registered')),
         variant(lambda b: b.update(scanId=b['scanId'].replace('-', ''))),
         variant(lambda b: b.update(startedAt=b['startedAt'][:16] + 'Z')),
+        variant(lambda b: by(b, 'WIN-006')['evidence']['agentSearch'].update(completedAt=None)),
+        variant(lambda b: by(b, 'WIN-006')['evidence'].update(pendingSecurityUpdates=[],
+                                                              pendingSecurityUpdatesTotal=3, truncated=False)),
+        variant(lambda b: by(b, 'WIN-006')['evidence'].update(
+            pendingSecurityUpdates=[{**update, 'revisionNumber': n} for n in range(ctx['pending_max'])],
+            pendingSecurityUpdatesTotal=ctx['pending_max'] + 10, truncated=False)),
     ]
 
 
@@ -203,10 +221,6 @@ def check_negatives(report, ctx):
     if not good:
         report.fail('contract', 'examples/scan-batch.json missing')
         return
-    evidence = {b['if']['properties']['checkId']['const']: b['then']['properties']['evidence']
-                for b in ctx['observation']['allOf'] if 'evidence' in b['then']['properties']}
-    ctx['pending_max'] = evidence['WIN-006']['properties']['pendingSecurityUpdates']['maxItems']
-    ctx['products_max'] = evidence['WIN-003']['properties']['products']['maxItems']
     negatives = _negatives(good, ctx)
     for index, bad in enumerate(negatives, 1):
         report.check(not accepted(bad, ctx), 'contract', f'Negative variant {index} accepted')
@@ -214,7 +228,17 @@ def check_negatives(report, ctx):
     next(o for o in positive['observations'] if o['checkId'] == 'WIN-003')['evidence']['products'][0][
         'provider'] = SAFE_TEXT_SAMPLE
     report.check(accepted(positive, ctx), 'contract', 'Positive SAFE_TEXT variant rejected')
-    report.summary.update(negativeVariants=len(negatives), positiveVariants=1)
+    truncated = copy.deepcopy(good)
+    update = next(o for o in truncated['observations'] if o['checkId'] == 'WIN-006')['evidence']
+    update.update(pendingSecurityUpdates=[{**update['pendingSecurityUpdates'][0], 'revisionNumber': n}
+                                          for n in range(ctx['pending_max'])],
+                  pendingSecurityUpdatesTotal=120, truncated=True)
+    report.check(accepted(truncated, ctx), 'contract', 'Positive truncated WIN-006 list rejected')
+    not_started = copy.deepcopy(good)
+    next(o for o in not_started['observations'] if o['checkId'] == 'WIN-006')['evidence']['agentSearch'].update(
+        resultCode='not_started', completedAt=None)
+    report.check(accepted(not_started, ctx), 'contract', 'Positive WIN-006 search without completedAt rejected')
+    report.summary.update(negativeVariants=len(negatives), positiveVariants=3)
 
 
 def check_openapi(report, ctx):
@@ -246,6 +270,13 @@ def check_openapi(report, ctx):
                          f'{name}: x-audit-read missing or invalid')
             report.check((op.get('x-audit-read') == 'always') == (name in AUDIT_ALWAYS), 'contract',
                          f'{name}: x-audit-read=always mismatch')
+            outside = '{organizationId}' not in path
+            report.check(outside == (name in PLATFORM_AUDIT_READS), 'contract',
+                         f'{name}: portal GET without organizationId must be in PLATFORM_AUDIT_READS')
+            if outside:
+                report.check(op.get('x-audit-read') == 'platform_admin'
+                             and 'platform_audit_event' in op.get('description', ''), 'contract',
+                             f'{name}: platform audit read must declare platform_admin and platform_audit_event')
         language = [p for p in params if p['in'] == 'header' and p['name'] == 'Accept-Language']
         if name in LOCALIZED_OPERATIONS:
             report.check(len(language) == 1, 'contract', f'{name}: Accept-Language header parameter missing')
@@ -279,8 +310,61 @@ def check_openapi(report, ctx):
     report.check(list(download.get('content', {})) == ['text/html'], 'contract', 'downloadReport: only text/html')
     report.check({'Content-Disposition', 'Content-Security-Policy', 'X-Content-Type-Options'}
                  <= set(download.get('headers', {})), 'contract', 'downloadReport: delivery headers missing')
+    report.check('16384' in by_id['enrollAgent'].get('description', ''), 'contract',
+                 'enrollAgent: body limit missing from description')
+    _check_audit_details(report, ctx)
     agent_ops = sum(1 for path, _, _ in ctx['operations'] if path.startswith('/api/v1/agent/'))
     report.summary.update(operations=len(ids), agentOperations=agent_ops, portalOperations=len(ids) - agent_ops)
+
+
+def _audit_samples():
+    base = {'id': '66666666-6666-4666-8666-666666666666', 'occurredAt': '2026-10-13T10:00:00Z',
+            'actorType': 'platform_admin', 'actorId': '77777777-7777-4777-8777-777777777777',
+            'action': 'organization.lifecycle_change', 'targetType': 'organization',
+            'targetId': '88888888-8888-4888-8888-888888888888', 'outcome': 'success', 'correlationId': 'c-1'}
+    lifecycle = {'lifecycleAction': 'disable', 'reason': '<img src=x onerror=alert(1)>', 'exportWaived': False}
+    deleted = {name: 0 for name in RETENTION_PURGE_ORDER if name != 'device'}
+    good = {**base, 'details': lifecycle}
+    bad = [{**base, 'action': 'platform.access', 'details': {'reason': 'x'}},
+           {**base, 'details': None},
+           {**base, 'details': {**lifecycle, 'lifecycleAction': 'enable', 'exportWaived': True}},
+           {**base, 'action': 'retention.purge_summary', 'details': {'deleted': deleted, 'snapshotted': 0}},
+           {**base, 'action': 'finding.assignment_change', 'details': {}}]
+    return good, bad
+
+
+def _check_audit_details(report, ctx):
+    schemas = ctx['schemas']
+    audit = schemas['AuditEvent']
+    report.check('details' in audit.get('required', []), 'contract', 'AuditEvent.details must be required')
+    branch, actions = (audit.get('allOf') or [{}])[0], {}
+    while 'if' in branch:
+        action = branch['if']['properties']['action']['const']
+        actions[action] = branch['then']['properties']['details'].get('$ref', '').rsplit('/', 1)[-1]
+        branch = branch.get('else', {})
+    report.check(actions == AUDIT_DETAILS and branch == {'properties': {'details': {'type': 'null'}}}, 'contract',
+                 'AuditEvent.allOf: details branches differ from AUDIT_DETAILS or the null fallback')
+    lifecycle = schemas['OrganizationLifecycleAuditDetails']['properties']
+    change = schemas['OrganizationLifecycleChange']['properties']
+    report.check(lifecycle['lifecycleAction']['enum'] == change['action']['enum']
+                 and lifecycle['reason']['maxLength'] == change['reason']['maxLength'], 'contract',
+                 'OrganizationLifecycleAuditDetails differs from OrganizationLifecycleChange')
+    patch = [name for name in schemas['FindingPatch']['properties'] if name != 'workflowState']
+    report.check(list(schemas['FindingAssignmentAuditDetails']['properties']) == patch, 'contract',
+                 'FindingAssignmentAuditDetails keys differ from FindingPatch without workflowState')
+    deleted = schemas['RetentionPurgeAuditDetails']['properties']['deleted']['properties']
+    report.check(list(deleted) == RETENTION_PURGE_ORDER, 'contract',
+                 'RetentionPurgeAuditDetails.deleted differs from RETENTION_PURGE_ORDER')
+    finding = schemas['Finding']['properties']['assigneeId'].get('description', '')
+    report.check(finding == schemas['FindingPatch']['properties']['assigneeId'].get('description')
+                 and 'OrganizationMember.entraUserId' in finding, 'contract',
+                 'Finding.assigneeId and FindingPatch.assigneeId must share the entraUserId description')
+    file = ctx['root'] / 'specs' / 'openapi.json'
+    good, bad = _audit_samples()
+    report.check(is_valid(good, audit, file, ctx['root']), 'contract', 'Valid AuditEvent with details rejected')
+    for index, sample in enumerate(bad, 1):
+        report.check(not is_valid(sample, audit, file, ctx['root']), 'contract',
+                     f'Invalid AuditEvent variant {index} accepted')
 
 
 def check_responses(report, ctx):
