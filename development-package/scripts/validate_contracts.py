@@ -3,8 +3,8 @@ import copy
 import json
 import re
 
-from contract_catalog import (AUDIT_ALWAYS, DOWNLOAD_OPERATIONS, LANGUAGES, LOCALIZED_OPERATIONS,
-                              MANAGE_ROLES, PROBLEM_CODES, PROBLEM_HTTP, REASON_CODES)
+from contract_catalog import (ACCEPT_LANGUAGE_MAX, AUDIT_ALWAYS, DOWNLOAD_OPERATIONS, LANGUAGES,
+                              LOCALIZED_OPERATIONS, MANAGE_ROLES, PROBLEM_CODES, PROBLEM_HTTP, REASON_CODES)
 from schema_check import SchemaError, is_valid, read_json, resolve_ref, unsupported_keywords, validate
 
 METHODS = ['get', 'post', 'patch', 'put', 'delete']
@@ -68,8 +68,22 @@ def check_catalog(report, ctx):
     report.summary.update(checkIds=len(ids), agentCheckIds=len(ctx['agent_ids']))
 
 
+def _required_leaves_without_default(schema, path):
+    """Required non-object properties of a closed object tree that carry no default."""
+    missing = []
+    for name in schema.get('required', []):
+        child = schema['properties'][name]
+        if child.get('type') == 'object':
+            missing += _required_leaves_without_default(child, f'{path}.{name}')
+        elif 'default' not in child:
+            missing.append(f'{path}.{name}')
+    return missing
+
+
 def check_schemas(report, ctx):
     api = ctx['api']
+    for path in _required_leaves_without_default(ctx['schemas']['PolicyConfiguration'], 'PolicyConfiguration'):
+        report.fail('contract', f'{path}: required field without default')
     for name in ('observation', 'batch'):
         report.check('$id' in ctx[name], 'contract', f'Standalone agent schema without $id: {name}')
     for item in walk(api):
@@ -234,8 +248,14 @@ def check_openapi(report, ctx):
                          f'{name}: x-audit-read=always mismatch')
         language = [p for p in params if p['in'] == 'header' and p['name'] == 'Accept-Language']
         if name in LOCALIZED_OPERATIONS:
-            report.check(len(language) == 1 and language[0]['schema'].get('enum') == LANGUAGES, 'contract',
-                         f'{name}: Accept-Language header parameter missing')
+            report.check(len(language) == 1, 'contract', f'{name}: Accept-Language header parameter missing')
+            schema = language[0]['schema'] if language else {}
+            report.check(schema.get('type') == 'string' and 'enum' not in schema
+                         and schema.get('maxLength') == ACCEPT_LANGUAGE_MAX, 'contract',
+                         f'{name}: Accept-Language must be a string without enum, maxLength {ACCEPT_LANGUAGE_MAX}')
+            success = next(iter(op['responses'].values()))
+            content = success.get('headers', {}).get('Content-Language', {}).get('schema', {})
+            report.check(content.get('enum') == LANGUAGES, 'contract', f'{name}: Content-Language enum')
         else:
             report.check(not language, 'contract', f'{name}: unexpected Accept-Language parameter')
     by_id = {op['operationId']: op for _, _, op in ctx['operations']}

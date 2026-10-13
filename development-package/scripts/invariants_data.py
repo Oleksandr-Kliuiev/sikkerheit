@@ -1,7 +1,7 @@
 """Registry of invariants that JSON Schema does not express (source of specs/invariants.json).
 
-IDs are assigned in list order; append new records at the end of their phase block so that
-existing INV-nnn identifiers stay stable.
+IDs are assigned in list order: P1, then P2, then P1_ADDED. New records go to the end of the last
+block, so that existing INV-nnn identifiers stay stable.
 """
 
 DOCS = {'02': '02-architecture-and-stack.md', '03': '03-check-catalog.md', '04': '04-security-and-privacy.md',
@@ -74,8 +74,9 @@ P1 = [
      'Клон VM отправляет пакет с другим признаком машины.', http(409, 'identity_conflict'), 'AT-04'),
     ('Пакет старше maxBatchAgeDays по completedAt относительно receivedAt отклоняется.', INTAKE, 'agent_api',
      'Пакет возрастом maxBufferDays + 3 суток.', http(422, 'batch_too_old'), 'AT-04'),
-    ('completedAt не раньше startedAt, observedAt не позже completedAt, время не позже receivedAt + 5 мин.',
-     CLOCK, 'agent_api', 'completedAt на 10 мин позже receivedAt.', http(422, 'batch_time_inconsistent'), 'AT-04'),
+    ('completedAt не раньше startedAt, observedAt не позже completedAt; startedAt, completedAt и '
+     'observations[].observedAt не позже receivedAt + 5 мин. Метки времени внутри evidence при приёме не '
+     'проверяются.', CLOCK, 'agent_api', 'completedAt на 10 мин позже receivedAt.', http(422, 'batch_time_inconsistent'), 'AT-04'),
     ('policyVersion пакета известна серверу и не из будущего.', INTAKE, 'agent_api',
      'policyVersion больше текущей версии политики.', http(422, 'unknown_policy_version'), 'AT-06'),
     ('Тот же sequence с другим scanId вызывает ресинхронизацию, не чаще раза в 24 ч.', IDENTITY, 'agent_api',
@@ -92,7 +93,8 @@ P1 = [
      'WIN-001 с freeBytes больше totalBytes.', http(422, 'schema_violation'), 'AT-05'),
     ('Отсутствующая ожидаемая пара даёт unknown без отклонения пакета.', UNIQUE, 'worker',
      'Пакет без наблюдения WIN-005 при активной WIN-005.', result('unknown', 'missing_observation'), 'AT-04'),
-    ('Пакет с признаком часов сохраняется в истории; его оценки unknown и не меняют текущую проекцию.', CLOCK,
+    ('Пакет с признаком часов сохраняется в истории и не меняет текущую проекцию. Признак действует на все '
+     'оценки пакета: assessed получают unknown, informational — result=null, обе с clock_inconsistent.', CLOCK,
      'worker', 'completedAt раньше maxAcceptedSourceTime при большем sequence.',
      result('unknown', 'clock_inconsistent'), 'AT-04'),
     ('Рост droppedBatchCount в heartbeat пишется в аудит устройства.', INTAKE, 'agent_api',
@@ -101,7 +103,8 @@ P1 = [
     ('Истёкший, отозванный или исчерпанный enrollment-токен и токен неактивной организации не регистрируют '
      'устройство; не больше maxUses устройств при конкурентных запросах.', ENROLL, 'portal_api',
      'Одиннадцатая регистрация пакетным токеном с maxUses 10.', http(401, 'enrollment_token_invalid'), 'AT-02'),
-    ('installationId отозванного устройства или активного устройства с другим CSR не регистрируется повторно.',
+    ('installationId отозванного устройства или активного устройства с действующим сертификатом не '
+     'регистрируется повторно.',
      IDENTITY, 'portal_api', 'enrollAgent с installationId отозванного устройства.',
      http(409, 'installation_already_enrolled'), 'AT-02'),
     ('Agent API принимает ровно один X-Forwarded-Client-Cert с зарегистрированным hash и цепочкой '
@@ -176,8 +179,8 @@ P1 = [
      result('unknown', 'unsupported'), 'AT-05'),
     ('Временная ошибка сборщика даёт unknown.', SEMANTICS, 'worker', 'WIN-005 unavailable/temporary_error.',
      result('unknown', 'temporary_error'), 'AT-05'),
-    ('Зависший сборщик завершается не дольше чем за 30 с, сессия укладывается в 120 с; дочерние процессы '
-     'не запускаются.', LOCAL, 'agent', 'Сборщик WIN-006 не отвечает 60 с.', result('unknown', 'collector_timeout'),
+    ('Ожидание результата сборщика — 30 с, по истечении collector_timeout; зависшая привилегированная работа '
+     'принудительно завершается не позже 120 с; дочерние процессы не запускаются.', LOCAL, 'agent', 'Сборщик WIN-006 не отвечает 60 с.', result('unknown', 'collector_timeout'),
      'AT-03'),
     ('Эталонный отрицательный тест BitLocker: fully_encrypted при protectionStatus=off и encryptionRequired=true '
      'даёт fail.', WINDOWS, 'worker', 'WIN-002 из examples/scan-batch.json.', result('fail'), 'AT-05'),
@@ -200,7 +203,8 @@ P1 = [
      result('unknown', 'os_version_unknown'), 'AT-05'),
     ('SYS-002: нет свежего WIN-011.', OS_MATRIX, 'worker', 'Последний WIN-011 старше окна свежести.',
      result('unknown', 'os_inventory_missing'), 'AT-05'),
-    ('Межпроверочная применимость берётся из того же пакета; без пригодного входа зависимая проверка unknown.',
+    ('Межпроверочная применимость берётся из того же пакета; без пригодного входа зависимая проверка unknown. '
+     'Правило применяется, только если у пакета нет признака часов.',
      SEMANTICS, 'worker', 'WIN-002 в пакете без WIN-011.', result('unknown', 'applicability_input_missing'),
      'AT-05'),
     ('Редакция из notApplicableEditionIds даёт not_applicable по политике.', SEMANTICS, 'worker',
@@ -240,18 +244,50 @@ P2 = [
      'worker', 'Ответ Graph с @odata.nextLink, который не запрошен.', {'capabilityStatus': 'partial'}, 'AT-15'),
     ('Свойство, которое не вернулось из-за прав или лицензии, не трактуется как значение.', CAPABILITY,
      'worker', 'Sign-in без appliedConditionalAccessPolicies.', {'capabilityStatus': 'partial'}, 'AT-15'),
-    ('Регистрация MFA не означает требования MFA политикой доступа.', M365, 'worker',
-     'isMfaRegistered=true без политики CA, требующей MFA.', {'capabilityStatus': 'license_unconfirmed'}, 'AT-10'),
+    ('Регистрация MFA не означает требования MFA политикой доступа: если политики Conditional Access не '
+     'прочитаны из-за неподтверждённой лицензии, вывод о требовании MFA не делается.', M365, 'worker',
+     'isMfaRegistered=true, политики CA не читаются: лицензия Entra ID P1 не подтверждена.',
+     {'capabilityStatus': 'license_unconfirmed'}, 'AT-10'),
     ('Устройство сопоставляется с Intune только по подтверждённому идентификатору.', M365, 'worker',
      'Совпадение только по имени устройства.', {'capabilityStatus': 'partial'}, 'AT-11'),
-    ('Consent запрашивается только для включённых модулей.', GRAPH, 'infra',
-     'Запрос права модуля M365-005 при выключенном модуле.', {'capabilityStatus': 'permission_missing'}, 'AT-09'),
+    ('Consent запрашивается только для включённых модулей; модуль, включённый после consent, не расширяет '
+     'выданные права сам и до нового consent работает без своего права.', GRAPH, 'infra',
+     'Модуль M365-004 включён после consent без DeviceManagementManagedDevices.Read.All.',
+     {'capabilityStatus': 'permission_missing'}, 'AT-09'),
+]
+
+# P1 records added after the P2 block; numbering continues after P2.
+P1_ADDED = [
+    ('Сертификат superseded после окончания перекрытия, например в образе старше ротации, не принимается; '
+     'агент выполняет повторную регистрацию, и при том же installationId и совпадающем признаке машины '
+     'deviceId и история сохраняются.', CERT, 'agent_api',
+     'Восстановленный образ старше ротации отправляет heartbeat старым сертификатом после перекрытия.',
+     http(401, 'certificate_expired'), 'AT-17'),
+    ('enrollAgent с уже зарегистрированным installationId и несовпадающим признаком машины отклоняется; '
+     'агент переходит в IdentityConflict.', IDENTITY, 'portal_api',
+     'Повторная регистрация после истечения сертификата с installationId другой машины.',
+     http(409, 'identity_conflict'), 'AT-02'),
+    ('Проверка, ставшая not_applicable по фактам устройства в пакете без смены policy_revision, закрывает '
+     'finding событием resolved с applicability_change; это не исправление.', TRANSITIONS, 'worker',
+     'WIN-011 editionId сменился на Core при открытом finding WIN-002 и той же ревизии политики.',
+     event('resolved', 'applicability_change'), 'AT-06'),
+    ('WIN-004: signatureLastUpdatedAt в будущем относительно receivedAt даёт unknown; пакет не отклоняется.',
+     WINDOWS, 'worker', 'signatureLastUpdatedAt через двое суток после receivedAt.',
+     result('unknown', 'evidence_time_invalid'), 'AT-05'),
+    ('Пакет с чужим или просроченным scanRequestId принимается как обычный сбор: scanRequestId игнорируется, '
+     'пишется запись диагностики, новых кодов нет.', INTAKE, 'agent_api',
+     'Пакет с scanRequestId другого устройства и свежим pass WIN-005 после исправления.',
+     event('resolved', 'device_change'), 'AT-05'),
+    ('Повторная проверка по requestDeviceScan (только вариант A) закрывает исправленную проблему событием '
+     'resolved с device_change.', PORTAL, 'worker',
+     'Пакет с действующим scanRequestId и pass WIN-005 после исправления.',
+     event('resolved', 'device_change'), 'AT-05'),
 ]
 
 
 def build_invariants():
     records = []
-    for phase, rows in (('P1', P1), ('P2', P2)):
+    for phase, rows in (('P1', P1), ('P2', P2), ('P1', P1_ADDED)):
         for rule, (doc, section), enforcement, negative, expected, acceptance in rows:
             records.append({'id': f'INV-{len(records) + 1:03}', 'rule': rule,
                             'sourceDoc': {'file': DOCS[doc], 'section': section}, 'phase': phase,

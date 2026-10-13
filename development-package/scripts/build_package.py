@@ -48,6 +48,7 @@ def validation_text(summary):
 
 Версия {VERSION}, дата {DATE}. Проверку выполняет `scripts/validate_package.py`; он ничего не записывает. `scripts/build_package.py` вызывает его первым и пишет этот файл, `REVIEW-BUNDLE.md`, `manifest.json` и архив только после успешной проверки.
 
+- Состав каталога соответствует белому списку путей пакета, скрытые файлы и `__pycache__` в пакет не входят; версия совпадает в `build_package.py`, `contract_catalog.py`, `README.md` и `09`.
 - Прочитаны все JSON-файлы и разрешены локальные ссылки `$ref`; в `openapi.json` нет внешних ссылок, у отдельных схем агента есть `$id`.
 - Каталог: уникальных check IDs — {s["checkIds"]}, из них WIN-* — {s["agentCheckIds"]}; у каждой проверки есть строка в `03`, объект и режим по умолчанию совпадают с каталогом.
 - Документы: функциональных требований с колонкой «Контракт» — {s["requirements"]}, приёмочных сценариев — {s["acceptance"]}, runbooks — {s["runbooks"]}; ссылки на ID разрешаются в определения.
@@ -82,8 +83,7 @@ def write_bundle(source_copy):
 
 
 def write_archive():
-    files = sorted(p for p in ROOT.rglob('*') if p.is_file() and p.name != 'manifest.json'
-                   and '__pycache__' not in p.parts)
+    files = [p for p in validate_package.package_files(ROOT) if p.relative_to(ROOT).as_posix() != 'manifest.json']
     manifest = {'packageVersion': VERSION, 'date': DATE, 'timezone': 'Europe/Oslo',
                 'files': [{'path': p.relative_to(ROOT).as_posix(), 'bytes': p.stat().st_size,
                            'sha256': hashlib.sha256(p.read_bytes()).hexdigest()} for p in files]}

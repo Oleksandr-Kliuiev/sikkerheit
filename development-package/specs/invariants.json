@@ -165,7 +165,7 @@
     },
     {
       "id": "INV-011",
-      "rule": "completedAt не раньше startedAt, observedAt не позже completedAt, время не позже receivedAt + 5 мин.",
+      "rule": "completedAt не раньше startedAt, observedAt не позже completedAt; startedAt, completedAt и observations[].observedAt не позже receivedAt + 5 мин. Метки времени внутри evidence при приёме не проверяются.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
         "section": "Время и часы устройства"
@@ -308,7 +308,7 @@
     },
     {
       "id": "INV-020",
-      "rule": "Пакет с признаком часов сохраняется в истории; его оценки unknown и не меняют текущую проекцию.",
+      "rule": "Пакет с признаком часов сохраняется в истории и не меняет текущую проекцию. Признак действует на все оценки пакета: assessed получают unknown, informational — result=null, обе с clock_inconsistent.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
         "section": "Время и часы устройства"
@@ -355,7 +355,7 @@
     },
     {
       "id": "INV-023",
-      "rule": "installationId отозванного устройства или активного устройства с другим CSR не регистрируется повторно.",
+      "rule": "installationId отозванного устройства или активного устройства с действующим сертификатом не регистрируется повторно.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
         "section": "Канонический объект и идентичность устройства"
@@ -864,7 +864,7 @@
     },
     {
       "id": "INV-055",
-      "rule": "Зависший сборщик завершается не дольше чем за 30 с, сессия укладывается в 120 с; дочерние процессы не запускаются.",
+      "rule": "Ожидание результата сборщика — 30 с, по истечении collector_timeout; зависшая привилегированная работа принудительно завершается не позже 120 с; дочерние процессы не запускаются.",
       "sourceDoc": {
         "file": "02-architecture-and-stack.md",
         "section": "Выполнение локальной проверки"
@@ -1022,7 +1022,7 @@
     },
     {
       "id": "INV-065",
-      "rule": "Межпроверочная применимость берётся из того же пакета; без пригодного входа зависимая проверка unknown.",
+      "rule": "Межпроверочная применимость берётся из того же пакета; без пригодного входа зависимая проверка unknown. Правило применяется, только если у пакета нет признака часов.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Семантика результата"
@@ -1261,14 +1261,14 @@
     },
     {
       "id": "INV-079",
-      "rule": "Регистрация MFA не означает требования MFA политикой доступа.",
+      "rule": "Регистрация MFA не означает требования MFA политикой доступа: если политики Conditional Access не прочитаны из-за неподтверждённой лицензии, вывод о требовании MFA не делается.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Microsoft 365"
       },
       "phase": "P2",
       "enforcement": "worker",
-      "negativeExample": "isMfaRegistered=true без политики CA, требующей MFA.",
+      "negativeExample": "isMfaRegistered=true, политики CA не читаются: лицензия Entra ID P1 не подтверждена.",
       "expectedError": {
         "capabilityStatus": "license_unconfirmed"
       },
@@ -1291,18 +1291,120 @@
     },
     {
       "id": "INV-081",
-      "rule": "Consent запрашивается только для включённых модулей.",
+      "rule": "Consent запрашивается только для включённых модулей; модуль, включённый после consent, не расширяет выданные права сам и до нового consent работает без своего права.",
       "sourceDoc": {
         "file": "04-security-and-privacy.md",
         "section": "Разрешения интеграций"
       },
       "phase": "P2",
       "enforcement": "infra",
-      "negativeExample": "Запрос права модуля M365-005 при выключенном модуле.",
+      "negativeExample": "Модуль M365-004 включён после consent без DeviceManagementManagedDevices.Read.All.",
       "expectedError": {
         "capabilityStatus": "permission_missing"
       },
       "acceptance": "AT-09"
+    },
+    {
+      "id": "INV-082",
+      "rule": "Сертификат superseded после окончания перекрытия, например в образе старше ротации, не принимается; агент выполняет повторную регистрацию, и при том же installationId и совпадающем признаке машины deviceId и история сохраняются.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Профиль и продление сертификата"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Восстановленный образ старше ротации отправляет heartbeat старым сертификатом после перекрытия.",
+      "expectedError": {
+        "http": 401,
+        "code": "certificate_expired"
+      },
+      "acceptance": "AT-17"
+    },
+    {
+      "id": "INV-083",
+      "rule": "enrollAgent с уже зарегистрированным installationId и несовпадающим признаком машины отклоняется; агент переходит в IdentityConflict.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Канонический объект и идентичность устройства"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Повторная регистрация после истечения сертификата с installationId другой машины.",
+      "expectedError": {
+        "http": 409,
+        "code": "identity_conflict"
+      },
+      "acceptance": "AT-02"
+    },
+    {
+      "id": "INV-084",
+      "rule": "Проверка, ставшая not_applicable по фактам устройства в пакете без смены policy_revision, закрывает finding событием resolved с applicability_change; это не исправление.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Таблица переходов finding"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "WIN-011 editionId сменился на Core при открытом finding WIN-002 и той же ревизии политики.",
+      "expectedError": {
+        "event": {
+          "eventType": "resolved",
+          "cause": "applicability_change"
+        }
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-085",
+      "rule": "WIN-004: signatureLastUpdatedAt в будущем относительно receivedAt даёт unknown; пакет не отклоняется.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Проверки Windows"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "signatureLastUpdatedAt через двое суток после receivedAt.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "evidence_time_invalid"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-086",
+      "rule": "Пакет с чужим или просроченным scanRequestId принимается как обычный сбор: scanRequestId игнорируется, пишется запись диагностики, новых кодов нет.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Пакет с scanRequestId другого устройства и свежим pass WIN-005 после исправления.",
+      "expectedError": {
+        "event": {
+          "eventType": "resolved",
+          "cause": "device_change"
+        }
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-087",
+      "rule": "Повторная проверка по requestDeviceScan (только вариант A) закрывает исправленную проблему событием resolved с device_change.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "API портала"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Пакет с действующим scanRequestId и pass WIN-005 после исправления.",
+      "expectedError": {
+        "event": {
+          "eventType": "resolved",
+          "cause": "device_change"
+        }
+      },
+      "acceptance": "AT-05"
     }
   ]
 }

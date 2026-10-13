@@ -1,6 +1,6 @@
 """OpenAPI operations of the P1 contract: paths, security, responses and headers."""
-from contract_catalog import (AUDIT_ALWAYS, DOWNLOAD_OPERATIONS, LANGUAGES, LOCALIZED_OPERATIONS,
-                              MANAGE_ROLES, PLATFORM_ROLES, READ_ROLES)
+from contract_catalog import (ACCEPT_LANGUAGE_MAX, AUDIT_ALWAYS, DOWNLOAD_OPERATIONS, LANGUAGES,
+                              LOCALIZED_OPERATIONS, MANAGE_ROLES, PLATFORM_ROLES, READ_ROLES)
 from contract_schemas import ETAG, UUID, enum, integer, ref, string
 
 AGENT_HOST = 'https://agent.example.invalid'
@@ -56,9 +56,10 @@ def pathparam(name, schema=UUID):
 IF_MATCH = {'name': 'If-Match', 'in': 'header', 'required': True, 'schema': ETAG,
             'description': 'Текущая ревизия в кавычках. Устаревшая: 412 revision_mismatch; '
                            'отсутствует: 428 if_match_required.'}
-ACCEPT_LANGUAGE = {'name': 'Accept-Language', 'in': 'header', 'required': False, 'schema': enum(*LANGUAGES),
-                   'description': 'Язык title, recommendation и explanation; без заголовка или при другом '
-                                  'значении используется nb.'}
+ACCEPT_LANGUAGE = {'name': 'Accept-Language', 'in': 'header', 'required': False,
+                   'schema': string(ACCEPT_LANGUAGE_MAX),
+                   'description': 'Язык title, recommendation и explanation. Принимаются nb, nn и en; без '
+                                  'заголовка или при любом другом значении используется nb, ошибки нет.'}
 PAGE = [{'name': 'cursor', 'in': 'query', 'schema': string(2048),
          'description': 'Непрозрачный cursor, связанный с организацией и фильтром; иначе 400 invalid_cursor.'},
         {'name': 'limit', 'in': 'query', 'schema': integer(1, maximum=100, default=50)}]
@@ -139,7 +140,9 @@ def build_paths():
         '/api/v1/agent/enroll': {'post': operation(
             'enrollAgent', 'Регистрация по токену организации', 'bootstrap', 201, 'DeviceCertificate',
             'EnrollmentRequest', description='Идемпотентно по registrationRequestId и CSR: повтор возвращает '
-                                             'исходный ответ и не увеличивает useCount.')},
+                                             'исходный ответ и не увеличивает useCount. Уже '
+                                             'зарегистрированный installationId с несовпадающим '
+                                             'machineFingerprint: 409 identity_conflict.')},
         '/api/v1/agent/configuration': {'get': operation(
             'getAgentConfiguration', 'Конфигурация устройства', 'device', 200, 'Configuration',
             description='Доступна агенту в состояниях VersionBlocked, Suspended и TrustFailed.')},
@@ -214,7 +217,8 @@ def build_paths():
         o + '/devices/{deviceId}/scan-requests': {'post': operation(
             'requestDeviceScan', 'Повторная проверка по фиксированному набору без произвольной команды',
             'portal_mutation', 202, 'ScanRequest', 'ScanRequestCreate', READ_ROLES, ORG + device_id,
-            description='idempotencyKey, срок 24 ч, не больше одного pending-запроса на устройство.')},
+            description='Только вариант A. idempotencyKey, срок 24 ч, не больше одного незавершённого '
+                        'запроса (requested или delivered) на устройство.')},
         o + '/devices/{deviceId}/assessments': {'get': operation(
             'listDeviceAssessments', 'Оценки и основания по устройству', 'portal', 200, 'AssessmentPage',
             roles=READ_ROLES, parameters=ORG + device_id + PAGE)},

@@ -10,15 +10,42 @@ from pathlib import Path  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import json  # noqa: E402
+import re  # noqa: E402
 
 import validate_contracts as contracts  # noqa: E402
 import validate_docs as documents  # noqa: E402
-from contract_catalog import AGENT_ACTIONS  # noqa: E402
+from contract_catalog import AGENT_ACTIONS, CATALOG_VERSION  # noqa: E402
 from schema_check import read_json  # noqa: E402
 from validate_invariants import check_invariants  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 STANDARD_SKIPPED = 'стандартная проверка не выполнена: jsonschema и openapi-spec-validator не установлены'
+# Allowed package paths (relative, POSIX); build packages exactly the files that package_files returns.
+ALLOWED_PATHS = [r'README\.md', r'VALIDATION\.md', r'REVIEW-BUNDLE\.md', r'manifest\.json',
+                 r'(0[1-9]|10)-[a-z0-9-]+\.md', r'source/boss-chat\.md', r'specs/[a-z0-9-]+(\.schema)?\.json',
+                 r'examples/[a-z0-9-]+\.json', r'scripts/[a-z_]+\.py']
+VERSION = re.compile(r'\b[0-9]+\.[0-9]+\.[0-9]+\b')
+
+
+def package_files(root):
+    """Files of the package: everything except hidden files or directories and __pycache__."""
+    return sorted(p for p in root.rglob('*') if p.is_file() and '__pycache__' not in p.parts
+                  and not any(part.startswith('.') for part in p.relative_to(root).parts))
+
+
+def check_layout(report, root):
+    for file in package_files(root):
+        path = file.relative_to(root).as_posix()
+        report.check(any(re.fullmatch(pattern, path) for pattern in ALLOWED_PATHS), 'contract',
+                     f'Unexpected file in the package: {path}')
+    build = (root / 'scripts' / 'build_package.py').read_text(encoding='utf-8')
+    declared = re.findall(r"^VERSION = '([^']+)'$", build, re.M)
+    report.check(declared == [CATALOG_VERSION], 'contract', 'build_package.py VERSION differs from CATALOG_VERSION')
+    for name in ('README.md', '09-independent-review-prompt.md'):
+        lines = (root / name).read_text(encoding='utf-8').splitlines() if (root / name).exists() else []
+        found = VERSION.findall(lines[2]) if len(lines) > 2 else []
+        report.check(bool(found) and set(found) == {CATALOG_VERSION}, 'docs',
+                     f'{name}: line 3 must state version {CATALOG_VERSION}')
 
 
 class Report:
@@ -63,6 +90,7 @@ def standard_validation(report, root):
 
 def run(root=ROOT):
     report = Report()
+    check_layout(report, root)
     contracts.check_json_files(report, root)
     try:
         ctx = contracts.load(root)

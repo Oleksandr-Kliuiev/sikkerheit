@@ -106,17 +106,21 @@ REASON_CODES = COLLECTOR_REASONS + [
     'missing_observation', 'clock_inconsistent', 'unmapped_state', 'update_search_failed',
     'update_search_outdated', 'update_source_mismatch', 'update_list_truncated',
     'os_version_unknown', 'os_inventory_missing', 'applicability_input_missing',
-    'policy_not_applicable',
+    'policy_not_applicable', 'evidence_time_invalid',
 ]
+# reasonCode values allowed for an informational assessment (result=null) when data is missing.
+INFORMATIONAL_REASONS = COLLECTOR_REASONS + ['missing_observation', 'clock_inconsistent',
+                                             'applicability_input_missing']
 RESULTS = ['pass', 'fail', 'unknown', 'not_applicable']
 
-EVENT_CAUSES = ['device_change', 'rule_change', 'policy_change', 'data_quality',
+EVENT_CAUSES = ['device_change', 'rule_change', 'policy_change', 'applicability_change', 'data_quality',
                 'manual_action', 'review_expired']
 _TRIGGERS = ['device_change', 'rule_change', 'policy_change']
 # eventType -> (allowed causes, assessmentId: 'required' | 'nullable' | 'null')
 EVENT_TABLE = {
     'opened': (_TRIGGERS, 'required'),
-    'resolved': (_TRIGGERS, 'required'),
+    # applicability_change: not_applicable from device facts of the batch without a policy_revision change.
+    'resolved': (_TRIGGERS + ['applicability_change'], 'required'),
     'reopened': (_TRIGGERS, 'required'),
     'quality_changed': (['data_quality'], 'nullable'),
     'workflow_changed': (['manual_action', 'review_expired'], 'null'),
@@ -132,6 +136,7 @@ READ_ROLES = ['PlatformAdmin', 'ServiceManager', 'Technician']
 MANAGE_ROLES = ['PlatformAdmin', 'ServiceManager']
 PLATFORM_ROLES = ['PlatformAdmin']
 LANGUAGES = ['nb', 'nn', 'en']
+ACCEPT_LANGUAGE_MAX = 35
 # Portal GET operations whose every read writes audit_event for any role.
 AUDIT_ALWAYS = ['downloadOrganizationExport', 'listAuditEvents', 'downloadReport']
 # Operations accepting Accept-Language and answering with Content-Language.
