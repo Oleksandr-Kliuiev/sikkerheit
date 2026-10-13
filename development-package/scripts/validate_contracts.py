@@ -264,6 +264,12 @@ def check_openapi(report, ctx):
                  'decideFindingRisk roles must equal MANAGE_ROLES')
     report.check(schemas['FindingPatch']['properties']['workflowState']['enum'] == ['new', 'in_progress'],
                  'contract', 'FindingPatch.workflowState must be {new, in_progress}')
+    queue = next((p for p in by_id['listFindings'].get('parameters', []) if p['name'] == 'workflowState'), {})
+    report.check(queue.get('style') == 'form' and queue.get('explode') is False
+                 and queue.get('schema', {}).get('type') == 'array'
+                 and queue['schema'].get('items', {}).get('enum') == schemas['Finding']['properties']
+                 ['workflowState']['enum'], 'contract',
+                 'listFindings.workflowState must be an enum array with style=form, explode=false')
     for name in ('Organization', 'OrganizationCreate', 'OrganizationUpdate'):
         report.check(schemas[name]['properties']['reportLanguage']['enum'] == LANGUAGES, 'contract',
                      f'{name}.reportLanguage enum')

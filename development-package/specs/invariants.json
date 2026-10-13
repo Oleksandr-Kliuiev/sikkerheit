@@ -355,14 +355,14 @@
     },
     {
       "id": "INV-023",
-      "rule": "installationId отозванного устройства или активного устройства с действующим сертификатом не регистрируется повторно.",
+      "rule": "Порядок проверок enrollAgent: недействительный токен; идемпотентный повтор того же registrationRequestId с тем же телом; отозванное устройство с этим installationId — 409 installation_already_enrolled; несовпадающий признак машины — 409 identity_conflict; pending или active сертификат у устройства при reenrollAllowedUntil, который не задан или истёк, — 409 installation_already_enrolled; иначе новый сертификат тому же deviceId.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
         "section": "Канонический объект и идентичность устройства"
       },
       "phase": "P1",
       "enforcement": "portal_api",
-      "negativeExample": "enrollAgent с installationId отозванного устройства.",
+      "negativeExample": "enrollAgent с installationId активного устройства с active-сертификатом, другим CSR и reenrollAllowedUntil=null.",
       "expectedError": {
         "http": 409,
         "code": "installation_already_enrolled"
@@ -871,7 +871,7 @@
       },
       "phase": "P1",
       "enforcement": "agent",
-      "negativeExample": "Сборщик WIN-006 не отвечает 60 с.",
+      "negativeExample": "Сборщик WIN-005 не отвечает 60 с.",
       "expectedError": {
         "result": "unknown",
         "reasonCode": "collector_timeout"
@@ -895,7 +895,7 @@
     },
     {
       "id": "INV-057",
-      "rule": "WIN-003: ни один одобренный продукт не активен, а у одного одобренного productState=unknown.",
+      "rule": "WIN-003 в режиме assessed: ни один одобренный продукт не активен, а у одного одобренного productState=unknown.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
@@ -911,7 +911,7 @@
     },
     {
       "id": "INV-058",
-      "rule": "WIN-006: неуспешный поиск обновлений даёт unknown.",
+      "rule": "WIN-006 в режиме assessed: неуспешный поиск обновлений даёт unknown.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
@@ -927,7 +927,7 @@
     },
     {
       "id": "INV-059",
-      "rule": "WIN-006: основа свежести поиска старше maxSearchAgeHours даёт unknown.",
+      "rule": "WIN-006 в режиме assessed: основа свежести поиска старше maxSearchAgeHours даёт unknown.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
@@ -943,7 +943,7 @@
     },
     {
       "id": "INV-060",
-      "rule": "WIN-006: configuredSource отличается от expectedSource.",
+      "rule": "WIN-006 в режиме assessed: configuredSource отличается от expectedSource.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
@@ -959,7 +959,7 @@
     },
     {
       "id": "INV-061",
-      "rule": "WIN-006: усечённый список без просрочки среди переданных элементов даёт unknown.",
+      "rule": "WIN-006 в режиме assessed: усечённый список без просрочки среди переданных элементов даёт unknown.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
@@ -975,7 +975,7 @@
     },
     {
       "id": "INV-062",
-      "rule": "WIN-006: просрочка хотя бы одного переданного обновления даёт fail независимо от truncated.",
+      "rule": "WIN-006 в режиме assessed: просрочка хотя бы одного переданного обновления даёт fail независимо от truncated.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
@@ -990,7 +990,7 @@
     },
     {
       "id": "INV-063",
-      "rule": "SYS-002: версии нет в таблице жизненного цикла.",
+      "rule": "SYS-002: версия, редакция или архитектура вне матрицы совместимости даёт fail.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Матрица совместимости и жизненный цикл ОС"
@@ -999,8 +999,7 @@
       "enforcement": "worker",
       "negativeExample": "WIN-011 displayVersion=27H1.",
       "expectedError": {
-        "result": "unknown",
-        "reasonCode": "os_version_unknown"
+        "result": "fail"
       },
       "acceptance": "AT-05"
     },
@@ -1038,7 +1037,7 @@
     },
     {
       "id": "INV-066",
-      "rule": "Редакция из notApplicableEditionIds даёт not_applicable по политике.",
+      "rule": "Редакция из notApplicableEditionIds даёт not_applicable.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Семантика результата"
@@ -1306,7 +1305,7 @@
     },
     {
       "id": "INV-082",
-      "rule": "Сертификат superseded после окончания перекрытия, например в образе старше ротации, не принимается; агент выполняет повторную регистрацию, и при том же installationId и совпадающем признаке машины deviceId и история сохраняются.",
+      "rule": "Зарегистрированный сертификат устройства в состоянии superseded после окончания перекрытия, например в образе старше ротации, получает 401 certificate_expired; в той же транзакции сервер записывает device.reenrollAllowedUntil = now + 7 суток и аудит device.reenroll_allowed. Отозванный сертификат или отозванное устройство это поле не выставляют. Повторная регистрация при reenrollAllowedUntil > now, том же installationId и совпадающем признаке машины выдаёт pending-сертификат тому же deviceId, история сохраняется; прежний active переходит в superseded при первом mTLS-запросе новым; reenrollAllowedUntil обнуляется в транзакции выдачи, previousCertificateValidUntil = null.",
       "sourceDoc": {
         "file": "04-security-and-privacy.md",
         "section": "Профиль и продление сертификата"
@@ -1356,14 +1355,14 @@
     },
     {
       "id": "INV-085",
-      "rule": "WIN-004: signatureLastUpdatedAt в будущем относительно receivedAt даёт unknown; пакет не отклоняется.",
+      "rule": "WIN-004: signatureLastUpdatedAt позже observedAt этого наблюдения даёт unknown/evidence_time_invalid; пакет не отклоняется.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Проверки Windows"
       },
       "phase": "P1",
       "enforcement": "worker",
-      "negativeExample": "signatureLastUpdatedAt через двое суток после receivedAt.",
+      "negativeExample": "signatureLastUpdatedAt на двое суток позже observedAt.",
       "expectedError": {
         "result": "unknown",
         "reasonCode": "evidence_time_invalid"
@@ -1375,7 +1374,7 @@
       "rule": "Пакет с чужим или просроченным scanRequestId принимается как обычный сбор: scanRequestId игнорируется, пишется запись диагностики, новых кодов нет.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
-        "section": "Порядок приёма пакета"
+        "section": "API портала"
       },
       "phase": "P1",
       "enforcement": "agent_api",
@@ -1403,6 +1402,22 @@
           "eventType": "resolved",
           "cause": "device_change"
         }
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-088",
+      "rule": "SYS-002: версия из матрицы совместимости, которой нет в таблице жизненного цикла, даёт unknown.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Матрица совместимости и жизненный цикл ОС"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "WIN-011 displayVersion=26H2, а строки 26H2 в таблице жизненного цикла нет.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "os_version_unknown"
       },
       "acceptance": "AT-05"
     }
