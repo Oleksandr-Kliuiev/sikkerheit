@@ -103,14 +103,15 @@ P1 = [
     ('Истёкший, отозванный или исчерпанный enrollment-токен и токен неактивной организации не регистрируют '
      'устройство; не больше maxUses устройств при конкурентных запросах.', ENROLL, 'portal_api',
      'Одиннадцатая регистрация пакетным токеном с maxUses 10.', http(401, 'enrollment_token_invalid'), 'AT-02'),
-    ('Порядок проверок enrollAgent: недействительный токен; идемпотентный повтор того же registrationRequestId '
-     'с тем же телом; отозванное устройство с этим installationId — 409 installation_already_enrolled; '
-     'несовпадающий признак машины — 409 identity_conflict; pending или active сертификат у устройства при '
-     'reenrollAllowedUntil, который не задан или истёк, — 409 installation_already_enrolled; иначе новый '
-     'сертификат тому же deviceId.',
+    ('Порядок проверок enrollAgent: неизвестный, истёкший или отозванный токен; идемпотентный повтор того же '
+     'registrationRequestId с тем же CSR, в том числе при исчерпанном токене (с другим CSR — 409 '
+     'idempotency_conflict); исчерпанный токен; новый installationId — новое устройство; отозванное устройство — '
+     '409 installation_already_enrolled; несовпадающий признак машины — 409 identity_conflict; действующий '
+     '(validTo > now) pending или active сертификат при reenrollAllowedUntil, который не задан или истёк, — 409 '
+     'installation_already_enrolled; иначе новый сертификат тому же deviceId.',
      IDENTITY, 'portal_api',
-     'enrollAgent с installationId активного устройства с active-сертификатом, другим CSR и '
-     'reenrollAllowedUntil=null.',
+     'enrollAgent с installationId активного устройства с действующим active-сертификатом, новым '
+     'registrationRequestId и reenrollAllowedUntil=null.',
      http(409, 'installation_already_enrolled'), 'AT-02'),
     ('Agent API принимает ровно один X-Forwarded-Client-Cert с зарегистрированным hash и цепочкой '
      'внутреннего CA.', XFCC, 'agent_api', 'Дублированный XFCC или XFCC из соседнего приложения.',
@@ -269,12 +270,14 @@ P1_ADDED = [
      'device.reenrollAllowedUntil = now + 7 суток и аудит device.reenroll_allowed. Отозванный сертификат или '
      'отозванное устройство это поле не выставляют. Повторная регистрация при reenrollAllowedUntil > now, том же '
      'installationId и совпадающем признаке машины выдаёт pending-сертификат тому же deviceId, история '
-     'сохраняется; прежний active переходит в superseded при первом mTLS-запросе новым; reenrollAllowedUntil '
+     'сохраняется; неактивированный pending отзывается, пишутся аудит device.reenroll_over_active и оповещение; '
+     'прежний active переходит в superseded при первом mTLS-запросе новым; reenrollAllowedUntil '
      'обнуляется в транзакции выдачи, previousCertificateValidUntil = null.', CERT, 'agent_api',
      'Восстановленный образ старше ротации отправляет heartbeat старым сертификатом после перекрытия.',
      http(401, 'certificate_expired'), 'AT-17'),
     ('enrollAgent с уже зарегистрированным installationId и несовпадающим признаком машины отклоняется; '
-     'агент переходит в IdentityConflict.', IDENTITY, 'portal_api',
+     'агент переходит в IdentityConflict; identityState существующего устройства не меняется, пишется аудит '
+     'device.enroll_identity_conflict.', IDENTITY, 'portal_api',
      'Повторная регистрация после истечения сертификата с installationId другой машины.',
      http(409, 'identity_conflict'), 'AT-02'),
     ('Проверка, ставшая not_applicable по фактам устройства в пакете без смены policy_revision, закрывает '
@@ -294,7 +297,8 @@ P1_ADDED = [
      'Пакет с действующим scanRequestId и pass WIN-005 после исправления.',
      event('resolved', 'device_change'), 'AT-05'),
     ('SYS-002: версия из матрицы совместимости, которой нет в таблице жизненного цикла, даёт unknown.',
-     OS_MATRIX, 'worker', 'WIN-011 displayVersion=26H2, а строки 26H2 в таблице жизненного цикла нет.',
+     OS_MATRIX, 'worker', 'Тестовая версия данных правила: матрица расширена версией 27H1, строки 27H1 в таблице '
+     'жизненного цикла ещё нет; WIN-011 displayVersion=27H1.',
      result('unknown', 'os_version_unknown'), 'AT-05'),
 ]
 

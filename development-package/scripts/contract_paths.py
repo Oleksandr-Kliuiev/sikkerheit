@@ -28,17 +28,21 @@ SECURITY = {
 }
 
 ENROLL_DESCRIPTION = (
-    'Идемпотентно по registrationRequestId и CSR: повтор возвращает исходный ответ и не увеличивает useCount. '
-    'Порядок проверок: (1) токен недействителен — 401 enrollment_token_invalid; (2) тот же '
-    'registrationRequestId с тем же телом — идемпотентный повтор прежнего ответа; (3) installationId известен '
-    'и устройство отозвано — 409 installation_already_enrolled; (4) machineFingerprint не совпадает — 409 '
-    'identity_conflict; (5) у устройства есть pending или active сертификат и reenrollAllowedUntil не задан '
-    'или истёк — 409 installation_already_enrolled; (6) иначе новый сертификат тому же deviceId. '
-    'reenrollAllowedUntil = now + 7 суток сервер записывает в той же транзакции, в которой отвечает 401 '
-    'certificate_expired на mTLS-запрос зарегистрированным сертификатом устройства в состоянии superseded '
-    'после окончания перекрытия. В случае (6) при reenrollAllowedUntil > now новый сертификат выдаётся как '
-    'pending, прежний active переходит в superseded при первом mTLS-запросе новым, reenrollAllowedUntil '
-    'обнуляется в транзакции выдачи, previousCertificateValidUntil = null.')
+    'Порядок проверок, первая сработавшая определяет ответ: (1) токен неизвестен, истёк или отозван либо '
+    'организация не active — 401 enrollment_token_invalid; (2) тот же registrationRequestId с тем же CSR — '
+    'идемпотентный повтор прежнего ответа, даже при исчерпанном токене, useCount не увеличивается; тот же '
+    'registrationRequestId с другим CSR — 409 idempotency_conflict; (3) токен исчерпан — 401 '
+    'enrollment_token_invalid; (4) новый installationId — новое устройство; (5) устройство с этим installationId '
+    'отозвано — 409 installation_already_enrolled; (6) machineFingerprint не совпадает — 409 identity_conflict, '
+    'identityState существующего устройства не меняется; (7) у устройства есть действующий (validTo > now, не '
+    'отозван) pending или active сертификат и reenrollAllowedUntil не задан или истёк — 409 '
+    'installation_already_enrolled; (8) иначе новый сертификат тому же deviceId. reenrollAllowedUntil = now + 7 '
+    'суток сервер записывает в той же транзакции, в которой отвечает 401 certificate_expired на mTLS-запрос '
+    'зарегистрированным сертификатом устройства в состоянии superseded после окончания перекрытия. В случае (8) '
+    'при reenrollAllowedUntil > now новый сертификат выдаётся как pending, существующий неактивированный pending '
+    'отзывается, прежний active переходит в superseded при первом mTLS-запросе новым, reenrollAllowedUntil '
+    'обнуляется, пишется аудит device.reenroll_over_active и поднимается оповещение. '
+    'previousCertificateValidUntil при enroll = null.')
 ERROR_DESCRIPTION = 'Problem с безопасным кодом из каталога Problem.code (05) и correlationId.'
 AGENT_SETS = {
     'enrollAgent': ['400', '401', '409', '413', '415', '422', '429', '503'],

@@ -54,7 +54,7 @@ AGENT_ACTIONS = {
 AGENT_STATES = ['Unenrolled', 'Active', 'Backoff', 'VersionBlocked', 'Suspended', 'TrustFailed',
                 'ReenrollRequired', 'ReinstallRequired', 'IdentityConflict']
 # Prefixes allowed before conditional action variants in the 05 table.
-ACTION_PREFIXES = ['submitScan:', 'прочие агентские:', 'без Retry-After:']
+ACTION_PREFIXES = ['enrollAgent:', 'submitScan:', 'прочие агентские:', 'без Retry-After:']
 
 _SCAN_OTHER_DROP = 'submitScan: drop_batch; прочие агентские: skip_request'
 _SCAN_OTHER_REFRESH = 'submitScan: drop_batch + refresh_configuration; прочие агентские: skip_request'
@@ -72,7 +72,7 @@ PROBLEM_CODES = [
     ('batch_too_old', 422, 'drop_batch'),
     ('batch_time_inconsistent', 422, 'drop_batch'),
     ('agent_version_unsupported', 422, 'stop_until_upgrade'),
-    ('idempotency_conflict', 409, 'submitScan: drop_batch'),
+    ('idempotency_conflict', 409, 'enrollAgent: reenroll_required; submitScan: drop_batch'),
     ('sequence_conflict', 409, 'resync_sequence'),
     ('identity_conflict', 409, 'identity_stop'),
     ('organization_inactive', 403, 'suspend_until_active'),
