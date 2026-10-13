@@ -1,36 +1,60 @@
 # Первичные источники и технические основания
 
-Дата проверки документации — 12 октября 2026 года. При реализации повторно сверить конкретные endpoints, permissions, лицензии, стабильные версии и доступность услуг в выбранном регионе. Проверенные страницы подтверждают возможности платформ; работу приложения подтверждают эксперименты P0 и испытания P1/P2.
+Дата проверки документации — 12 октября 2026 года, кроме строк с датой 2026-10-13. «Сверено» означает сверку документации, а не поведения: поведение API на Windows подтверждает SP-01. При реализации повторно сверить конкретные endpoints, permissions, лицензии, стабильные версии и доступность услуг в выбранном регионе. Проверенные страницы подтверждают возможности платформ; работу приложения подтверждают эксперименты P0 и испытания P1/P2.
 
-| Источник | Поддерживаемое положение |
-| --- | --- |
-| [Политика поддержки .NET](https://dotnet.microsoft.com/en-us/platform/support/policy) | .NET 10 LTS и срок поддержки |
-| [Npgsql EF Core 10](https://www.npgsql.org/efcore/release-notes/10.0.html) | Доступен совместимый PostgreSQL provider |
-| [Windows Service в .NET](https://learn.microsoft.com/en-us/dotnet/core/extensions/windows-service) | Worker Service и Windows hosting |
-| [BitLocker status](https://learn.microsoft.com/en-us/powershell/module/bitlocker/get-bitlockervolume?view=windowsserver2025-ps) | Состояние шифрования и защиты являются отдельными полями |
-| [Defender status](https://learn.microsoft.com/en-us/powershell/module/defender/get-mpcomputerstatus?view=windowsserver2025-ps) | Получение состояния и сигнатур Defender |
-| [Windows Security Center](https://learn.microsoft.com/en-us/windows/win32/api/iwscapi/) | Интерфейсы статуса зарегистрированных защитных продуктов |
-| [WinGet upgrade](https://learn.microsoft.com/en-us/windows/package-manager/winget/upgrade) | Не для всех приложений определяется текущая версия |
-| [Graph users](https://learn.microsoft.com/en-us/graph/api/user-list?view=graph-rest-1.0) | Application User.Read.All для списка пользователей и select |
-| [Graph userRegistrationDetails](https://learn.microsoft.com/en-us/graph/api/authenticationmethodsroot-list-userregistrationdetails?view=graph-rest-1.0) | AuditLog.Read.All и отсутствие отключённых пользователей в отчёте |
-| [Свойства регистрации](https://learn.microsoft.com/en-us/graph/api/resources/userregistrationdetails?view=graph-rest-1.0) | Registered и capable имеют разные значения |
-| [Authentication Methods Activity](https://learn.microsoft.com/en-us/entra/identity/authentication/howto-authentication-methods-activity) | Entra P1/P2 для отчётности и возможная задержка данных |
-| [Security Defaults API](https://learn.microsoft.com/en-us/graph/api/identitysecuritydefaultsenforcementpolicy-get?view=graph-rest-1.0) | Policy.Read.All и isEnabled |
-| [Conditional Access policies API](https://learn.microsoft.com/en-us/graph/api/conditionalaccessroot-list-policies?view=graph-rest-1.0) | Для инвентаризации требуется Policy.Read.All |
-| [Sign-in API](https://learn.microsoft.com/en-us/graph/api/signin-list?view=graph-rest-1.0) | AuditLog.Read.All, дополнительные права к CA-данным |
-| [Sign-in resource](https://learn.microsoft.com/en-us/graph/api/resources/signin?view=graph-rest-1.0) | Entra P1/P2 для Graph-выгрузки |
-| [Sign-in details](https://learn.microsoft.com/en-us/entra/identity/monitoring-health/concept-sign-in-log-activity-details) | CA не применяется к обычному Windows sign-in; MFA может подтверждаться token claims |
-| [Intune managedDevices](https://learn.microsoft.com/en-us/graph/api/intune-devices-manageddevice-list?view=graph-rest-1.0) | Active Intune license и DeviceManagementManagedDevices.Read.All |
-| [Graph daemon configuration](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-daemon-app-configuration) | App-only токены, конкретный tenant и certificate credentials |
-| [Graph throttling](https://learn.microsoft.com/en-us/graph/throttling) | 429 и Retry-After |
-| [Container Apps mTLS](https://learn.microsoft.com/en-us/azure/container-apps/client-certificate-authorization) | Отдельные режимы ingress и forwarded certificate |
-| [Container Apps secrets](https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets) | Managed Identity и ссылки на Key Vault |
-| [PostgreSQL RLS](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) | Политики строк и обход владельцем/superuser |
-| [PostgreSQL backups](https://learn.microsoft.com/en-us/azure/postgresql/backup-restore/concepts-backup-restore) | Managed backups и PITR с условиями конфигурации |
-| [Authenticode](https://learn.microsoft.com/en-us/windows/win32/seccrypto/time-stamping-authenticode-signatures) | Подпись, timestamp и современные digest algorithms |
-| [Microsoft 365 Lighthouse](https://learn.microsoft.com/en-us/microsoft-365/lighthouse/m365-lighthouse-overview?view=o365-worldwide) | Существующая платформа MSP, которую следует сравнить с собственной услугой |
-| [Secure Score](https://learn.microsoft.com/microsoft-365/security/defender/microsoft-secure-score?view=o365-worldwide) | Показатель внедрения контролей, не вероятность взлома |
-| [GDPR](https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng) | Минимизация, сроки хранения и обязанности обработчика |
+| Источник | Поддерживаемое положение | Сверено |
+| --- | --- | --- |
+| [Политика поддержки .NET](https://dotnet.microsoft.com/en-us/platform/support/policy) | .NET 10 LTS и срок поддержки | 2026-10-12 |
+| [Npgsql EF Core 10](https://www.npgsql.org/efcore/release-notes/10.0.html) | Доступен совместимый PostgreSQL provider | 2026-10-12 |
+| [Windows Service в .NET](https://learn.microsoft.com/en-us/dotnet/core/extensions/windows-service) | Worker Service и Windows hosting | 2026-10-12 |
+| [CNG Key Storage Providers](https://learn.microsoft.com/en-us/windows/win32/seccertenroll/cng-key-storage-providers) | Microsoft Software Key Storage Provider поддерживает ECDSA P-256; Microsoft Platform Crypto Provider хранит ключи в TPM без возможности извлечения | 2026-10-13 |
+| [NCryptCreatePersistedKey](https://learn.microsoft.com/en-us/windows/win32/api/ncrypt/nf-ncrypt-ncryptcreatepersistedkey) | Создание сохраняемого ключа в выбранном KSP, флаг NCRYPT_MACHINE_KEY_FLAG; служба не должна вызывать функцию из обработчика запуска | 2026-10-13 |
+| [BitLocker status](https://learn.microsoft.com/en-us/powershell/module/bitlocker/get-bitlockervolume?view=windowsserver2025-ps) | Семантика полей: состояние шифрования и защиты являются отдельными полями; способ сбора — WMI (Win32_EncryptableVolume), PowerShell не используется | 2026-10-12 |
+| [Win32_EncryptableVolume](https://learn.microsoft.com/en-us/windows/win32/secprov/win32-encryptablevolume) | ConversionStatus, ProtectionStatus и VolumeType — отдельные значения; методы класса требуют прав администратора; пространство имён Root\CIMV2\Security\MicrosoftVolumeEncryption | 2026-10-13 |
+| [Defender status](https://learn.microsoft.com/en-us/powershell/module/defender/get-mpcomputerstatus?view=windowsserver2025-ps) | Семантика полей состояния и сигнатур Defender; способ сбора — WMI (MSFT_MpComputerStatus), PowerShell не используется | 2026-10-12 |
+| [MSFT_MpComputerStatus](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/defender/msft-mpcomputerstatus) | Документация архивная. Поля AntivirusEnabled, RealTimeProtectionEnabled и AntivirusSignatureLastUpdated (локальное время) в пространстве имён Root\Microsoft\Windows\Defender | 2026-10-13 |
+| [Совместимость Defender](https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-antivirus-compatibility) | На Windows 10 и 11 без Defender for Endpoint при стороннем антивирусе Defender автоматически переходит в disabled; passive mode возможен при подключении к Defender for Endpoint или при включённом Smart App Control; режим показывает AMRunningMode | 2026-10-13 |
+| [Windows Security Center](https://learn.microsoft.com/en-us/windows/win32/api/iwscapi/) | Интерфейсы статуса зарегистрированных защитных продуктов | 2026-10-13 |
+| [WSC_SECURITY_PRODUCT_STATE](https://learn.microsoft.com/en-us/windows/win32/api/iwscapi/ne-iwscapi-wsc_security_product_state) | Состояния продукта ON, OFF, SNOOZED и EXPIRED; минимальный клиент — Windows 8, серверные ОС не поддерживаются | 2026-10-13 |
+| [IWSCProductList](https://learn.microsoft.com/en-us/windows/win32/api/iwscapi/nn-iwscapi-iwscproductlist) | Перечень зарегистрированных в Windows Security Center продуктов выбранного типа; серверные ОС не поддерживаются | 2026-10-13 |
+| [IUpdate](https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iupdate) | Свойства обновления: MsrcSeverity, Categories, KBArticleIDs, IsInstalled, Deadline и LastDeploymentChangeTime (дата публикации на сервере, UTC) | 2026-10-13 |
+| [IUpdateSearcher](https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iupdatesearcher) | Синхронный и асинхронный поиск обновлений; свойство Online определяет, обращается ли поиск к серверу | 2026-10-13 |
+| [IAutomaticUpdatesResults](https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nn-wuapi-iautomaticupdatesresults) | LastSearchSuccessDate и LastInstallationSuccessDate — время последнего успешного поиска и установки в UTC | 2026-10-13 |
+| [ISystemInformation.RebootRequired](https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-isysteminformation-get_rebootrequired) | Только логический признак: для завершения установки или удаления обновлений нужна перезагрузка; времени возникновения требования свойство не сообщает | 2026-10-13 |
+| [Win32_OperatingSystem](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-operatingsystem) | Caption, Version, BuildNumber, OperatingSystemSKU, ProductType, OSArchitecture и LastBootUpTime | 2026-10-13 |
+| [Жизненный цикл Windows 11 Home и Pro](https://learn.microsoft.com/en-us/lifecycle/products/windows-11-home-and-pro) | Modern Lifecycle Policy и даты окончания обслуживания каждой версии; данные правила SYS-002 | 2026-10-13 |
+| [Жизненный цикл Windows 11 Enterprise и Education](https://learn.microsoft.com/en-us/lifecycle/products/windows-11-enterprise-and-education) | Modern Lifecycle Policy и более длительное обслуживание тех же версий; данные правила SYS-002 | 2026-10-13 |
+| [NetGetAadJoinInformation](https://learn.microsoft.com/en-us/windows/win32/api/lmjoin/nf-lmjoin-netgetaadjoininformation) | Сведения о присоединении устройства к Entra ID и о рабочих учётных записях, добавленных текущим пользователем: результат зависит от контекста вызова | 2026-10-13 |
+| [Confirm-SecureBootUEFI](https://learn.microsoft.com/en-us/powershell/module/secureboot/confirm-securebootuefi) | Проверка Secure Boot требует прав администратора; это источник сведений о правах, а не способ сбора | 2026-10-13 |
+| [WinGet upgrade](https://learn.microsoft.com/en-us/windows/package-manager/winget/upgrade) | Не для всех приложений определяется текущая версия | 2026-10-12 |
+| [Graph users](https://learn.microsoft.com/en-us/graph/api/user-list?view=graph-rest-1.0) | Application User.Read.All для списка пользователей и select | 2026-10-12 |
+| [Graph userRegistrationDetails](https://learn.microsoft.com/en-us/graph/api/authenticationmethodsroot-list-userregistrationdetails?view=graph-rest-1.0) | AuditLog.Read.All и отсутствие отключённых пользователей в отчёте | 2026-10-12 |
+| [Свойства регистрации](https://learn.microsoft.com/en-us/graph/api/resources/userregistrationdetails?view=graph-rest-1.0) | Registered и capable имеют разные значения | 2026-10-12 |
+| [Authentication Methods Activity](https://learn.microsoft.com/en-us/entra/identity/authentication/howto-authentication-methods-activity) | Entra P1/P2 для отчётности и возможная задержка данных | 2026-10-12 |
+| [Security Defaults API](https://learn.microsoft.com/en-us/graph/api/identitysecuritydefaultsenforcementpolicy-get?view=graph-rest-1.0) | Policy.Read.All и isEnabled | 2026-10-13 |
+| [Conditional Access policies API](https://learn.microsoft.com/en-us/graph/api/conditionalaccessroot-list-policies?view=graph-rest-1.0) | Наименьшее application-право — Policy.Read.All, более широкого нет | 2026-10-13 |
+| [Sign-in API](https://learn.microsoft.com/en-us/graph/api/signin-list?view=graph-rest-1.0) | AuditLog.Read.All; appliedConditionalAccessPolicies возвращается только при одном из прав Policy.Read.All, Policy.Read.ConditionalAccess или Policy.ReadWrite.ConditionalAccess, без права свойство опускается | 2026-10-13 |
+| [Sign-in resource](https://learn.microsoft.com/en-us/graph/api/resources/signin?view=graph-rest-1.0) | Entra P1/P2 для Graph-выгрузки | 2026-10-12 |
+| [Sign-in details](https://learn.microsoft.com/en-us/entra/identity/monitoring-health/concept-sign-in-log-activity-details) | CA не применяется к обычному Windows sign-in; MFA может подтверждаться token claims | 2026-10-12 |
+| [Intune managedDevices](https://learn.microsoft.com/en-us/graph/api/intune-devices-manageddevice-list?view=graph-rest-1.0) | Active Intune license и DeviceManagementManagedDevices.Read.All | 2026-10-12 |
+| [Graph daemon configuration](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-daemon-app-configuration) | App-only токены, конкретный tenant и certificate credentials | 2026-10-12 |
+| [Graph throttling](https://learn.microsoft.com/en-us/graph/throttling) | 429 и Retry-After | 2026-10-12 |
+| [Container Apps mTLS](https://learn.microsoft.com/en-us/azure/container-apps/client-certificate-authorization) | Режимы clientCertificateMode require, accept и ignore; сертификат клиента передаётся приложению в X-Forwarded-Client-Cert | 2026-10-13 |
+| [Ingress в Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview) | Ingress перезаписывает X-Forwarded-Client-Cert, присланный клиентом; приложения одного environment достижимы друг для друга, поэтому полная изоляция — отдельный environment; внешний TCP ingress только в environment с VNet | 2026-10-13 |
+| [Container Apps secrets](https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets) | Managed Identity и ссылки на Key Vault | 2026-10-12 |
+| [Ключи Key Vault](https://learn.microsoft.com/en-us/azure/key-vault/keys/about-keys) | EC-ключи P-256 в vault: программные и HSM-защищённые (Premium) | 2026-10-13 |
+| [Key Vault RBAC](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide) | Встроенная роль Key Vault Crypto User для криптографических операций; назначение на уровне отдельного vault; рекомендован отдельный vault на приложение и окружение | 2026-10-13 |
+| [Immutable storage](https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview) | WORM: time-based retention и legal hold; заблокированную политику нельзя удалить или сократить; функция несовместима с point-in-time restore | 2026-10-13 |
+| [PostgreSQL RLS](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) | Политики строк и обход владельцем/superuser | 2026-10-12 |
+| [PostgreSQL SET](https://www.postgresql.org/docs/current/sql-set.html) | SET LOCAL действует только до конца текущей транзакции | 2026-10-13 |
+| [PostgreSQL backups](https://learn.microsoft.com/en-us/azure/postgresql/backup-restore/concepts-backup-restore) | Managed backups и PITR с условиями конфигурации | 2026-10-12 |
+| [CSP sandbox](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/sandbox) | Директива sandbox без ключевых слов запрещает скрипты, отправку форм и всплывающие окна и назначает документу непрозрачный origin | 2026-10-13 |
+| [Authenticode](https://learn.microsoft.com/en-us/windows/win32/seccrypto/time-stamping-authenticode-signatures) | Подпись, timestamp и современные digest algorithms | 2026-10-12 |
+| [Artifact Signing quickstart](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart) | Public Trust доступен организациям из ЕС, Великобритании, Норвегии и ряда других стран; проверка личности организации занимает от 1 до 20 рабочих дней | 2026-10-13 |
+| [Artifact Signing FAQ](https://learn.microsoft.com/en-us/azure/artifact-signing/faq) | EKU подписанта с префиксом 1.3.6.1.4.1.311.97.*; сертификаты хранятся в сервисе и не выдаются клиенту; EV-сертификаты не выпускаются | 2026-10-13 |
+| [Microsoft 365 Lighthouse](https://learn.microsoft.com/en-us/microsoft-365/lighthouse/m365-lighthouse-overview?view=o365-worldwide) | Существующая платформа MSP, которую следует сравнить с собственной услугой | 2026-10-12 |
+| [Secure Score](https://learn.microsoft.com/microsoft-365/security/defender/microsoft-secure-score?view=o365-worldwide) | Показатель внедрения контролей, не вероятность взлома | 2026-10-12 |
+| [GDPR](https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng) | Минимизация, сроки хранения и обязанности обработчика | 2026-10-12 |
 
 ## Источник продуктовой идеи
 
