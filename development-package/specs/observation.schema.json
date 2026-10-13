@@ -760,7 +760,8 @@
                   "windows_update",
                   "wsus",
                   "other_approved"
-                ]
+                ],
+                "description": "Источник, к которому относится наблюдение. Сервер хранит историю ожидания по (deviceId, configuredSource, updateId): наблюдение источника обновляет и закрывает эпизоды только этого источника и задаёт previousCompleteAt только для него (03, «Правило WIN-006»)."
               },
               "auLastSearchSuccessAt": {
                 "type": [
@@ -917,7 +918,7 @@
                       "maxLength": 40,
                       "format": "date-time",
                       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
-                      "description": "observedAt первого сбора, в котором агент нашёл обновление; не позже observedAt наблюдения."
+                      "description": "observedAt первого сбора, в котором агент нашёл обновление у этого configuredSource; не позже observedAt наблюдения. Агент хранит значение по (configuredSource, updateId) и удаляет его только после поиска с resultCode=succeeded того же configuredSource без этого updateId."
                     }
                   },
                   "required": [

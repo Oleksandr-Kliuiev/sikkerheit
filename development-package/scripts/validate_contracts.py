@@ -216,6 +216,29 @@ def _negatives(good, ctx):
     ]
 
 
+def _defaults(schema):
+    """Object assembled from the default values of a closed PolicyConfiguration tree."""
+    if 'default' in schema:
+        return copy.deepcopy(schema['default'])
+    return {name: _defaults(schema['properties'][name]) for name in schema.get('required', [])}
+
+
+def _policy_negatives(ctx):
+    """createPolicyRevision bodies that must give 422 schema_violation; the default body must pass."""
+    body_schema = {'$ref': '#/components/schemas/PolicyRevisionCreate'}
+    api_file = ctx['root'] / 'specs' / 'openapi.json'
+    good = {'configuration': _defaults(ctx['schemas']['PolicyConfiguration'])}
+
+    def search_age(hours):
+        bad = copy.deepcopy(good)
+        bad['configuration']['checks']['WIN-006']['parameters']['maxSearchAgeHours'] = hours
+        return bad
+
+    def ok(body):
+        return is_valid(body, body_schema, api_file, ctx['root'])
+    return ok(good), [ok(body) for body in (search_age(169), search_age(0))]
+
+
 def check_negatives(report, ctx):
     good = ctx['examples'].get('scan-batch.json')
     if not good:
@@ -224,6 +247,10 @@ def check_negatives(report, ctx):
     negatives = _negatives(good, ctx)
     for index, bad in enumerate(negatives, 1):
         report.check(not accepted(bad, ctx), 'contract', f'Negative variant {index} accepted')
+    default_ok, policy_results = _policy_negatives(ctx)
+    report.check(default_ok, 'contract', 'createPolicyRevision with the default configuration rejected')
+    for index, result in enumerate(policy_results, len(negatives) + 1):
+        report.check(not result, 'contract', f'Negative variant {index} (createPolicyRevision) accepted')
     positive = copy.deepcopy(good)
     next(o for o in positive['observations'] if o['checkId'] == 'WIN-003')['evidence']['products'][0][
         'provider'] = SAFE_TEXT_SAMPLE
@@ -238,7 +265,7 @@ def check_negatives(report, ctx):
     next(o for o in not_started['observations'] if o['checkId'] == 'WIN-006')['evidence']['agentSearch'].update(
         resultCode='not_started', completedAt=None)
     report.check(accepted(not_started, ctx), 'contract', 'Positive WIN-006 search without completedAt rejected')
-    report.summary.update(negativeVariants=len(negatives), positiveVariants=3)
+    report.summary.update(negativeVariants=len(negatives) + len(policy_results), positiveVariants=3)
 
 
 def check_openapi(report, ctx):
