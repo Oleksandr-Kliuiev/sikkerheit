@@ -35,6 +35,7 @@ RESTORE = ('06', 'Журнал жизненного цикла и restore в к�
 M365 = ('03', 'Проверки Microsoft 365')
 CAPABILITY = ('03', 'Возможности интеграции')
 GRAPH = ('04', 'Разрешения интеграций')
+AGENT_API = ('05', 'API агента')
 
 
 def http(status, code):
@@ -106,10 +107,11 @@ P1 = [
     ('Порядок проверок enrollAgent: неизвестный, истёкший или отозванный токен; идемпотентный повтор того же '
      'registrationRequestId с тем же CSR, в том числе при исчерпанном токене (с другим CSR — 409 '
      'idempotency_conflict); исчерпанный токен; новый installationId — новое устройство; отозванное устройство — '
-     '409 installation_already_enrolled; несовпадающий признак машины — 409 identity_conflict; действующий '
-     '(validTo > now) pending или active сертификат при reenrollAllowedUntil, который не задан или истёк, — 409 '
-     'installation_already_enrolled; иначе новый сертификат тому же deviceId.',
-     IDENTITY, 'portal_api',
+     '409 installation_already_enrolled; несовпадающий признак машины — 409 identity_conflict; active '
+     'сертификат с validTo > now при reenrollAllowedUntil, который не задан или истёк, — 409 '
+     'installation_already_enrolled (неактивированный pending не учитывается); иначе новый сертификат тому же '
+     'deviceId, useCount увеличивается, создаётся запись enrollment, неактивированный pending отзывается.',
+     AGENT_API, 'portal_api',
      'enrollAgent с installationId активного устройства с действующим active-сертификатом, новым '
      'registrationRequestId и reenrollAllowedUntil=null.',
      http(409, 'installation_already_enrolled'), 'AT-02'),
@@ -267,11 +269,13 @@ P2 = [
 P1_ADDED = [
     ('Зарегистрированный сертификат устройства в состоянии superseded после окончания перекрытия, например в '
      'образе старше ротации, получает 401 certificate_expired; в той же транзакции сервер записывает '
-     'device.reenrollAllowedUntil = now + 7 суток и аудит device.reenroll_allowed. Отозванный сертификат или '
+     'device.reenrollAllowedUntil = now + 7 суток и аудит device.reenroll_allowed, независимо от validTo, если '
+     'запрос дошёл до приложения. Отозванный сертификат или '
      'отозванное устройство это поле не выставляют. Повторная регистрация при reenrollAllowedUntil > now, том же '
      'installationId и совпадающем признаке машины выдаёт pending-сертификат тому же deviceId, история '
-     'сохраняется; неактивированный pending отзывается, пишутся аудит device.reenroll_over_active и оповещение; '
-     'прежний active переходит в superseded при первом mTLS-запросе новым; reenrollAllowedUntil '
+     'сохраняется; неактивированный pending отзывается (аудит device.pending_revoked), useCount увеличивается, '
+     'создаётся запись enrollment, перекрытие прежних superseded заканчивается в момент выдачи, пишутся аудит '
+     'device.reenroll_over_active и оповещение; прежний active переходит в superseded при первом mTLS-запросе новым; reenrollAllowedUntil '
      'обнуляется в транзакции выдачи, previousCertificateValidUntil = null.', CERT, 'agent_api',
      'Восстановленный образ старше ротации отправляет heartbeat старым сертификатом после перекрытия.',
      http(401, 'certificate_expired'), 'AT-17'),

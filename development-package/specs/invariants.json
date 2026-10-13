@@ -355,10 +355,10 @@
     },
     {
       "id": "INV-023",
-      "rule": "Порядок проверок enrollAgent: неизвестный, истёкший или отозванный токен; идемпотентный повтор того же registrationRequestId с тем же CSR, в том числе при исчерпанном токене (с другим CSR — 409 idempotency_conflict); исчерпанный токен; новый installationId — новое устройство; отозванное устройство — 409 installation_already_enrolled; несовпадающий признак машины — 409 identity_conflict; действующий (validTo > now) pending или active сертификат при reenrollAllowedUntil, который не задан или истёк, — 409 installation_already_enrolled; иначе новый сертификат тому же deviceId.",
+      "rule": "Порядок проверок enrollAgent: неизвестный, истёкший или отозванный токен; идемпотентный повтор того же registrationRequestId с тем же CSR, в том числе при исчерпанном токене (с другим CSR — 409 idempotency_conflict); исчерпанный токен; новый installationId — новое устройство; отозванное устройство — 409 installation_already_enrolled; несовпадающий признак машины — 409 identity_conflict; active сертификат с validTo > now при reenrollAllowedUntil, который не задан или истёк, — 409 installation_already_enrolled (неактивированный pending не учитывается); иначе новый сертификат тому же deviceId, useCount увеличивается, создаётся запись enrollment, неактивированный pending отзывается.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
-        "section": "Канонический объект и идентичность устройства"
+        "section": "API агента"
       },
       "phase": "P1",
       "enforcement": "portal_api",
@@ -1305,7 +1305,7 @@
     },
     {
       "id": "INV-082",
-      "rule": "Зарегистрированный сертификат устройства в состоянии superseded после окончания перекрытия, например в образе старше ротации, получает 401 certificate_expired; в той же транзакции сервер записывает device.reenrollAllowedUntil = now + 7 суток и аудит device.reenroll_allowed. Отозванный сертификат или отозванное устройство это поле не выставляют. Повторная регистрация при reenrollAllowedUntil > now, том же installationId и совпадающем признаке машины выдаёт pending-сертификат тому же deviceId, история сохраняется; неактивированный pending отзывается, пишутся аудит device.reenroll_over_active и оповещение; прежний active переходит в superseded при первом mTLS-запросе новым; reenrollAllowedUntil обнуляется в транзакции выдачи, previousCertificateValidUntil = null.",
+      "rule": "Зарегистрированный сертификат устройства в состоянии superseded после окончания перекрытия, например в образе старше ротации, получает 401 certificate_expired; в той же транзакции сервер записывает device.reenrollAllowedUntil = now + 7 суток и аудит device.reenroll_allowed, независимо от validTo, если запрос дошёл до приложения. Отозванный сертификат или отозванное устройство это поле не выставляют. Повторная регистрация при reenrollAllowedUntil > now, том же installationId и совпадающем признаке машины выдаёт pending-сертификат тому же deviceId, история сохраняется; неактивированный pending отзывается (аудит device.pending_revoked), useCount увеличивается, создаётся запись enrollment, перекрытие прежних superseded заканчивается в момент выдачи, пишутся аудит device.reenroll_over_active и оповещение; прежний active переходит в superseded при первом mTLS-запросе новым; reenrollAllowedUntil обнуляется в транзакции выдачи, previousCertificateValidUntil = null.",
       "sourceDoc": {
         "file": "04-security-and-privacy.md",
         "section": "Профиль и продление сертификата"
