@@ -89,7 +89,8 @@ Graph-сертификаты хранятся в отдельном Key Vault Gr
 | `scan_request` | 90 суток от `createdAt` |
 | Отчёты (файл и метаданные), `audit_event`, `platform_audit_event` | 12 месяцев |
 | `policy_revision` | Не меньше 12 месяцев; не удаляется, пока на неё ссылаются сохраняемые записи |
-| Записи `enrollment_token`, `device_certificate`, `enrollment` | 12 месяцев после истечения или отзыва; удаляются раньше `device`, на который ссылаются |
+| Записи `enrollment_token`, `device_certificate` | 12 месяцев после истечения или отзыва; удаляются раньше `device`, на который ссылаются |
+| `enrollment` | 12 месяцев от `createdAt`; удаляется раньше `enrollment_token` и `device`, на которые ссылается |
 | Hash и `revokedAt` сертификатов удалённой организации | До `validTo` сертификата |
 | `job` | Завершённые 30 дней, failed 90 дней; копий payload нет |
 | Файлы экспорта | 7 дней |
