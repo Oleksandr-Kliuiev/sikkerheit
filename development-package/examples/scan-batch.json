@@ -4,6 +4,7 @@
   "sequence": 1,
   "agentVersion": "0.1.0",
   "policyVersion": 1,
+  "machineFingerprint": "9f2c4e6a8b0d1f3e5a7c9b1d3f5e7a9c0b2d4f6e8a1c3e5b7d9f0a2c4e6b8d0f",
   "startedAt": "2026-10-12T10:00:00Z",
   "completedAt": "2026-10-12T10:01:30Z",
   "observations": [
@@ -12,7 +13,9 @@
       "collectorVersion": "0.1.0",
       "subject": {
         "type": "volume",
-        "reference": "C:"
+        "volumeId": "\\\\?\\Volume{5f1c2c1e-8a8f-4b3e-9a51-3c1d2e4f6a7b}\\",
+        "mountPoint": "C:",
+        "role": "os"
       },
       "observedAt": "2026-10-12T10:01:00Z",
       "collectionStatus": "collected",
@@ -26,7 +29,9 @@
       "collectorVersion": "0.1.0",
       "subject": {
         "type": "volume",
-        "reference": "C:"
+        "volumeId": "\\\\?\\Volume{5f1c2c1e-8a8f-4b3e-9a51-3c1d2e4f6a7b}\\",
+        "mountPoint": "C:",
+        "role": "os"
       },
       "observedAt": "2026-10-12T10:01:00Z",
       "collectionStatus": "collected",
@@ -40,23 +45,30 @@
       "checkId": "WIN-003",
       "collectorVersion": "0.1.0",
       "subject": {
-        "type": "device",
-        "reference": "self"
+        "type": "device"
       },
       "observedAt": "2026-10-12T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
-        "provider": "Microsoft Defender",
-        "productState": "on",
-        "statusSource": "defender"
+        "products": [
+          {
+            "provider": "Microsoft Defender Antivirus",
+            "productState": "on",
+            "statusSource": "defender",
+            "rawState": null
+          }
+        ],
+        "defender": {
+          "amRunningMode": "normal",
+          "realTimeProtectionEnabled": true
+        }
       }
     },
     {
       "checkId": "WIN-004",
       "collectorVersion": "0.1.0",
       "subject": {
-        "type": "device",
-        "reference": "self"
+        "type": "device"
       },
       "observedAt": "2026-10-12T10:01:00Z",
       "collectionStatus": "collected",
@@ -68,8 +80,7 @@
       "checkId": "WIN-005",
       "collectorVersion": "0.1.0",
       "subject": {
-        "type": "device",
-        "reference": "self"
+        "type": "device"
       },
       "observedAt": "2026-10-12T10:01:00Z",
       "collectionStatus": "collected",
@@ -83,28 +94,49 @@
       "checkId": "WIN-006",
       "collectorVersion": "0.1.0",
       "subject": {
-        "type": "device",
-        "reference": "self"
+        "type": "device"
       },
       "observedAt": "2026-10-12T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
-        "securityUpdatesPending": 0,
-        "lastSuccessfulSearchAt": "2026-10-12T09:59:00Z",
-        "configuredSource": "windows_update"
+        "configuredSource": "windows_update",
+        "auLastSearchSuccessAt": "2026-10-12T06:15:00Z",
+        "agentSearch": {
+          "mode": "offline_cache",
+          "completedAt": "2026-10-12T10:00:40Z",
+          "resultCode": "succeeded"
+        },
+        "pendingSecurityUpdates": [
+          {
+            "updateId": "6b8e2f4a-1c3d-4e5f-8a9b-0c1d2e3f4a5b",
+            "revisionNumber": 200,
+            "kbArticleIds": [
+              "5066835"
+            ],
+            "categoryIds": [
+              "0FA1201D-4330-4FA8-8AE9-B877473B6441"
+            ],
+            "msrcSeverity": "Important",
+            "lastDeploymentChangeAt": "2026-10-08T17:00:00Z",
+            "deadlineAt": null,
+            "firstSeenPendingAt": "2026-10-09T10:01:00Z"
+          }
+        ],
+        "pendingSecurityUpdatesTotal": 1,
+        "truncated": false
       }
     },
     {
       "checkId": "WIN-007",
       "collectorVersion": "0.1.0",
       "subject": {
-        "type": "device",
-        "reference": "self"
+        "type": "device"
       },
       "observedAt": "2026-10-12T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
         "rebootRequired": false,
+        "lastBootAt": "2026-10-11T07:30:00Z",
         "statusSource": "windows_update_api"
       }
     },
@@ -112,8 +144,7 @@
       "checkId": "WIN-008",
       "collectorVersion": "0.1.0",
       "subject": {
-        "type": "device",
-        "reference": "self"
+        "type": "device"
       },
       "observedAt": "2026-10-12T10:01:00Z",
       "collectionStatus": "collected",
@@ -128,8 +159,7 @@
       "checkId": "WIN-009",
       "collectorVersion": "0.1.0",
       "subject": {
-        "type": "device",
-        "reference": "self"
+        "type": "device"
       },
       "observedAt": "2026-10-12T10:01:00Z",
       "collectionStatus": "collected",
@@ -142,8 +172,7 @@
       "checkId": "WIN-010",
       "collectorVersion": "0.1.0",
       "subject": {
-        "type": "device",
-        "reference": "self"
+        "type": "device"
       },
       "observedAt": "2026-10-12T10:01:00Z",
       "collectionStatus": "collected",
@@ -151,6 +180,22 @@
         "joinType": "entra_joined",
         "tenantId": "22222222-2222-4222-8222-222222222222",
         "entraDeviceId": "33333333-3333-4333-8333-333333333333"
+      }
+    },
+    {
+      "checkId": "WIN-011",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "device"
+      },
+      "observedAt": "2026-10-12T10:01:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "editionId": "Professional",
+        "displayVersion": "25H2",
+        "build": 26200,
+        "ubr": 6899,
+        "architecture": "x64"
       }
     }
   ]
