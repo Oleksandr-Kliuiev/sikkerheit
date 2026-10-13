@@ -28,7 +28,7 @@
 | FR-03 | Сбор фактов о Windows без автоматического изменения системы | P1, вариант A | AT-03 | getAgentConfiguration, submitScan |
 | FR-04 | Очередь при отсутствии сети и повторная отправка без дубликатов | P1, вариант A | AT-04 | submitScan, submitHeartbeat |
 | FR-05 | Четыре результата оценки, отдельный признак свежести и явный информационный режим | P1 | AT-05 | listDeviceAssessments, listFindings, listDevices |
-| FR-06 | Стабильная история появления, изменения, повторного открытия и исправления проблем | P1 | AT-06 | getFinding, listFindingEvents, requestDeviceScan |
+| FR-06 | Стабильная история появления, изменения, повторного открытия и исправления проблем | P1 | AT-05, AT-06 | getFinding, listFindingEvents, requestDeviceScan |
 | FR-07 | Отчёт за период в HTML на языке организации, с покрытием проверок и временем наблюдения | P1 | AT-07 | createReport, listReports, downloadReport |
 | FR-08 | Ответственный, срок и принятие риска без подмены технического результата | P1 | AT-08 | patchFinding, decideFindingRisk |
 | FR-09 | Безопасное подключение M365 и отзыв доступа | P2 | AT-09 | — |
