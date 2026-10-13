@@ -35,8 +35,8 @@
     },
     {
       "path": "07-delivery-plan-and-acceptance.md",
-      "bytes": 61722,
-      "sha256": "8e33ea84095c1be1b71ffe5318e40012a101abddf997aa19f8e074ac29a027bf"
+      "bytes": 61719,
+      "sha256": "ecf9c9fe76eaf078d9bca0e3eae60bde4daf4c84a23debd75d66b69bdd5d4f60"
     },
     {
       "path": "08-risks-and-decisions.md",
@@ -45,8 +45,8 @@
     },
     {
       "path": "09-independent-review-prompt.md",
-      "bytes": 8116,
-      "sha256": "fc49e031602ec7d490998a0ca69505dfbebb43115873e361625b2515a922c07a"
+      "bytes": 8011,
+      "sha256": "1902b07cdd8039fe237aacbd0c02864dceafcf1f479eb0058370efc696755f41"
     },
     {
       "path": "10-sources.md",
@@ -55,13 +55,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 11330,
-      "sha256": "d199ca9949cd2a60ad7f4f7ab7031d6ac2d348172a1ba9bd9dbe768e0a2ba66e"
+      "bytes": 11353,
+      "sha256": "e7d19864f8f8a82d711d11efd61666b5778b1e9958ac82f0cbb9479915ba964a"
     },
     {
       "path": "REVIEW-BUNDLE.md",
-      "bytes": 828413,
-      "sha256": "2d239e2b0f187394c5b789a945a8d02a955b99f3dfdd4c059dfdbc6168256a17"
+      "bytes": 828328,
+      "sha256": "10cd577d3ba57084f8fabc40fed66651fc526675815a99c47862cdfc09eb0d15"
     },
     {
       "path": "VALIDATION.md",
