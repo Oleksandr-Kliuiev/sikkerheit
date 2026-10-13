@@ -1,0 +1,1308 @@
+{
+  "version": "0.2.0",
+  "invariants": [
+    {
+      "id": "INV-001",
+      "rule": "Тело submitScan с Content-Encoding или Content-Type не application/json отклоняется до разбора JSON.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Пакет с Content-Encoding: gzip.",
+      "expectedError": {
+        "http": 415,
+        "code": "unsupported_media_type"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-002",
+      "rule": "Тело submitScan больше maxBatchBytes отклоняется до разбора.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Пакет размером maxBatchBytes + 1 байт.",
+      "expectedError": {
+        "http": 413,
+        "code": "payload_too_large"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-003",
+      "rule": "Тело, которое не разбирается как JSON, отклоняется; агент удаляет пакет.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Обрезанный JSON в submitScan.",
+      "expectedError": {
+        "http": 400,
+        "code": "invalid_json"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-004",
+      "rule": "Повтор с тем же Idempotency-Key и теми же байтами возвращает исходный receipt без повторной оценки независимо от возраста пакета.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Потеря ответа и повтор после границы maxBatchAgeDays.",
+      "expectedError": {
+        "replay": {
+          "http": 202,
+          "duplicate": true
+        }
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-005",
+      "rule": "Тот же Idempotency-Key с другими байтами отклоняется.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Повтор scanId с изменённым observedAt.",
+      "expectedError": {
+        "http": 409,
+        "code": "idempotency_conflict"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-006",
+      "rule": "scanId в теле равен заголовку Idempotency-Key.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Idempotency-Key отличается от scanId.",
+      "expectedError": {
+        "http": 422,
+        "code": "schema_violation"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-007",
+      "rule": "agentVersion ниже minimumAgentVersion отклоняется, Problem содержит minimumAgentVersion.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "agentVersion 0.0.9 при minimumAgentVersion 0.1.0.",
+      "expectedError": {
+        "http": 422,
+        "code": "agent_version_unsupported"
+      },
+      "acceptance": "AT-13"
+    },
+    {
+      "id": "INV-008",
+      "rule": "Неподдерживаемый schemaVersion отклоняется.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "schemaVersion 2.0.",
+      "expectedError": {
+        "http": 422,
+        "code": "unsupported_schema_version"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-009",
+      "rule": "machineFingerprint пакета совпадает с зафиксированным при регистрации.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Канонический объект и идентичность устройства"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Клон VM отправляет пакет с другим признаком машины.",
+      "expectedError": {
+        "http": 409,
+        "code": "identity_conflict"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-010",
+      "rule": "Пакет старше maxBatchAgeDays по completedAt относительно receivedAt отклоняется.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Пакет возрастом maxBufferDays + 3 суток.",
+      "expectedError": {
+        "http": 422,
+        "code": "batch_too_old"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-011",
+      "rule": "completedAt не раньше startedAt, observedAt не позже completedAt, время не позже receivedAt + 5 мин.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Время и часы устройства"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "completedAt на 10 мин позже receivedAt.",
+      "expectedError": {
+        "http": 422,
+        "code": "batch_time_inconsistent"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-012",
+      "rule": "policyVersion пакета известна серверу и не из будущего.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "policyVersion больше текущей версии политики.",
+      "expectedError": {
+        "http": 422,
+        "code": "unknown_policy_version"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-013",
+      "rule": "Тот же sequence с другим scanId вызывает ресинхронизацию, не чаще раза в 24 ч.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Канонический объект и идентичность устройства"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Восстановление VM из checkpoint повторяет sequence.",
+      "expectedError": {
+        "http": 409,
+        "code": "sequence_conflict"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-014",
+      "rule": "Ресинхронизация sequence пишется в аудит устройства.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Канонический объект и идентичность устройства"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Принятая ресинхронизация после sequence_conflict.",
+      "expectedError": {
+        "audit": "device.sequence_rollback"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-015",
+      "rule": "checkId из каталога вне activeCheckIds версии политики пакета отклоняется.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Уникальность и ожидаемые объекты"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Наблюдение WIN-008 при activeCheckIds без WIN-008.",
+      "expectedError": {
+        "http": 422,
+        "code": "unknown_check_id"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-016",
+      "rule": "Ключ (checkId, subject.type, localKey) уникален внутри пакета.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Уникальность и ожидаемые объекты"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Два наблюдения WIN-005 с subject.type=device.",
+      "expectedError": {
+        "http": 422,
+        "code": "duplicate_observation"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-017",
+      "rule": "Для WIN-001 и WIN-002 ожидается ровно один volume с role=os; лишний объект отклоняется.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Уникальность и ожидаемые объекты"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Два тома с role=os для WIN-001.",
+      "expectedError": {
+        "http": 422,
+        "code": "unexpected_subject"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-018",
+      "rule": "freeBytes не больше totalBytes (межполевой инвариант тела).",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Инварианты вне JSON Schema"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "WIN-001 с freeBytes больше totalBytes.",
+      "expectedError": {
+        "http": 422,
+        "code": "schema_violation"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-019",
+      "rule": "Отсутствующая ожидаемая пара даёт unknown без отклонения пакета.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Уникальность и ожидаемые объекты"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Пакет без наблюдения WIN-005 при активной WIN-005.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "missing_observation"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-020",
+      "rule": "Пакет с признаком часов сохраняется в истории; его оценки unknown и не меняют текущую проекцию.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Время и часы устройства"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "completedAt раньше maxAcceptedSourceTime при большем sequence.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "clock_inconsistent"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-021",
+      "rule": "Рост droppedBatchCount в heartbeat пишется в аудит устройства.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "droppedBatchCount вырос с 0 до 2.",
+      "expectedError": {
+        "audit": "device.data_loss"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-022",
+      "rule": "Истёкший, отозванный или исчерпанный enrollment-токен и токен неактивной организации не регистрируют устройство; не больше maxUses устройств при конкурентных запросах.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Enrollment-токены"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Одиннадцатая регистрация пакетным токеном с maxUses 10.",
+      "expectedError": {
+        "http": 401,
+        "code": "enrollment_token_invalid"
+      },
+      "acceptance": "AT-02"
+    },
+    {
+      "id": "INV-023",
+      "rule": "installationId отозванного устройства или активного устройства с другим CSR не регистрируется повторно.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Канонический объект и идентичность устройства"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "enrollAgent с installationId отозванного устройства.",
+      "expectedError": {
+        "http": 409,
+        "code": "installation_already_enrolled"
+      },
+      "acceptance": "AT-02"
+    },
+    {
+      "id": "INV-024",
+      "rule": "Agent API принимает ровно один X-Forwarded-Client-Cert с зарегистрированным hash и цепочкой внутреннего CA.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Доверие ingress и XFCC"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Дублированный XFCC или XFCC из соседнего приложения.",
+      "expectedError": {
+        "http": 401,
+        "code": "certificate_unknown"
+      },
+      "acceptance": "AT-02"
+    },
+    {
+      "id": "INV-025",
+      "rule": "Тот же renewalRequestId с другим CSR отклоняется.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Профиль и продление сертификата"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Повтор renew с тем же id и новым CSR.",
+      "expectedError": {
+        "http": 409,
+        "code": "renewal_request_conflict"
+      },
+      "acceptance": "AT-17"
+    },
+    {
+      "id": "INV-026",
+      "rule": "Повтор renew с тем же renewalRequestId и CSR возвращает прежний сертификат.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Профиль и продление сертификата"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Потеря ответа renew и повтор.",
+      "expectedError": {
+        "replay": {
+          "http": 200,
+          "duplicate": true
+        }
+      },
+      "acceptance": "AT-17"
+    },
+    {
+      "id": "INV-027",
+      "rule": "Истёкший сертификат не принимается; восстановление — повторная регистрация.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Профиль и продление сертификата"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "Запрос сертификатом тестового профиля после истечения срока.",
+      "expectedError": {
+        "http": 401,
+        "code": "certificate_expired"
+      },
+      "acceptance": "AT-17"
+    },
+    {
+      "id": "INV-028",
+      "rule": "Обрыв TLS при истёкшем локальном сертификате переводит агент в ReenrollRequired.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Конечный автомат агента"
+      },
+      "phase": "P1",
+      "enforcement": "agent",
+      "negativeExample": "Ingress обрывает рукопожатие с истёкшим сертификатом.",
+      "expectedError": {
+        "agentState": "ReenrollRequired"
+      },
+      "acceptance": "AT-17"
+    },
+    {
+      "id": "INV-029",
+      "rule": "agent_version_unsupported останавливает отправку scans до обновления.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Конечный автомат агента"
+      },
+      "phase": "P1",
+      "enforcement": "agent",
+      "negativeExample": "Ответ 422 agent_version_unsupported на submitScan.",
+      "expectedError": {
+        "agentState": "VersionBlocked"
+      },
+      "acceptance": "AT-13"
+    },
+    {
+      "id": "INV-030",
+      "rule": "identity_conflict останавливает агент до решения ServiceManager; сертификат не отзывается.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Конечный автомат агента"
+      },
+      "phase": "P1",
+      "enforcement": "agent",
+      "negativeExample": "Ответ 409 identity_conflict клону.",
+      "expectedError": {
+        "agentState": "IdentityConflict"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-031",
+      "rule": "Агенты организации в статусе disabled или deletion_scheduled получают отказ и приостанавливаются.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Жизненный цикл организации"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "submitScan после disable организации.",
+      "expectedError": {
+        "http": 403,
+        "code": "organization_inactive"
+      },
+      "acceptance": "AT-12"
+    },
+    {
+      "id": "INV-032",
+      "rule": "schedule_deletion требует готового экспорта после перехода в disabled либо exportWaived=true.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Жизненный цикл организации"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "schedule_deletion без экспорта и без exportWaived.",
+      "expectedError": {
+        "http": 409,
+        "code": "lifecycle_transition_forbidden"
+      },
+      "acceptance": "AT-12"
+    },
+    {
+      "id": "INV-033",
+      "rule": "После удаления организации агенты получают certificate_revoked, пока хранится запись отзыва.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Жизненный цикл организации"
+      },
+      "phase": "P1",
+      "enforcement": "agent_api",
+      "negativeExample": "submitHeartbeat после выполнения organization_delete.",
+      "expectedError": {
+        "http": 401,
+        "code": "certificate_revoked"
+      },
+      "acceptance": "AT-12"
+    },
+    {
+      "id": "INV-034",
+      "rule": "Restore выполняется в карантине: журнал жизненного цикла применяется до открытия доступа, отозванное устройство остаётся отозванным.",
+      "sourceDoc": {
+        "file": "06-azure-and-operations.md",
+        "section": "Журнал жизненного цикла и restore в карантине"
+      },
+      "phase": "P1",
+      "enforcement": "infra",
+      "negativeExample": "Restore на точку до отзыва устройства.",
+      "expectedError": {
+        "http": 401,
+        "code": "certificate_revoked"
+      },
+      "acceptance": "AT-12"
+    },
+    {
+      "id": "INV-035",
+      "rule": "Запрос портала без действительной сессии отклоняется.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "API портала"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "GET findings без cookie.",
+      "expectedError": {
+        "http": 401,
+        "code": "session_required"
+      },
+      "acceptance": "AT-01"
+    },
+    {
+      "id": "INV-036",
+      "rule": "Мутация портала без верного CSRF-токена отклоняется.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "API портала"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "PATCH finding без X-CSRF-Token.",
+      "expectedError": {
+        "http": 403,
+        "code": "csrf_failed"
+      },
+      "acceptance": "AT-01"
+    },
+    {
+      "id": "INV-037",
+      "rule": "Technician не принимает решения о риске.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Автомат workflowState"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Technician вызывает decideFindingRisk.",
+      "expectedError": {
+        "http": 403,
+        "code": "forbidden"
+      },
+      "acceptance": "AT-08"
+    },
+    {
+      "id": "INV-038",
+      "rule": "Сущность недоступной организации неотличима от отсутствующей.",
+      "sourceDoc": {
+        "file": "02-architecture-and-stack.md",
+        "section": "Разделение клиентов"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "getFinding с findingId чужой организации.",
+      "expectedError": {
+        "http": 404,
+        "code": "not_found"
+      },
+      "acceptance": "AT-01"
+    },
+    {
+      "id": "INV-039",
+      "rule": "Cursor связан с организацией и фильтром.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "API портала"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Cursor другой организации.",
+      "expectedError": {
+        "http": 400,
+        "code": "invalid_cursor"
+      },
+      "acceptance": "AT-01"
+    },
+    {
+      "id": "INV-040",
+      "rule": "Устаревший If-Match отклоняется.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Автомат workflowState"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "patchFinding с прошлой ревизией.",
+      "expectedError": {
+        "http": 412,
+        "code": "revision_mismatch"
+      },
+      "acceptance": "AT-08"
+    },
+    {
+      "id": "INV-041",
+      "rule": "Мутации finding и политики требуют If-Match.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Автомат workflowState"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "patchFinding без If-Match.",
+      "expectedError": {
+        "http": 428,
+        "code": "if_match_required"
+      },
+      "acceptance": "AT-08"
+    },
+    {
+      "id": "INV-042",
+      "rule": "Решение о риске допустимо только при technicalState=open.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Автомат workflowState"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "decideFindingRisk risk_accepted для resolved finding.",
+      "expectedError": {
+        "http": 409,
+        "code": "workflow_transition_forbidden"
+      },
+      "acceptance": "AT-08"
+    },
+    {
+      "id": "INV-043",
+      "rule": "reviewAt решения о риске лежит в (now, now + 365 сут].",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Автомат workflowState"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "reviewAt через 400 суток.",
+      "expectedError": {
+        "http": 422,
+        "code": "validation_failed"
+      },
+      "acceptance": "AT-08"
+    },
+    {
+      "id": "INV-044",
+      "rule": "PATCH не принимает risk_accepted и suppressed.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Автомат workflowState"
+      },
+      "phase": "P1",
+      "enforcement": "schema",
+      "negativeExample": "patchFinding workflowState=risk_accepted.",
+      "expectedError": {
+        "http": 422,
+        "code": "schema_violation"
+      },
+      "acceptance": "AT-08"
+    },
+    {
+      "id": "INV-045",
+      "rule": "Файл отчёта выдаётся только в состоянии ready.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Отчёт и покрытие"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "downloadReport для queued отчёта.",
+      "expectedError": {
+        "http": 409,
+        "code": "resource_not_ready"
+      },
+      "acceptance": "AT-07"
+    },
+    {
+      "id": "INV-046",
+      "rule": "periodStart раньше periodEnd (межполевой инвариант тела).",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Инварианты вне JSON Schema"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "createReport с periodStart = periodEnd.",
+      "expectedError": {
+        "http": 422,
+        "code": "schema_violation"
+      },
+      "acceptance": "AT-07"
+    },
+    {
+      "id": "INV-047",
+      "rule": "maxBatchAgeDays не меньше maxBufferDays + 1 (межполевой инвариант тела).",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Инварианты вне JSON Schema"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "createPolicyRevision с maxBufferDays 7 и maxBatchAgeDays 7.",
+      "expectedError": {
+        "http": 422,
+        "code": "schema_violation"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-048",
+      "rule": "Режим assessed требует входных настроек; WIN-011 обязательна; WIN-004 активна только вместе с WIN-003.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Инварианты вне JSON Schema"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "WIN-008 в режиме assessed с пустым allowedSids.",
+      "expectedError": {
+        "http": 422,
+        "code": "policy_inputs_missing"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-049",
+      "rule": "Строки SAFE_TEXT не содержат < и >, управляющих и bidi-символов.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Недоверенные строки и выдача отчёта"
+      },
+      "phase": "P1",
+      "enforcement": "schema",
+      "negativeExample": "Organization.name со строкой <script>.",
+      "expectedError": {
+        "http": 422,
+        "code": "schema_violation"
+      },
+      "acceptance": "AT-07"
+    },
+    {
+      "id": "INV-050",
+      "rule": "Запрос без контекста организации возвращает 0 строк (FORCE ROW LEVEL SECURITY).",
+      "sourceDoc": {
+        "file": "02-architecture-and-stack.md",
+        "section": "Разделение клиентов"
+      },
+      "phase": "P1",
+      "enforcement": "db_rls",
+      "negativeExample": "SELECT из клиентской таблицы без app.begin_org_context.",
+      "expectedError": {
+        "rows": 0
+      },
+      "acceptance": "AT-01"
+    },
+    {
+      "id": "INV-051",
+      "rule": "Каждый доступ субъекта с platform_role к данным клиента пишет audit_event в той же транзакции, даже при членстве в организации.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Вход в портал и роли"
+      },
+      "phase": "P1",
+      "enforcement": "db_rls",
+      "negativeExample": "PlatformAdmin с членством читает listFindings.",
+      "expectedError": {
+        "audit": "platform.access"
+      },
+      "acceptance": "AT-01"
+    },
+    {
+      "id": "INV-052",
+      "rule": "Наблюдение unavailable даёт unknown с reasonCode наблюдения.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Семантика результата"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "WIN-002 unavailable/permission_denied.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "permission_denied"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-053",
+      "rule": "Неподдерживаемый сбор даёт unknown, а не fail.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Семантика результата"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "WIN-009 unavailable/unsupported.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "unsupported"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-054",
+      "rule": "Временная ошибка сборщика даёт unknown.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Семантика результата"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "WIN-005 unavailable/temporary_error.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "temporary_error"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-055",
+      "rule": "Зависший сборщик завершается не дольше чем за 30 с, сессия укладывается в 120 с; дочерние процессы не запускаются.",
+      "sourceDoc": {
+        "file": "02-architecture-and-stack.md",
+        "section": "Выполнение локальной проверки"
+      },
+      "phase": "P1",
+      "enforcement": "agent",
+      "negativeExample": "Сборщик WIN-006 не отвечает 60 с.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "collector_timeout"
+      },
+      "acceptance": "AT-03"
+    },
+    {
+      "id": "INV-056",
+      "rule": "Эталонный отрицательный тест BitLocker: fully_encrypted при protectionStatus=off и encryptionRequired=true даёт fail.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Проверки Windows"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "WIN-002 из examples/scan-batch.json.",
+      "expectedError": {
+        "result": "fail"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-057",
+      "rule": "WIN-003: ни один одобренный продукт не активен, а у одного одобренного productState=unknown.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Проверки Windows"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Одобренный VendorX с productState=unknown и rawState без сопоставления.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "unmapped_state"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-058",
+      "rule": "WIN-006: неуспешный поиск обновлений даёт unknown.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Проверки Windows"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "agentSearch.resultCode=failed.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "update_search_failed"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-059",
+      "rule": "WIN-006: основа свежести поиска старше maxSearchAgeHours даёт unknown.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Проверки Windows"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "auLastSearchSuccessAt 100 ч назад при offline_cache.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "update_search_outdated"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-060",
+      "rule": "WIN-006: configuredSource отличается от expectedSource.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Проверки Windows"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "configuredSource=wsus при expectedSource=windows_update.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "update_source_mismatch"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-061",
+      "rule": "WIN-006: усечённый список без просрочки среди переданных элементов даёт unknown.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Проверки Windows"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "truncated=true, все переданные обновления в пределах grace.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "update_list_truncated"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-062",
+      "rule": "WIN-006: просрочка хотя бы одного переданного обновления даёт fail независимо от truncated.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Проверки Windows"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "truncated=true и одно Critical обновление старше 7 суток.",
+      "expectedError": {
+        "result": "fail"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-063",
+      "rule": "SYS-002: версии нет в таблице жизненного цикла.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Матрица совместимости и жизненный цикл ОС"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "WIN-011 displayVersion=27H1.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "os_version_unknown"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-064",
+      "rule": "SYS-002: нет свежего WIN-011.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Матрица совместимости и жизненный цикл ОС"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Последний WIN-011 старше окна свежести.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "os_inventory_missing"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-065",
+      "rule": "Межпроверочная применимость берётся из того же пакета; без пригодного входа зависимая проверка unknown.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Семантика результата"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "WIN-002 в пакете без WIN-011.",
+      "expectedError": {
+        "result": "unknown",
+        "reasonCode": "applicability_input_missing"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-066",
+      "rule": "Редакция из notApplicableEditionIds даёт not_applicable по политике.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Семантика результата"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "WIN-011 editionId=Core, WIN-002 при стартовой политике.",
+      "expectedError": {
+        "result": "not_applicable",
+        "reasonCode": "policy_not_applicable"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-067",
+      "rule": "WIN-007: перезагрузка между двумя rebootRequired=true начинает новый эпизод и не даёт ложного fail.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Проверки Windows"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Два наблюдения rebootRequired=true с разным lastBootAt через 4 суток.",
+      "expectedError": {
+        "result": "pass"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-068",
+      "rule": "Свежий fail без finding создаёт open/new и событие opened.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Таблица переходов finding"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Первый fail WIN-005.",
+      "expectedError": {
+        "event": {
+          "eventType": "opened",
+          "cause": "device_change"
+        }
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-069",
+      "rule": "Свежий pass открытого finding даёт resolved; workflowState не меняется. Исправлением считается только resolved с device_change.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Таблица переходов finding"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "fail → pass WIN-005.",
+      "expectedError": {
+        "event": {
+          "eventType": "resolved",
+          "cause": "device_change"
+        }
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-070",
+      "rule": "Свежий fail resolved finding даёт reopened; действующее решение о риске сохраняется.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Таблица переходов finding"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "fail → pass → fail WIN-005.",
+      "expectedError": {
+        "event": {
+          "eventType": "reopened",
+          "cause": "device_change"
+        }
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-071",
+      "rule": "Смена ruleVersion пересчитывает проекции с rule_change и не входит в исправления.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Выбор текущего состояния"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Новая ruleVersion WIN-001 открывает finding.",
+      "expectedError": {
+        "event": {
+          "eventType": "opened",
+          "cause": "rule_change"
+        }
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-072",
+      "rule": "Перевод проверки в not_applicable или informational политикой закрывает finding событием policy_changed.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Таблица переходов finding"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Исключение WIN-005 из activeCheckIds.",
+      "expectedError": {
+        "event": {
+          "eventType": "policy_changed",
+          "cause": "policy_change"
+        }
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-073",
+      "rule": "Отзыв устройства выводит его объекты.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Таблица переходов finding"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "revokeDevice с открытым finding.",
+      "expectedError": {
+        "event": {
+          "eventType": "object_retired",
+          "cause": "manual_action"
+        }
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-074",
+      "rule": "По наступлении reviewAt решение истекает: workflowState=new, одно событие review_expired.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Автомат workflowState"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Двойной запуск review_expiry после reviewAt.",
+      "expectedError": {
+        "event": {
+          "eventType": "workflow_changed",
+          "cause": "review_expired"
+        }
+      },
+      "acceptance": "AT-08"
+    },
+    {
+      "id": "INV-075",
+      "rule": "freshness_sweep идемпотентен: переход свежести открытого finding пишет одно событие quality_changed.",
+      "sourceDoc": {
+        "file": "02-architecture-and-stack.md",
+        "section": "Очередь заданий"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Два такта планировщика в одном часе в двух репликах worker.",
+      "expectedError": {
+        "event": {
+          "eventType": "quality_changed",
+          "cause": "data_quality"
+        }
+      },
+      "acceptance": "AT-14"
+    },
+    {
+      "id": "INV-076",
+      "rule": "Завершение задания с устаревшим leaseToken откатывается и не создаёт второго бизнес-эффекта.",
+      "sourceDoc": {
+        "file": "02-architecture-and-stack.md",
+        "section": "Очередь заданий"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Lease истекает у живого worker, второй worker обрабатывает тот же evaluate_batch.",
+      "expectedError": {
+        "event": {
+          "eventType": "opened",
+          "cause": "device_change"
+        }
+      },
+      "acceptance": "AT-14"
+    },
+    {
+      "id": "INV-077",
+      "rule": "Неполная выборка Graph без пройденного nextLink не даёт вывода по отсутствующим страницам.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Возможности интеграции"
+      },
+      "phase": "P2",
+      "enforcement": "worker",
+      "negativeExample": "Ответ Graph с @odata.nextLink, который не запрошен.",
+      "expectedError": {
+        "capabilityStatus": "partial"
+      },
+      "acceptance": "AT-15"
+    },
+    {
+      "id": "INV-078",
+      "rule": "Свойство, которое не вернулось из-за прав или лицензии, не трактуется как значение.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Возможности интеграции"
+      },
+      "phase": "P2",
+      "enforcement": "worker",
+      "negativeExample": "Sign-in без appliedConditionalAccessPolicies.",
+      "expectedError": {
+        "capabilityStatus": "partial"
+      },
+      "acceptance": "AT-15"
+    },
+    {
+      "id": "INV-079",
+      "rule": "Регистрация MFA не означает требования MFA политикой доступа.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Проверки Microsoft 365"
+      },
+      "phase": "P2",
+      "enforcement": "worker",
+      "negativeExample": "isMfaRegistered=true без политики CA, требующей MFA.",
+      "expectedError": {
+        "capabilityStatus": "license_unconfirmed"
+      },
+      "acceptance": "AT-10"
+    },
+    {
+      "id": "INV-080",
+      "rule": "Устройство сопоставляется с Intune только по подтверждённому идентификатору.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Проверки Microsoft 365"
+      },
+      "phase": "P2",
+      "enforcement": "worker",
+      "negativeExample": "Совпадение только по имени устройства.",
+      "expectedError": {
+        "capabilityStatus": "partial"
+      },
+      "acceptance": "AT-11"
+    },
+    {
+      "id": "INV-081",
+      "rule": "Consent запрашивается только для включённых модулей.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Разрешения интеграций"
+      },
+      "phase": "P2",
+      "enforcement": "infra",
+      "negativeExample": "Запрос права модуля M365-005 при выключенном модуле.",
+      "expectedError": {
+        "capabilityStatus": "permission_missing"
+      },
+      "acceptance": "AT-09"
+    }
+  ]
+}

@@ -1,101 +1,149 @@
 {
-  "catalogVersion": "0.1.0",
+  "catalogVersion": "0.2.0",
   "checks": [
     {
       "checkId": "WIN-001",
       "name": "disk_space",
       "phase": "P1",
-      "assessmentMode": "assessed"
+      "defaultAssessmentMode": "assessed",
+      "source": "agent",
+      "subjectType": "volume"
     },
     {
       "checkId": "WIN-002",
       "name": "bitlocker_protection",
       "phase": "P1",
-      "assessmentMode": "assessed"
+      "defaultAssessmentMode": "assessed",
+      "source": "agent",
+      "subjectType": "volume"
     },
     {
       "checkId": "WIN-003",
       "name": "antivirus_state",
       "phase": "P1",
-      "assessmentMode": "assessed"
+      "defaultAssessmentMode": "informational",
+      "source": "agent",
+      "subjectType": "device"
     },
     {
       "checkId": "WIN-004",
       "name": "defender_signature_age",
       "phase": "P1",
-      "assessmentMode": "assessed"
+      "defaultAssessmentMode": "assessed",
+      "source": "agent",
+      "subjectType": "device"
     },
     {
       "checkId": "WIN-005",
       "name": "firewall_profiles",
       "phase": "P1",
-      "assessmentMode": "assessed"
+      "defaultAssessmentMode": "assessed",
+      "source": "agent",
+      "subjectType": "device"
     },
     {
       "checkId": "WIN-006",
       "name": "windows_update",
       "phase": "P1",
-      "assessmentMode": "assessed"
+      "defaultAssessmentMode": "informational",
+      "source": "agent",
+      "subjectType": "device"
     },
     {
       "checkId": "WIN-007",
       "name": "reboot_required",
       "phase": "P1",
-      "assessmentMode": "assessed"
+      "defaultAssessmentMode": "assessed",
+      "source": "agent",
+      "subjectType": "device"
     },
     {
       "checkId": "WIN-008",
       "name": "local_admin_membership",
       "phase": "P1",
-      "assessmentMode": "assessed"
+      "defaultAssessmentMode": "informational",
+      "source": "agent",
+      "subjectType": "device"
     },
     {
       "checkId": "WIN-009",
       "name": "secure_boot",
       "phase": "P1",
-      "assessmentMode": "assessed"
+      "defaultAssessmentMode": "assessed",
+      "source": "agent",
+      "subjectType": "device"
     },
     {
       "checkId": "WIN-010",
       "name": "entra_device_join",
       "phase": "P1",
-      "assessmentMode": "informational"
+      "defaultAssessmentMode": "informational",
+      "source": "agent",
+      "subjectType": "device"
+    },
+    {
+      "checkId": "WIN-011",
+      "name": "os_inventory",
+      "phase": "P1",
+      "defaultAssessmentMode": "informational",
+      "source": "agent",
+      "subjectType": "device"
     },
     {
       "checkId": "SYS-001",
       "name": "agent_freshness",
       "phase": "P1",
-      "assessmentMode": "server_generated"
+      "defaultAssessmentMode": "informational",
+      "source": "server",
+      "subjectType": "device"
+    },
+    {
+      "checkId": "SYS-002",
+      "name": "os_support_status",
+      "phase": "P1",
+      "defaultAssessmentMode": "assessed",
+      "source": "server",
+      "subjectType": "device"
     },
     {
       "checkId": "M365-001",
       "name": "mfa_registration",
       "phase": "P2",
-      "assessmentMode": "assessed"
+      "defaultAssessmentMode": "assessed",
+      "source": "graph",
+      "subjectType": "user"
     },
     {
       "checkId": "M365-002",
       "name": "security_defaults",
       "phase": "P2",
-      "assessmentMode": "informational"
+      "defaultAssessmentMode": "informational",
+      "source": "graph",
+      "subjectType": "tenant"
     },
     {
       "checkId": "M365-003",
       "name": "conditional_access_inventory",
       "phase": "P2",
-      "assessmentMode": "informational"
+      "defaultAssessmentMode": "informational",
+      "source": "graph",
+      "subjectType": "tenant"
     },
     {
       "checkId": "M365-004",
       "name": "intune_compliance",
       "phase": "P2",
-      "assessmentMode": "assessed"
+      "defaultAssessmentMode": "assessed",
+      "source": "graph",
+      "subjectType": "managed_device"
     },
     {
       "checkId": "M365-005",
       "name": "sign_in_evidence",
       "phase": "P3",
-      "assessmentMode": "informational"
+      "defaultAssessmentMode": "informational",
+      "source": "graph",
+      "subjectType": "tenant"
     }
   ]
 }

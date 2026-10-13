@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sikkerheit.example.invalid/agent/observation.schema.json",
   "title": "Sikkerheit Agent Observation",
   "type": "object",
   "additionalProperties": false,
@@ -16,49 +17,32 @@
         "WIN-007",
         "WIN-008",
         "WIN-009",
-        "WIN-010"
+        "WIN-010",
+        "WIN-011"
       ]
     },
     "collectorVersion": {
       "type": "string",
       "minLength": 1,
       "maxLength": 40,
-      "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][A-Za-z0-9.-]+)?$"
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$"
     },
     "subject": {
       "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "type": {
-          "type": "string",
-          "enum": [
-            "device",
-            "volume"
-          ]
-        },
-        "reference": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 100
-        }
-      },
-      "required": [
-        "type",
-        "reference"
-      ]
+      "description": "Форма объекта задаётся по checkId (allOf)."
     },
     "observedAt": {
       "type": "string",
       "minLength": 1,
       "maxLength": 40,
-      "format": "date-time"
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
     },
     "collectionStatus": {
       "type": "string",
       "enum": [
         "collected",
-        "unavailable",
-        "not_applicable"
+        "unavailable"
       ]
     },
     "evidence": {
@@ -70,9 +54,7 @@
         "permission_denied",
         "unsupported",
         "collector_timeout",
-        "temporary_error",
-        "clock_inconsistent",
-        "policy_excluded"
+        "temporary_error"
       ]
     }
   },
@@ -103,34 +85,6 @@
       "properties": {
         "collectionStatus": {
           "const": "unavailable"
-        },
-        "reasonCode": {
-          "type": "string",
-          "enum": [
-            "permission_denied",
-            "unsupported",
-            "collector_timeout",
-            "temporary_error",
-            "clock_inconsistent"
-          ]
-        }
-      },
-      "required": [
-        "reasonCode"
-      ],
-      "not": {
-        "required": [
-          "evidence"
-        ]
-      }
-    },
-    {
-      "properties": {
-        "collectionStatus": {
-          "const": "not_applicable"
-        },
-        "reasonCode": {
-          "const": "policy_excluded"
         }
       },
       "required": [
@@ -149,11 +103,357 @@
         "properties": {
           "checkId": {
             "const": "WIN-001"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "volume"
+              },
+              "volumeId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^\\\\\\\\\\?\\\\Volume\\{[0-9a-fA-F-]{36}\\}\\\\$"
+              },
+              "mountPoint": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2,
+                "pattern": "^[A-Z]:$"
+              },
+              "role": {
+                "const": "os"
+              }
+            },
+            "required": [
+              "type",
+              "volumeId",
+              "role"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-002"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "volume"
+              },
+              "volumeId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^\\\\\\\\\\?\\\\Volume\\{[0-9a-fA-F-]{36}\\}\\\\$"
+              },
+              "mountPoint": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2,
+                "pattern": "^[A-Z]:$"
+              },
+              "role": {
+                "const": "os"
+              }
+            },
+            "required": [
+              "type",
+              "volumeId",
+              "role"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-003"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "device"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-004"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "device"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-005"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "device"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-006"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "device"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-007"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "device"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-008"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "device"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-009"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "device"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-010"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "device"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-011"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "device"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-001"
           },
           "collectionStatus": {
             "const": "collected"
           }
-        }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
       },
       "then": {
         "properties": {
@@ -187,7 +487,11 @@
           "collectionStatus": {
             "const": "collected"
           }
-        }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
       },
       "then": {
         "properties": {
@@ -235,7 +539,11 @@
           "collectionStatus": {
             "const": "collected"
           }
-        }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
       },
       "then": {
         "properties": {
@@ -243,32 +551,106 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "provider": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 120
+              "products": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "provider": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120,
+                      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+                    },
+                    "productState": {
+                      "type": "string",
+                      "enum": [
+                        "on",
+                        "off",
+                        "snoozed",
+                        "expired",
+                        "unknown"
+                      ]
+                    },
+                    "statusSource": {
+                      "type": "string",
+                      "enum": [
+                        "windows_security_center",
+                        "defender"
+                      ]
+                    },
+                    "rawState": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "productState",
+                    "statusSource"
+                  ],
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "productState": {
+                            "const": "unknown"
+                          }
+                        },
+                        "required": [
+                          "productState"
+                        ]
+                      },
+                      "then": {
+                        "required": [
+                          "rawState"
+                        ],
+                        "properties": {
+                          "rawState": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 10,
+                "description": "Больше 10 продуктов: collectionStatus=unavailable, reasonCode=unsupported; список не усекается."
               },
-              "productState": {
-                "type": "string",
-                "enum": [
-                  "on",
-                  "off",
-                  "expired",
-                  "snoozed"
-                ]
-              },
-              "statusSource": {
-                "type": "string",
-                "enum": [
-                  "defender",
-                  "windows_security_center"
+              "defender": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "amRunningMode": {
+                    "type": "string",
+                    "enum": [
+                      "normal",
+                      "passive",
+                      "edr_block",
+                      "sxs_passive",
+                      "other"
+                    ]
+                  },
+                  "realTimeProtectionEnabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "amRunningMode",
+                  "realTimeProtectionEnabled"
                 ]
               }
             },
             "required": [
-              "provider",
-              "productState",
-              "statusSource"
+              "products",
+              "defender"
             ]
           }
         }
@@ -283,7 +665,11 @@
           "collectionStatus": {
             "const": "collected"
           }
-        }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
       },
       "then": {
         "properties": {
@@ -295,7 +681,8 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 40,
-                "format": "date-time"
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
               }
             },
             "required": [
@@ -314,7 +701,11 @@
           "collectionStatus": {
             "const": "collected"
           }
-        }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
       },
       "then": {
         "properties": {
@@ -350,7 +741,11 @@
           "collectionStatus": {
             "const": "collected"
           }
-        }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
       },
       "then": {
         "properties": {
@@ -358,16 +753,6 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "securityUpdatesPending": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "lastSuccessfulSearchAt": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 40,
-                "format": "date-time"
-              },
               "configuredSource": {
                 "type": "string",
                 "enum": [
@@ -375,12 +760,169 @@
                   "wsus",
                   "other_approved"
                 ]
+              },
+              "auLastSearchSuccessAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 40,
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+              },
+              "agentSearch": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "offline_cache",
+                      "online"
+                    ]
+                  },
+                  "completedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "format": "date-time",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+                  },
+                  "resultCode": {
+                    "type": "string",
+                    "enum": [
+                      "not_started",
+                      "succeeded",
+                      "succeeded_with_errors",
+                      "failed",
+                      "aborted"
+                    ]
+                  }
+                },
+                "required": [
+                  "mode",
+                  "completedAt",
+                  "resultCode"
+                ]
+              },
+              "pendingSecurityUpdates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "updateId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 36,
+                      "format": "uuid",
+                      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                    },
+                    "revisionNumber": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "kbArticleIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 8,
+                        "pattern": "^[0-9]{6,8}$"
+                      },
+                      "minItems": 0,
+                      "maxItems": 10,
+                      "uniqueItems": true
+                    },
+                    "categoryIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 36,
+                        "format": "uuid",
+                        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                      },
+                      "minItems": 0,
+                      "maxItems": 10,
+                      "uniqueItems": true
+                    },
+                    "msrcSeverity": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "Critical",
+                        "Important",
+                        "Moderate",
+                        "Low",
+                        null
+                      ]
+                    },
+                    "lastDeploymentChangeAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "minLength": 1,
+                      "maxLength": 40,
+                      "format": "date-time",
+                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+                    },
+                    "deadlineAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "minLength": 1,
+                      "maxLength": 40,
+                      "format": "date-time",
+                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+                    },
+                    "firstSeenPendingAt": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40,
+                      "format": "date-time",
+                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+                    }
+                  },
+                  "required": [
+                    "updateId",
+                    "revisionNumber",
+                    "kbArticleIds",
+                    "categoryIds",
+                    "msrcSeverity",
+                    "lastDeploymentChangeAt",
+                    "deadlineAt",
+                    "firstSeenPendingAt"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 50,
+                "description": "Только Security Updates по CategoryID, по возрастанию min(deadlineAt, firstSeenPendingAt); без заголовков.",
+                "uniqueItems": true
+              },
+              "pendingSecurityUpdatesTotal": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "truncated": {
+                "type": "boolean"
               }
             },
             "required": [
-              "securityUpdatesPending",
-              "lastSuccessfulSearchAt",
-              "configuredSource"
+              "configuredSource",
+              "auLastSearchSuccessAt",
+              "agentSearch",
+              "pendingSecurityUpdates",
+              "pendingSecurityUpdatesTotal",
+              "truncated"
             ]
           }
         }
@@ -395,7 +937,11 @@
           "collectionStatus": {
             "const": "collected"
           }
-        }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
       },
       "then": {
         "properties": {
@@ -406,6 +952,13 @@
               "rebootRequired": {
                 "type": "boolean"
               },
+              "lastBootAt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40,
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+              },
               "statusSource": {
                 "type": "string",
                 "enum": [
@@ -415,6 +968,7 @@
             },
             "required": [
               "rebootRequired",
+              "lastBootAt",
               "statusSource"
             ]
           }
@@ -430,7 +984,11 @@
           "collectionStatus": {
             "const": "collected"
           }
-        }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
       },
       "then": {
         "properties": {
@@ -444,8 +1002,9 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 184,
-                  "pattern": "^S-\\d+(?:-\\d+)+$"
+                  "pattern": "^S-[0-9]+(?:-[0-9]+)+$"
                 },
+                "minItems": 0,
                 "maxItems": 100,
                 "uniqueItems": true
               },
@@ -473,7 +1032,11 @@
           "collectionStatus": {
             "const": "collected"
           }
-        }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
       },
       "then": {
         "properties": {
@@ -509,7 +1072,11 @@
           "collectionStatus": {
             "const": "collected"
           }
-        }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
       },
       "then": {
         "properties": {
@@ -522,7 +1089,7 @@
                 "enum": [
                   "entra_joined",
                   "hybrid_joined",
-                  "registered",
+                  "domain_joined",
                   "not_joined"
                 ]
               },
@@ -531,14 +1098,20 @@
                   "string",
                   "null"
                 ],
-                "format": "uuid"
+                "minLength": 1,
+                "maxLength": 36,
+                "format": "uuid",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
               },
               "entraDeviceId": {
                 "type": [
                   "string",
                   "null"
                 ],
-                "format": "uuid"
+                "minLength": 1,
+                "maxLength": 36,
+                "format": "uuid",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
               }
             },
             "required": [
@@ -549,7 +1122,67 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "WIN-011"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "editionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z]+$"
+              },
+              "displayVersion": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8,
+                "pattern": "^[0-9]{2}H[0-9]$"
+              },
+              "build": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "ubr": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "architecture": {
+                "type": "string",
+                "enum": [
+                  "x64",
+                  "arm64"
+                ]
+              }
+            },
+            "required": [
+              "editionId",
+              "displayVersion",
+              "build",
+              "ubr",
+              "architecture"
+            ]
+          }
+        }
+      }
     }
   ],
-  "description": "Только allowlisted P1 Windows evidence. Проверка timestamps, применимости, субъекта и ожидаемых проверок выполняется backend согласно 05-data-and-api.md."
+  "description": "Закрытые allowlisted evidence-структуры P1 для каждого checkId. Применимость определяет сервер: агент не передаёт not_applicable. Межполевые и семантические инварианты (freeBytes <= totalBytes, ожидаемые объекты, время) проверяет backend по 05-data-and-api.md и specs/invariants.json."
 }
