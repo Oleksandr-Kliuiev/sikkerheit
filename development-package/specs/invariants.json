@@ -803,7 +803,7 @@
     },
     {
       "id": "INV-051",
-      "rule": "Каждый вход субъекта с platform_role в контекст организации пишет audit_event platform.access внутри app.begin_org_context после установки контекста и до первого чтения данных, в той же транзакции, даже при членстве в организации.",
+      "rule": "Каждый вход с purpose=portal в режиме PlatformAdmin (субъект с platform_role, даже при членстве в организации), кроме createOrganization, пишет audit_event platform.access внутри app.begin_org_context после установки контекста и до первого чтения данных, в той же транзакции; в режиме restore аудит пишет команда восстановления.",
       "sourceDoc": {
         "file": "04-security-and-privacy.md",
         "section": "Контекст организации и аудит PlatformAdmin"
@@ -1459,7 +1459,7 @@
     },
     {
       "id": "INV-090",
-      "rule": "Идентичный повтор enrollAgent (тот же токен, registrationRequestId, CSR и installationId) в течение 7 суток от записи enrollment проверяется раньше срока, отзыва и исчерпания токена и возвращает прежний ответ; если сбой Issuer после commit транзакции регистрации помешал выпуску, повтор выпускает недостающий сертификат записи. useCount не меняется, новых enrollment и device нет, у записи не больше одного сертификата.",
+      "rule": "Идентичный повтор enrollAgent (тот же токен, registrationRequestId, CSR и installationId) в течение 7 суток от записи enrollment проверяется раньше срока, отзыва и исчерпания токена и, если устройство записи не отозвано и её сертификат действующий, возвращает прежний ответ; если сбой Issuer после commit транзакции регистрации помешал выпуску, повтор выпускает недостающий сертификат записи. useCount не меняется, новых enrollment и device нет, у записи не больше одного сертификата.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
         "section": "API агента"
@@ -1798,7 +1798,7 @@
     },
     {
       "id": "INV-111",
-      "rule": "Текущую проекцию устройства меняет только пакет с projectionEligible, если его sequence больше device.projectionSequence; сравнение и замена выполняются в evaluate_batch под блокировкой строки устройства. Пакеты с признаком часов и пакеты вне порядка пополняют только историю и событий не создают; при любом порядке заданий совпадают текущая проекция, projectionSequence и множество открытых finding.",
+      "rule": "Текущую проекцию устройства меняет только пакет с projectionEligible, если его sequence больше device.projectionSequence; сравнение и замена выполняются в evaluate_batch под блокировкой строки устройства. Пакеты с признаком часов и пакеты вне порядка пополняют только историю и событий не создают, кроме переоценки WIN-006 текущей проекции, когда такой пакет изменил историю ожидания (05, «Выбор текущего состояния», п. 5); при любом порядке заданий совпадают текущая проекция, projectionSequence и множество открытых finding.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
         "section": "Выбор текущего состояния"
@@ -1878,6 +1878,22 @@
         "code": "validation_failed"
       },
       "acceptance": "AT-07"
+    },
+    {
+      "id": "INV-116",
+      "rule": "Карантин устанавливает lifecycle_decision_seq выше максимума из её текущего значения, наибольшей targetVersion журнала и наибольших decisionVersion и journalPendingVersion в базе: последовательность не уменьшается, и переход после restore получает версию выше любой версии, уже назначенной объекту.",
+      "sourceDoc": {
+        "file": "06-azure-and-operations.md",
+        "section": "Журнал жизненного цикла и restore в карантине"
+      },
+      "phase": "P1",
+      "enforcement": "infra",
+      "negativeExample": "enable организации: commit выполнен, запись в журнал не создана; restore на точку после commit; после открытия доступа задание дописывает запись enable, затем disable той же организации; повторный restore; агент вызывает submitScan.",
+      "expectedError": {
+        "http": 403,
+        "code": "organization_inactive"
+      },
+      "acceptance": "AT-12"
     }
   ]
 }

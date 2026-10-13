@@ -189,7 +189,7 @@ def _negatives(good, ctx):
         variant(lambda b: by(b, 'WIN-006')['evidence'].update(pendingSecurityUpdates=[
             {**update, 'revisionNumber': n} for n in range(ctx['pending_max'] + 1)])),
         variant(lambda b: by(b, 'WIN-003')['evidence']['products'][0].update(provider='<script>alert(1)</script>')),
-        variant(lambda b: by(b, 'WIN-003')['evidence']['products'][0].update(provider='Vendor‮X')),
+        variant(lambda b: by(b, 'WIN-003')['evidence']['products'][0].update(provider='Vendor\u202eX')),
         variant(lambda b: by(b, 'WIN-005').update(collectionStatus='unavailable', reasonCode='clock_inconsistent')
                 or by(b, 'WIN-005').pop('evidence')),
         variant(lambda b: by(b, 'WIN-002').update(subject={'type': 'device'})),
