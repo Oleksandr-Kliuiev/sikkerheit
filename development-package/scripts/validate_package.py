@@ -71,12 +71,16 @@ def standard_validation(report, root):
         print(STANDARD_SKIPPED)
         return
     try:
-        observation = read_json(root / 'specs/observation.schema.json')
-        batch = read_json(root / 'specs/scan-batch.schema.json')
-        registry = Registry().with_resources([(s['$id'], Resource.from_contents(s)) for s in (observation, batch)])
-        validator = jsonschema.Draft202012Validator(
-            batch, registry=registry, format_checker=jsonschema.Draft202012Validator.FORMAT_CHECKER)
+        names = ['observation', 'scan-batch', 'graph-observation', 'graph-collection']
+        loaded = {name: read_json(root / f'specs/{name}.schema.json') for name in names}
+        registry = Registry().with_resources([(s['$id'], Resource.from_contents(s)) for s in loaded.values()])
+        checker = jsonschema.Draft202012Validator.FORMAT_CHECKER
+        validators = {'scan-batch': jsonschema.Draft202012Validator(loaded['scan-batch'], registry=registry,
+                                                                    format_checker=checker),
+                      'm365': jsonschema.Draft202012Validator(loaded['graph-collection'], registry=registry,
+                                                              format_checker=checker)}
         for example in sorted((root / 'examples').glob('*.json')):
+            validator = validators['m365' if example.name.startswith('m365') else 'scan-batch']
             for error in validator.iter_errors(read_json(example)):
                 report.fail('contract', f'standard: examples/{example.name}: {error.message}')
         api = read_json(root / 'specs/openapi.json')
@@ -105,7 +109,11 @@ def run(root=ROOT):
     documents.check_catalog_rows(report, ctx, docs)
     documents.check_os_lifecycle(report, docs)
     documents.check_requirements(report, ctx, docs)
-    documents.check_p0_plan(report, docs)
+    documents.check_effort(report, docs, documents.check_p0_plan(report, docs))
+    documents.check_calendar(report, docs)
+    documents.check_acceptance_stages(report, ctx, docs)
+    documents.check_runbooks(report, ctx, docs)
+    documents.check_agent_states(report, docs)
     documents.check_data_api(report, ctx, docs)
     documents.check_purge_order(report, docs)
     documents.check_roles(report, ctx, docs)

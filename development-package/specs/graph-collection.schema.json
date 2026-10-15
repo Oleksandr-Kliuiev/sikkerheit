@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sikkerheit.example.invalid/m365/graph-collection.schema.json",
+  "title": "Sikkerheit M365 Collection Run",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "collectionRunId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "startedAt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+    },
+    "completedAt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "partial"
+      ],
+      "description": "completed — все модули available, license_missing или skipped; иначе partial. Запуск без модулей tenant и users наблюдений не даёт и получает failed (05, «Подключение M365 и сбор»)."
+    },
+    "entraP1": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Есть ли в tenant план Entra ID P1 или P2 по subscribedSkus; null — лицензии прочитать не удалось."
+    },
+    "usersComplete": {
+      "type": "boolean",
+      "description": "Все страницы /users получены; без этого объекты user не выводятся из учёта (05, «Подключение M365 и сбор»)."
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "module": {
+            "type": "string",
+            "enum": [
+              "tenant",
+              "licenses",
+              "users",
+              "auth_methods",
+              "roles",
+              "security_defaults",
+              "conditional_access",
+              "authorization_policy",
+              "sign_in_activity",
+              "per_user_mfa"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "skipped",
+              "permission_missing",
+              "license_missing",
+              "partial",
+              "temporary_error"
+            ]
+          }
+        },
+        "required": [
+          "module",
+          "status"
+        ]
+      },
+      "minItems": 10,
+      "maxItems": 10,
+      "uniqueItems": true
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "$ref": "graph-observation.schema.json"
+      },
+      "minItems": 0,
+      "maxItems": 20000
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "collectionRunId",
+    "tenantId",
+    "startedAt",
+    "completedAt",
+    "state",
+    "entraP1",
+    "usersComplete",
+    "modules",
+    "observations"
+  ],
+  "description": "Результат одного запуска сбора по tenant. Каждый модуль из закрытого перечня имеет ровно один статус; оценка выполняется по наблюдениям запуска в одной транзакции."
+}

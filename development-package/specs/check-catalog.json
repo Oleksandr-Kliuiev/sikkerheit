@@ -1,10 +1,66 @@
 {
-  "catalogVersion": "0.2.0",
+  "catalogVersion": "0.3.0",
   "checks": [
+    {
+      "checkId": "M365-001",
+      "name": "mfa_registration",
+      "phase": "P1",
+      "defaultAssessmentMode": "assessed",
+      "source": "graph",
+      "subjectType": "user"
+    },
+    {
+      "checkId": "M365-002",
+      "name": "admin_mfa_registration",
+      "phase": "P1",
+      "defaultAssessmentMode": "assessed",
+      "source": "graph",
+      "subjectType": "user"
+    },
+    {
+      "checkId": "M365-003",
+      "name": "mfa_enforcement",
+      "phase": "P1",
+      "defaultAssessmentMode": "assessed",
+      "source": "graph",
+      "subjectType": "tenant"
+    },
+    {
+      "checkId": "M365-004",
+      "name": "legacy_auth_blocking",
+      "phase": "P1",
+      "defaultAssessmentMode": "informational",
+      "source": "graph",
+      "subjectType": "tenant"
+    },
+    {
+      "checkId": "M365-005",
+      "name": "global_admin_count",
+      "phase": "P1",
+      "defaultAssessmentMode": "assessed",
+      "source": "graph",
+      "subjectType": "tenant"
+    },
+    {
+      "checkId": "M365-006",
+      "name": "user_app_consent",
+      "phase": "P1",
+      "defaultAssessmentMode": "assessed",
+      "source": "graph",
+      "subjectType": "tenant"
+    },
+    {
+      "checkId": "M365-007",
+      "name": "inactive_accounts",
+      "phase": "P1",
+      "defaultAssessmentMode": "informational",
+      "source": "graph",
+      "subjectType": "user"
+    },
     {
       "checkId": "WIN-001",
       "name": "disk_space",
-      "phase": "P1",
+      "phase": "P2",
       "defaultAssessmentMode": "assessed",
       "source": "agent",
       "subjectType": "volume"
@@ -12,7 +68,7 @@
     {
       "checkId": "WIN-002",
       "name": "bitlocker_protection",
-      "phase": "P1",
+      "phase": "P2",
       "defaultAssessmentMode": "assessed",
       "source": "agent",
       "subjectType": "volume"
@@ -20,7 +76,7 @@
     {
       "checkId": "WIN-003",
       "name": "antivirus_state",
-      "phase": "P1",
+      "phase": "P2",
       "defaultAssessmentMode": "informational",
       "source": "agent",
       "subjectType": "device"
@@ -28,7 +84,7 @@
     {
       "checkId": "WIN-004",
       "name": "defender_signature_age",
-      "phase": "P1",
+      "phase": "P2",
       "defaultAssessmentMode": "assessed",
       "source": "agent",
       "subjectType": "device"
@@ -36,23 +92,23 @@
     {
       "checkId": "WIN-005",
       "name": "firewall_profiles",
-      "phase": "P1",
+      "phase": "P2",
       "defaultAssessmentMode": "assessed",
       "source": "agent",
       "subjectType": "device"
     },
     {
       "checkId": "WIN-006",
-      "name": "windows_update",
-      "phase": "P1",
+      "name": "windows_update_health",
+      "phase": "P2",
       "defaultAssessmentMode": "informational",
       "source": "agent",
       "subjectType": "device"
     },
     {
       "checkId": "WIN-007",
-      "name": "reboot_required",
-      "phase": "P1",
+      "name": "reboot_pending",
+      "phase": "P2",
       "defaultAssessmentMode": "assessed",
       "source": "agent",
       "subjectType": "device"
@@ -60,7 +116,7 @@
     {
       "checkId": "WIN-008",
       "name": "local_admin_membership",
-      "phase": "P1",
+      "phase": "P2",
       "defaultAssessmentMode": "informational",
       "source": "agent",
       "subjectType": "device"
@@ -68,7 +124,7 @@
     {
       "checkId": "WIN-009",
       "name": "secure_boot",
-      "phase": "P1",
+      "phase": "P2",
       "defaultAssessmentMode": "assessed",
       "source": "agent",
       "subjectType": "device"
@@ -76,7 +132,7 @@
     {
       "checkId": "WIN-010",
       "name": "entra_device_join",
-      "phase": "P1",
+      "phase": "P2",
       "defaultAssessmentMode": "informational",
       "source": "agent",
       "subjectType": "device"
@@ -84,7 +140,7 @@
     {
       "checkId": "WIN-011",
       "name": "os_inventory",
-      "phase": "P1",
+      "phase": "P2",
       "defaultAssessmentMode": "informational",
       "source": "agent",
       "subjectType": "device"
@@ -92,58 +148,189 @@
     {
       "checkId": "SYS-001",
       "name": "agent_freshness",
-      "phase": "P1",
+      "phase": "P2",
       "defaultAssessmentMode": "informational",
       "source": "server",
-      "subjectType": "device"
+      "subjectType": "device",
+      "evidenceSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lastFullScanAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+          },
+          "lastSeenAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+          }
+        },
+        "required": [
+          "lastFullScanAt",
+          "lastSeenAt"
+        ]
+      }
     },
     {
       "checkId": "SYS-002",
       "name": "os_support_status",
-      "phase": "P1",
+      "phase": "P2",
       "defaultAssessmentMode": "assessed",
       "source": "server",
-      "subjectType": "device"
+      "subjectType": "device",
+      "evidenceSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "product": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "windows_10",
+              "windows_11",
+              null
+            ]
+          },
+          "family": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "home_pro",
+              "enterprise_education",
+              "ltsc",
+              "iot_ltsc",
+              null
+            ]
+          },
+          "displayVersion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 8
+          },
+          "build": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "architecture": {
+            "type": "string",
+            "enum": [
+              "x64",
+              "arm64"
+            ]
+          },
+          "servicingEndsAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+          }
+        },
+        "required": [
+          "product",
+          "family",
+          "displayVersion",
+          "build",
+          "architecture",
+          "servicingEndsAt"
+        ]
+      }
     },
     {
-      "checkId": "M365-001",
-      "name": "mfa_registration",
+      "checkId": "SYS-003",
+      "name": "os_patch_level",
       "phase": "P2",
       "defaultAssessmentMode": "assessed",
-      "source": "graph",
-      "subjectType": "user"
-    },
-    {
-      "checkId": "M365-002",
-      "name": "security_defaults",
-      "phase": "P2",
-      "defaultAssessmentMode": "informational",
-      "source": "graph",
-      "subjectType": "tenant"
-    },
-    {
-      "checkId": "M365-003",
-      "name": "conditional_access_inventory",
-      "phase": "P2",
-      "defaultAssessmentMode": "informational",
-      "source": "graph",
-      "subjectType": "tenant"
-    },
-    {
-      "checkId": "M365-004",
-      "name": "intune_compliance",
-      "phase": "P2",
-      "defaultAssessmentMode": "assessed",
-      "source": "graph",
-      "subjectType": "managed_device"
-    },
-    {
-      "checkId": "M365-005",
-      "name": "sign_in_evidence",
-      "phase": "P3",
-      "defaultAssessmentMode": "informational",
-      "source": "graph",
-      "subjectType": "tenant"
+      "source": "server",
+      "subjectType": "device",
+      "evidenceSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "branchBuild": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "ubr": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "deviceSecurityMonth": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 7,
+            "maxLength": 7,
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          },
+          "expectedSecurityMonth": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 7,
+            "maxLength": 7,
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          },
+          "monthsBehind": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "missingKb": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 6,
+            "maxLength": 8,
+            "pattern": "^[0-9]{6,8}$"
+          },
+          "verifiedThroughMonth": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 7,
+            "maxLength": 7,
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          }
+        },
+        "required": [
+          "branchBuild",
+          "ubr",
+          "deviceSecurityMonth",
+          "expectedSecurityMonth",
+          "monthsBehind",
+          "missingKb",
+          "verifiedThroughMonth"
+        ]
+      }
     }
   ]
 }

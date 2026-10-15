@@ -505,14 +505,17 @@
                   "fully_encrypted",
                   "encrypting",
                   "decrypting",
-                  "fully_decrypted"
+                  "fully_decrypted",
+                  "encryption_paused",
+                  "decryption_paused"
                 ]
               },
               "protectionStatus": {
                 "type": "string",
                 "enum": [
                   "on",
-                  "off"
+                  "off",
+                  "unknown"
                 ]
               },
               "encryptionPercentage": {
@@ -561,7 +564,7 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 120,
-                      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]+$"
+                      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
                     },
                     "productState": {
                       "type": "string",
@@ -722,12 +725,45 @@
               },
               "publicEnabled": {
                 "type": "boolean"
+              },
+              "firewallProducts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "provider": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120,
+                      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+                    },
+                    "productState": {
+                      "type": "string",
+                      "enum": [
+                        "on",
+                        "off",
+                        "snoozed",
+                        "expired",
+                        "unknown"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "productState"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 10,
+                "description": "Сторонние firewall из Windows Security Center."
               }
             },
             "required": [
               "domainEnabled",
               "privateEnabled",
-              "publicEnabled"
+              "publicEnabled",
+              "firewallProducts"
             ]
           }
         }
@@ -754,16 +790,7 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "configuredSource": {
-                "type": "string",
-                "enum": [
-                  "windows_update",
-                  "wsus",
-                  "other_approved"
-                ],
-                "description": "Источник, к которому относится наблюдение. Сервер хранит историю ожидания по (deviceId, configuredSource, updateId): наблюдение источника обновляет и закрывает эпизоды только этого источника и задаёт previousCompleteAt только для него (03, «Правило WIN-006»)."
-              },
-              "auLastSearchSuccessAt": {
+              "lastSearchSuccessAt": {
                 "type": [
                   "string",
                   "null"
@@ -772,188 +799,28 @@
                 "maxLength": 40,
                 "format": "date-time",
                 "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
-                "description": "LastSearchSuccessDate, прочитанный до начала agentSearch; основа свежести при offline_cache, null — основы нет (03, «Правило WIN-006»)."
+                "description": "LastSearchSuccessDate службы автоматического обновления; null — нет."
               },
-              "agentSearch": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "enum": [
-                      "offline_cache",
-                      "online"
-                    ]
-                  },
-                  "completedAt": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "minLength": 1,
-                    "maxLength": 40,
-                    "format": "date-time",
-                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
-                  },
-                  "resultCode": {
-                    "type": "string",
-                    "enum": [
-                      "not_started",
-                      "succeeded",
-                      "succeeded_with_errors",
-                      "failed",
-                      "aborted"
-                    ]
-                  }
-                },
-                "required": [
-                  "mode",
-                  "completedAt",
-                  "resultCode"
+              "lastInstallSuccessAt": {
+                "type": [
+                  "string",
+                  "null"
                 ],
-                "allOf": [
-                  {
-                    "if": {
-                      "properties": {
-                        "resultCode": {
-                          "const": "succeeded"
-                        }
-                      },
-                      "required": [
-                        "resultCode"
-                      ]
-                    },
-                    "then": {
-                      "properties": {
-                        "completedAt": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 40,
-                          "format": "date-time",
-                          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
-                        }
-                      }
-                    }
-                  }
-                ]
+                "minLength": 1,
+                "maxLength": 40,
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
+                "description": "LastInstallationSuccessDate; null — нет."
               },
-              "pendingSecurityUpdates": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "properties": {
-                    "updateId": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 36,
-                      "format": "uuid",
-                      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-                    },
-                    "revisionNumber": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "kbArticleIds": {
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 8,
-                        "pattern": "^[0-9]{6,8}$"
-                      },
-                      "minItems": 0,
-                      "maxItems": 10,
-                      "uniqueItems": true
-                    },
-                    "categoryIds": {
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 36,
-                        "format": "uuid",
-                        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-                      },
-                      "minItems": 0,
-                      "maxItems": 10,
-                      "uniqueItems": true
-                    },
-                    "msrcSeverity": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
-                      "enum": [
-                        "Critical",
-                        "Important",
-                        "Moderate",
-                        "Low",
-                        null
-                      ]
-                    },
-                    "lastDeploymentChangeAt": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
-                      "minLength": 1,
-                      "maxLength": 40,
-                      "format": "date-time",
-                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
-                    },
-                    "deadlineAt": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
-                      "minLength": 1,
-                      "maxLength": 40,
-                      "format": "date-time",
-                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
-                    },
-                    "firstSeenPendingAt": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 40,
-                      "format": "date-time",
-                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
-                      "description": "observedAt первого сбора, в котором агент нашёл обновление у этого configuredSource; не позже observedAt наблюдения. Агент хранит значение по (configuredSource, updateId) и удаляет его только после поиска с resultCode=succeeded того же configuredSource без этого updateId."
-                    }
-                  },
-                  "required": [
-                    "updateId",
-                    "revisionNumber",
-                    "kbArticleIds",
-                    "categoryIds",
-                    "msrcSeverity",
-                    "lastDeploymentChangeAt",
-                    "deadlineAt",
-                    "firstSeenPendingAt"
-                  ]
-                },
-                "minItems": 0,
-                "maxItems": 50,
-                "description": "Только Security Updates по CategoryID, по возрастанию min(deadlineAt, firstSeenPendingAt); без заголовков.",
-                "uniqueItems": true
-              },
-              "pendingSecurityUpdatesTotal": {
-                "type": "integer",
-                "minimum": 0,
-                "description": "Длина pendingSecurityUpdates = min(total, 50); иначе 422 schema_violation."
-              },
-              "truncated": {
+              "wsusConfigured": {
                 "type": "boolean",
-                "description": "true тогда и только тогда, когда pendingSecurityUpdatesTotal > 50; иначе 422 schema_violation."
+                "description": "Политика задаёт сервер WSUS (WUServer и UseWUServer)."
               }
             },
             "required": [
-              "configuredSource",
-              "auLastSearchSuccessAt",
-              "agentSearch",
-              "pendingSecurityUpdates",
-              "pendingSecurityUpdatesTotal",
-              "truncated"
+              "lastSearchSuccessAt",
+              "lastInstallSuccessAt",
+              "wsusConfigured"
             ]
           }
         }
@@ -989,18 +856,11 @@
                 "maxLength": 40,
                 "format": "date-time",
                 "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
-              },
-              "statusSource": {
-                "type": "string",
-                "enum": [
-                  "windows_update_api"
-                ]
               }
             },
             "required": [
               "rebootRequired",
-              "lastBootAt",
-              "statusSource"
+              "lastBootAt"
             ]
           }
         }
@@ -1027,13 +887,43 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "memberSids": {
+              "members": {
                 "type": "array",
                 "items": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 184,
-                  "pattern": "^S-[0-9]+(?:-[0-9]+)+$"
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "sid": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 184,
+                      "pattern": "^S-[0-9]+(?:-[0-9]+)+$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "builtin_administrator",
+                        "local_account",
+                        "domain",
+                        "entra",
+                        "well_known",
+                        "unknown"
+                      ]
+                    },
+                    "relativeId": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "description": "RID относительно SID машины или домена; null для entra и well_known."
+                    }
+                  },
+                  "required": [
+                    "sid",
+                    "kind",
+                    "relativeId"
+                  ]
                 },
                 "minItems": 0,
                 "maxItems": 100,
@@ -1047,7 +937,7 @@
               }
             },
             "required": [
-              "memberSids",
+              "members",
               "membershipScope"
             ]
           }
@@ -1182,10 +1072,14 @@
                 "pattern": "^[A-Za-z]+$"
               },
               "displayVersion": {
-                "type": "string",
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "minLength": 1,
                 "maxLength": 8,
-                "pattern": "^[0-9]{2}H[0-9]$"
+                "pattern": "^([0-9]{2}H[0-9]|[0-9]{4})$",
+                "description": "DisplayVersion, у старых сборок — ReleaseId; null, если нет обоих."
               },
               "build": {
                 "type": "integer",
@@ -1215,5 +1109,5 @@
       }
     }
   ],
-  "description": "Закрытые allowlisted evidence-структуры P1 для каждого checkId. Применимость определяет сервер: агент не передаёт not_applicable. Межполевые и семантические инварианты (freeBytes <= totalBytes, согласованность списка WIN-006, ожидаемые объекты, время) проверяет backend по 05-data-and-api.md и specs/invariants.json."
+  "description": "Закрытые allowlisted evidence-структуры агента для каждой WIN-проверки. Применимость определяет сервер: агент не передаёт not_applicable. Межполевые и семантические инварианты (freeBytes <= totalBytes, ожидаемые объекты, время) проверяет backend по 05-data-and-api.md и specs/invariants.json."
 }

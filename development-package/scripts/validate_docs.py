@@ -1,25 +1,39 @@
-"""Document checks: catalog rows in 03, FR contracts in 01, 05 tables, 04 roles, ID references, links, chat,
-plan P0 and OS lifecycle tables; the transcript original outside the package is optional."""
+"""Document checks: catalog rows in 03, FR contracts in 01, 05 tables, 04 roles and Graph permissions, ID
+references, links, chat, P0 plan, effort plan, calendar, acceptance stages, runbook operations, agent states and
+OS lifecycle tables; the transcript original outside the package is optional."""
 from datetime import date, datetime, time, timedelta, timezone
 import hashlib
 import re
 from urllib.parse import unquote
 
-from contract_catalog import ACTION_PREFIXES, AGENT_ACTIONS, EVENT_TABLE, PROBLEM_HTTP, RETENTION_PURGE_ORDER
+from contract_catalog import (ACTION_PREFIXES, AGENT_ACTIONS, AGENT_STATES, EVENT_TABLE, GRAPH_PERMISSIONS,
+                              OS_FAMILIES, PROBLEM_HTTP, RETENTION_PURGE_ORDER, ROLES)
 from doc_tables import row_ids, table_exact, tables_with
 
 FR_HEADER = ['ID', 'Требование', 'Этап', 'Приёмка', 'Контракт']
 PROBLEM_HEADER = ['code', 'HTTP', 'Операции', 'Когда', 'Действие агента']
 EVENT_HEADER = ['eventType', 'Допустимые cause', 'assessmentId']
 ROLE_HEADER = ['Роль', 'Область', 'Разрешения']
-STAGES = ['P1', 'P1, вариант A', 'P2']
+PERMISSION_HEADER = ['Право', 'Endpoints', 'Проверки']
+STAGES = ['P1', 'P2']
 FR_COUNT, AT_COUNT, RB_COUNT, CHAT_MESSAGES = 13, 17, 14, 12
 GENERATED = {'REVIEW-BUNDLE.md', 'VALIDATION.md'}
 REFERENCE = re.compile(r'\b(?:(R|FR|AT|RB|SP|ADR)-[0-9]{2}|(INV)-[0-9]{3}|(WP)-[0-9]{2}[A-Za-z]?)\b')
 P0_HEADER = ['Работа', 'Исполнитель', 'Недели', 'Инженерные недели']
-EFFORT_HEADER = ['Работа', 'Вариант A', 'Вариант B']
-LIFECYCLE_HEADER = ['Семейство', 'displayVersion', 'Последний день обслуживания', 'servicingEndsAt']
-P0_WEEKS, P0_LOAD, P0_ENGINEERS = 5, 0.8, ('И1', 'И2')
+EFFORT_HEADER = ['Работа', 'Этап', 'Инженерные недели']
+LIFECYCLE_HEADER = ['Продукт', 'Семейство', 'displayVersion', 'build', 'Последний день обслуживания',
+                    'servicingEndsAt']
+AT_HEADER = ['ID', 'Этап', 'Сценарий', 'Ожидаемый результат', 'Ответственный WP']
+AT_STAGES = {'P1': {'P1'}, 'P2': {'P2'}, 'P1, P2': {'P1', 'P2'}}
+# Steps of «Условия допуска» and the stage whose scenario parts they require.
+ADMISSION_STAGE = {'Старт P1': 'P1', 'Пилот M365': 'P1', 'Подключение всех клиентов к M365': 'P1',
+                   'Пилот Windows': 'P2', 'Раскатка агента на все ПК': 'P2'}
+RB_HEADER = ['RB-nn', 'Название', 'Владелец роли', 'Этап', 'Операции']
+CALENDAR_HEADER = ['Отрезок', 'Состав', 'Инженерные недели', 'Минимум, недель', 'Календарные недели']
+FSM_HEADER = ['Состояние', 'Что делает агент', 'Выход']
+FAMILY_HEADER = ['Семейство', 'editionId']
+PLAN = '07-delivery-plan-and-acceptance.md'
+P0_WEEKS, P0_LOAD, P0_ENGINEERS = 3, 0.8, ('Разработчик',)
 CHAT_SHA256 = 'c9a5c429c5d6274710320dc858fc2a096c730138273785d221a6d540707454fb'
 # Documents that state the retention_purge deletion order as a chain of `entity` → `entity`.
 PURGE_DOCS = ['04-security-and-privacy.md', '05-data-and-api.md']
@@ -42,14 +56,12 @@ def check_catalog_rows(report, ctx, docs):
         rows.update({row.get('ID'): row for row in table})
     for item in ctx['catalog']:
         cid = item['checkId']
-        report.check(f'| {cid} |' in text, 'docs', f'03: no row for {cid}')
-        if item['source'] in ('agent', 'server'):
-            row = rows.get(cid)
-            report.check(row is not None, 'docs', f'03: {cid} absent from the table with «Объект» and «Режим по умолчанию»')
-            if row:
-                report.check(row.get('Объект') == item['subjectType'], 'docs', f'03: {cid} «Объект» ≠ subjectType')
-                report.check(row.get('Режим по умолчанию') == item['defaultAssessmentMode'], 'docs',
-                             f'03: {cid} «Режим по умолчанию» ≠ defaultAssessmentMode')
+        row = rows.get(cid)
+        report.check(row is not None, 'docs', f'03: {cid} absent from a table with «Объект» and «Режим по умолчанию»')
+        if row:
+            report.check(row.get('Объект') == item['subjectType'], 'docs', f'03: {cid} «Объект» ≠ subjectType')
+            report.check(row.get('Режим по умолчанию') == item['defaultAssessmentMode'], 'docs',
+                         f'03: {cid} «Режим по умолчанию» ≠ defaultAssessmentMode')
 
 
 def check_requirements(report, ctx, docs):
@@ -63,20 +75,23 @@ def check_requirements(report, ctx, docs):
     for number in range(1, RB_COUNT + 1):
         report.check(f'RB-{number:02}' in plan_ids, 'docs', f'07: RB-{number:02} row missing')
     rows = table_exact(requirements, FR_HEADER)
-    report.check(bool(rows), 'docs', '01: FR table with column «Контракт» missing')
-    operations = set(ctx['operation_ids'])
+    report.check(len(rows) == FR_COUNT, 'docs', '01: FR table with column «Контракт» must have every FR')
+    phases = {op['operationId']: op.get('x-phase') for _, _, op in ctx['operations']}
+    covered = set()
     for row in rows:
         fr, stage, contract = row.get('ID'), row.get('Этап', ''), row.get('Контракт', '')
         report.check(stage in STAGES, 'docs', f'01: {fr} stage «{stage}» not allowed')
-        if not stage.startswith('P1'):
-            continue
         report.check(contract not in ('', '—'), 'docs', f'01: {fr} has empty «Контракт»')
         for item in filter(None, contract.split(', ')):
             procedure = re.fullmatch(r'процедура: (RB-[0-9]{2})', item)
             if procedure:
                 report.check(procedure.group(1) in plan_ids, 'docs', f'01: {fr} refers to missing {item}')
-            elif item != '—':
-                report.check(item in operations, 'docs', f'01: {fr} refers to unknown operationId {item}')
+                continue
+            report.check(item in phases, 'docs', f'01: {fr} refers to unknown operationId {item}')
+            report.check(phases.get(item, stage) == stage, 'docs', f'01: {fr} ({stage}) lists {item} of another phase')
+            covered.add(item)
+    for operation_id in phases:
+        report.check(operation_id in covered, 'docs', f'01: operationId {operation_id} not in any FR «Контракт»')
     report.summary.update(requirements=FR_COUNT, acceptance=AT_COUNT, runbooks=RB_COUNT)
 
 
@@ -110,7 +125,7 @@ def check_data_api(report, ctx, docs):
             report.check(row.get('HTTP') == str(PROBLEM_HTTP[code]), 'docs', f'05: {code} HTTP differs')
         report.check(_action_ok(row.get('Действие агента', '')), 'docs', f'05: {code} agent action outside the list')
         if code == 'payload_too_large':
-            for token in ('262144', '16384', '65536', 'enrollAgent'):
+            for token in ('262144', '16384', '1024', '65536'):
                 report.check(token in row.get('Когда', ''), 'docs', f'05: payload_too_large row lacks {token}')
     events = table_exact(text, EVENT_HEADER)
     report.check(bool(events), 'docs', '05: eventType/cause table missing')
@@ -140,13 +155,16 @@ def check_purge_order(report, docs):
 
 def check_roles(report, ctx, docs):
     text = docs.get('04-security-and-privacy.md', '')
-    report.check('| PlatformAdmin | платформа |' in text, 'docs', '04: row «| PlatformAdmin | платформа |» missing')
     rows = table_exact(text, ROLE_HEADER)
-    report.check(bool(rows), 'docs', '04: role table missing')
-    roles = {row['Роль'] for row in rows if 'P3' not in row.get('Область', '')}
+    roles = {row['Роль'] for row in rows}
+    report.check(roles == set(ROLES), 'docs', f'04: role table must list exactly {ROLES}')
     for _, _, op in ctx['operations']:
         missing = set(op.get('x-allowed-roles', [])) - roles
-        report.check(not missing or not rows, 'docs', f'04: roles {sorted(missing)} of {op["operationId"]} not defined')
+        report.check(not missing, 'docs', f'04: roles {sorted(missing)} of {op["operationId"]} not defined')
+    permissions = [row['Право'].strip('`') for row in table_exact(text, PERMISSION_HEADER)]
+    report.check(permissions == GRAPH_PERMISSIONS, 'docs',
+                 '04: Graph permission table must list GRAPH_PERMISSIONS in catalog order')
+    report.summary['graphPermissions'] = len(permissions)
 
 
 def check_references(report, docs, invariant_ids):
@@ -213,17 +231,99 @@ def check_p0_plan(report, docs):
     for sp, weeks in sorted(spans.items()):
         report.check(max(weeks) - min(weeks) + 1 <= limits.get(sp, 0), 'docs',
                      f'07: «План P0» {sp} spans more weeks than its limit')
-    effort = table_exact(text, EFFORT_HEADER)
-    p0 = [row for row in effort if row['Работа'].startswith('P0')]
-    report.check(len(p0) == 1 and all(_range(p0[0][c]) == (total, total) for c in EFFORT_HEADER[1:]), 'docs',
-                 f'07: row «P0» of the effort plan must equal {total}')
-    items = [row for row in effort if not row['Работа'].startswith('**')]
-    totals = [row for row in effort if row['Работа'].startswith('**Итого')]
-    for column in EFFORT_HEADER[1:]:
-        expected = tuple(sum(_range(row[column])[i] for row in items) for i in (0, 1))
-        report.check(len(totals) == 1 and _range(totals[0][column]) == expected, 'docs',
-                     f'07: «Итого» {column} differs from the sum of rows')
     report.summary['p0EngineerWeeks'] = total
+    return total
+
+
+def _whole_weeks(value):
+    return int(value + 0.5 + 1e-9)
+
+
+def check_calendar(report, docs):
+    """Each calendar segment sums its effort rows; weeks = max(minimum, engineer weeks / load), rounded."""
+    text = docs.get(PLAN, '')
+    effort = {('P0' if row['Этап'] == 'P0' else row['Работа']): _range(row['Инженерные недели'])
+              for row in table_exact(text, EFFORT_HEADER) if not row['Работа'].startswith('**')}
+    rows = table_exact(text, CALENDAR_HEADER)
+    report.check(bool(rows), 'docs', '07: calendar table «Отрезок | Состав | …» missing')
+    used = []
+    for row in rows:
+        name, parts = row['Отрезок'], row['Состав'].split(', ')
+        unknown = [part for part in parts if part not in effort]
+        report.check(not unknown, 'docs', f'07: calendar «{name}» lists unknown work {unknown}')
+        used.extend(parts)
+        weeks = tuple(round(sum(effort.get(part, (0.0, 0.0))[i] for part in parts), 2) for i in (0, 1))
+        report.check(_range(row['Инженерные недели']) == weeks, 'docs', f'07: calendar «{name}» must sum to {weeks}')
+        minimum = _range(row['Минимум, недель'])
+        expected = tuple(float(max(minimum[i], _whole_weeks(weeks[i] / P0_LOAD))) for i in (0, 1))
+        report.check(_range(row['Календарные недели']) == expected, 'docs',
+                     f'07: calendar «{name}» must last {expected} weeks')
+    report.check(sorted(used) == sorted(effort), 'docs', '07: every effort row must be in exactly one calendar segment')
+
+
+def _at_refs(text):
+    """AT IDs in a text; a range «AT-01…AT-11» stands for every ID between its ends."""
+    found = set()
+    for first, last in re.findall(r'AT-([0-9]{2})(?:…AT-([0-9]{2}))?', text):
+        found.update(f'AT-{number:02}' for number in range(int(first), int(last or first) + 1))
+    return found
+
+
+def check_acceptance_stages(report, ctx, docs):
+    """Scenario parts per stage: FR, invariant records and admission steps refer only to parts of their stage."""
+    plan = docs.get(PLAN, '')
+    rows = table_exact(plan, AT_HEADER)
+    stages = {row['ID']: AT_STAGES.get(row['Этап'], set()) for row in rows}
+    report.check(len(rows) == AT_COUNT and all(stages.values()), 'docs',
+                 '07: every AT row needs «Этап» P1, P2 or «P1, P2»')
+    for row in table_exact(docs.get('01-product-and-scope.md', ''), FR_HEADER):
+        for at in sorted(_at_refs(row.get('Приёмка', ''))):
+            report.check(row.get('Этап') in stages.get(at, ()), 'docs', f'01: {row["ID"]} uses {at} without its stage')
+    for record in ctx['invariants']:
+        at = record.get('acceptance')
+        report.check(record.get('phase') in stages.get(at, ()), 'docs',
+                     f'{record.get("id")}: acceptance {at} has no {record.get("phase")} part')
+    for table in tables_with(plan, ['Шаг', 'Условия']):
+        for row in table:
+            stage = ADMISSION_STAGE.get(row['Шаг'])
+            report.check(stage is not None, 'docs', f'07: unknown admission step «{row["Шаг"]}»')
+            for at in sorted(_at_refs(row['Условия'])):
+                report.check(stage in stages.get(at, ()), 'docs', f'07: admission «{row["Шаг"]}» needs {at} of {stage}')
+
+
+def check_runbooks(report, ctx, docs):
+    phases = {op['operationId']: op.get('x-phase') for _, _, op in ctx['operations']}
+    rows = table_exact(docs.get(PLAN, ''), RB_HEADER)
+    report.check(len(rows) == RB_COUNT, 'docs', '07: runbook table must have «Операции» for every RB')
+    for row in rows:
+        allowed = STAGES[:STAGES.index(row['Этап']) + 1] if row['Этап'] in STAGES else []
+        for operation_id in ([] if row['Операции'] == '—' else row['Операции'].split(', ')):
+            report.check(phases.get(operation_id) in allowed, 'docs',
+                         f'07: {row["RB-nn"]} lists {operation_id}: unknown or of a later stage')
+
+
+def check_agent_states(report, docs):
+    rows = table_exact(docs.get('05-data-and-api.md', ''), FSM_HEADER)
+    report.check([row['Состояние'] for row in rows] == AGENT_STATES, 'docs',
+                 '05: agent state table must list AGENT_STATES in catalog order')
+
+
+def check_effort(report, docs, p0_total):
+    rows = table_exact(docs.get('07-delivery-plan-and-acceptance.md', ''), EFFORT_HEADER)
+    report.check(bool(rows), 'docs', '07: effort table «Работа | Этап | Инженерные недели» missing')
+    p0 = [row for row in rows if row['Этап'] == 'P0' and not row['Работа'].startswith('**')]
+    report.check(len(p0) == 1 and _range(p0[0]['Инженерные недели']) == (p0_total, p0_total), 'docs',
+                 f'07: effort row of P0 must equal the P0 plan ({p0_total})')
+    totals = {}
+    for stage in ('P1', 'P2'):
+        items = [row for row in rows if row['Этап'] == stage and not row['Работа'].startswith('**')]
+        expected = tuple(round(sum(_range(row['Инженерные недели'])[i] for row in items), 2) for i in (0, 1))
+        found = [row for row in rows if row['Работа'] == f'**Итого {stage}**']
+        report.check(bool(items) and len(found) == 1 and _range(found[0]['Инженерные недели']) == expected, 'docs',
+                     f'07: «Итого {stage}» differs from the sum of its rows {expected}')
+        totals[stage] = expected
+    report.summary['effortWeeks'] = {stage: '–'.join(f'{v:g}'.replace('.', ',') for v in value)
+                                     for stage, value in totals.items()}
 
 
 def _nth_sunday(year, month, n):
@@ -239,12 +339,17 @@ def pacific_day_end(day):
 
 
 def check_os_lifecycle(report, docs):
-    rows = table_exact(docs.get('03-check-catalog.md', ''), LIFECYCLE_HEADER)
+    text = docs.get('03-check-catalog.md', '')
+    families = [row['Семейство'] for row in table_exact(text, FAMILY_HEADER)]
+    report.check(families == OS_FAMILIES, 'docs', '03: family table must list OS_FAMILIES in catalog order')
+    rows = table_exact(text, LIFECYCLE_HEADER)
     report.check(bool(rows), 'docs', '03: OS lifecycle table missing')
-    keys = [(row['Семейство'], row['displayVersion']) for row in rows]
+    keys = [(row['Продукт'], row['Семейство'], row['displayVersion']) for row in rows]
     report.check(len(keys) == len(set(keys)), 'docs', '03: duplicate OS lifecycle row')
     for row in rows:
+        report.check(row['Семейство'] in OS_FAMILIES, 'docs', f'03: unknown family {row["Семейство"]}')
         day = row['Последний день обслуживания']
+        report.check(row['build'].isdigit(), 'docs', f'03: {row["displayVersion"]}: build must be a number')
         try:
             parsed = date.fromisoformat(day) if re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', day) else None
         except ValueError:
@@ -254,7 +359,7 @@ def check_os_lifecycle(report, docs):
             continue
         expected = pacific_day_end(parsed).strftime('%Y-%m-%dT%H:%M:%SZ')
         report.check(row['servicingEndsAt'] == expected, 'docs',
-                     f'03: {row["displayVersion"]}: servicingEndsAt must be {expected}')
+                     f'03: {row["Продукт"]} {row["displayVersion"]}: servicingEndsAt must be {expected}')
     report.summary['osLifecycleRows'] = len(rows)
 
 

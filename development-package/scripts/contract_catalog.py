@@ -1,58 +1,91 @@
 """Closed catalogs shared by the contract generator and the package validator.
 
-Each list here is the single machine source for a closed set described in 03 and 05:
-checks, Problem.code with agent actions, Assessment.reasonCode, finding_event pairs,
+Each list here is the single machine source for a closed set described in 03, 04 and 05:
+checks, Graph permissions, Problem.code with agent actions, Assessment.reasonCode, finding_event pairs,
 agent states and portal role sets. Counts are never hard-coded elsewhere.
 """
 
-CATALOG_VERSION = '0.2.0'
+CATALOG_VERSION = '0.3.0'
 
 # checkId, name, phase, defaultAssessmentMode, source, subjectType
 CHECKS = [
-    ('WIN-001', 'disk_space', 'P1', 'assessed', 'agent', 'volume'),
-    ('WIN-002', 'bitlocker_protection', 'P1', 'assessed', 'agent', 'volume'),
-    ('WIN-003', 'antivirus_state', 'P1', 'informational', 'agent', 'device'),
-    ('WIN-004', 'defender_signature_age', 'P1', 'assessed', 'agent', 'device'),
-    ('WIN-005', 'firewall_profiles', 'P1', 'assessed', 'agent', 'device'),
-    ('WIN-006', 'windows_update', 'P1', 'informational', 'agent', 'device'),
-    ('WIN-007', 'reboot_required', 'P1', 'assessed', 'agent', 'device'),
-    ('WIN-008', 'local_admin_membership', 'P1', 'informational', 'agent', 'device'),
-    ('WIN-009', 'secure_boot', 'P1', 'assessed', 'agent', 'device'),
-    ('WIN-010', 'entra_device_join', 'P1', 'informational', 'agent', 'device'),
-    ('WIN-011', 'os_inventory', 'P1', 'informational', 'agent', 'device'),
-    ('SYS-001', 'agent_freshness', 'P1', 'informational', 'server', 'device'),
-    ('SYS-002', 'os_support_status', 'P1', 'assessed', 'server', 'device'),
-    ('M365-001', 'mfa_registration', 'P2', 'assessed', 'graph', 'user'),
-    ('M365-002', 'security_defaults', 'P2', 'informational', 'graph', 'tenant'),
-    ('M365-003', 'conditional_access_inventory', 'P2', 'informational', 'graph', 'tenant'),
-    ('M365-004', 'intune_compliance', 'P2', 'assessed', 'graph', 'managed_device'),
-    ('M365-005', 'sign_in_evidence', 'P3', 'informational', 'graph', 'tenant'),
+    ('M365-001', 'mfa_registration', 'P1', 'assessed', 'graph', 'user'),
+    ('M365-002', 'admin_mfa_registration', 'P1', 'assessed', 'graph', 'user'),
+    ('M365-003', 'mfa_enforcement', 'P1', 'assessed', 'graph', 'tenant'),
+    ('M365-004', 'legacy_auth_blocking', 'P1', 'informational', 'graph', 'tenant'),
+    ('M365-005', 'global_admin_count', 'P1', 'assessed', 'graph', 'tenant'),
+    ('M365-006', 'user_app_consent', 'P1', 'assessed', 'graph', 'tenant'),
+    ('M365-007', 'inactive_accounts', 'P1', 'informational', 'graph', 'user'),
+    ('WIN-001', 'disk_space', 'P2', 'assessed', 'agent', 'volume'),
+    ('WIN-002', 'bitlocker_protection', 'P2', 'assessed', 'agent', 'volume'),
+    ('WIN-003', 'antivirus_state', 'P2', 'informational', 'agent', 'device'),
+    ('WIN-004', 'defender_signature_age', 'P2', 'assessed', 'agent', 'device'),
+    ('WIN-005', 'firewall_profiles', 'P2', 'assessed', 'agent', 'device'),
+    ('WIN-006', 'windows_update_health', 'P2', 'informational', 'agent', 'device'),
+    ('WIN-007', 'reboot_pending', 'P2', 'assessed', 'agent', 'device'),
+    ('WIN-008', 'local_admin_membership', 'P2', 'informational', 'agent', 'device'),
+    ('WIN-009', 'secure_boot', 'P2', 'assessed', 'agent', 'device'),
+    ('WIN-010', 'entra_device_join', 'P2', 'informational', 'agent', 'device'),
+    ('WIN-011', 'os_inventory', 'P2', 'informational', 'agent', 'device'),
+    ('SYS-001', 'agent_freshness', 'P2', 'informational', 'server', 'device'),
+    ('SYS-002', 'os_support_status', 'P2', 'assessed', 'server', 'device'),
+    ('SYS-003', 'os_patch_level', 'P2', 'assessed', 'server', 'device'),
 ]
+CHECK_IDS = [c[0] for c in CHECKS]
+GRAPH_IDS = [c[0] for c in CHECKS if c[4] == 'graph']
 AGENT_IDS = [c[0] for c in CHECKS if c[4] == 'agent']
-P1_IDS = [c[0] for c in CHECKS if c[2] == 'P1']
-SUBJECT_TYPES = sorted({c[5] for c in CHECKS})
+SERVER_IDS = [c[0] for c in CHECKS if c[4] == 'server']
+WINDOWS_IDS = AGENT_IDS + SERVER_IDS
+SUBJECT_TYPES = ['tenant', 'user', 'device', 'volume']
 VOLUME_IDS = [c[0] for c in CHECKS if c[5] == 'volume' and c[4] == 'agent']
+GRAPH_SUBJECTS = {c[0]: c[5] for c in CHECKS if c[4] == 'graph'}
 ALWAYS_INFORMATIONAL = ['WIN-011', 'SYS-001']
 
-# Agent actions: closed list; each leads to a state of the agent state machine (05).
+# Application permissions of the multi-tenant Graph app (04 «Права Graph»); read-only, all P1 modules.
+GRAPH_PERMISSIONS = ['Organization.Read.All', 'User.Read.All', 'UserAuthenticationMethod.Read.All',
+                     'RoleManagement.Read.Directory', 'GroupMember.ReadBasic.All', 'Policy.Read.All',
+                     'AuditLog.Read.All']
+# Role template of the Entra Connect synchronization account: M365-001 and M365-007 are not applicable to it.
+DIRECTORY_SYNC_ROLE = 'd29b2b05-8046-44ba-8758-1e26182fcf32'
+# Conditions of a Conditional Access policy that make its MFA requirement conditional (03 «Правило M365-003»).
+CA_CONDITIONS = ['user_risk', 'sign_in_risk', 'insider_risk', 'locations_trusted_excluded', 'locations_other',
+                 'platforms', 'devices', 'authentication_flows', 'client_applications']
+CA_GRANT_CONTROLS = ['mfa', 'authentication_strength', 'compliant_device', 'domain_joined_device',
+                     'approved_application', 'compliant_application', 'password_change', 'terms_of_use', 'other']
+# Normalized authentication method kinds stored for M365-001/M365-002 (03 «Правило M365-001 и M365-002»).
+# hardware_oath is listed by Graph only in beta; P1 reads v1.0 and does not observe it.
+METHOD_KINDS = ['password', 'microsoft_authenticator', 'fido2', 'windows_hello_for_business',
+                'platform_credential', 'software_oath', 'hardware_oath', 'phone', 'external', 'email',
+                'temporary_access_pass', 'qr_code_pin', 'other']
+MFA_METHOD_KINDS = ['microsoft_authenticator', 'fido2', 'windows_hello_for_business', 'platform_credential',
+                    'software_oath', 'hardware_oath', 'phone', 'external']
+# Modules of an M365 collection run and their capability statuses (03 «Возможности подключения»).
+GRAPH_MODULES = ['tenant', 'licenses', 'users', 'auth_methods', 'roles', 'security_defaults',
+                 'conditional_access', 'authorization_policy', 'sign_in_activity', 'per_user_mfa']
+# skipped: the module is not needed in this run (per_user_mfa when Security Defaults or Conditional Access decide).
+CAPABILITY_STATUSES = ['available', 'skipped', 'permission_missing', 'license_missing', 'partial',
+                       'temporary_error']
+
+# Agent actions: closed list; each leads to a state of the agent state machine (05). None — the action keeps the
+# current state; new_challenge escalates to reenroll after a second refusal (05, «Конечный автомат агента»).
 AGENT_ACTIONS = {
     'retry_after': 'Backoff',
     'retry_backoff': 'Backoff',
-    'drop_batch': 'Active',
-    'refresh_configuration': 'Active',
-    'resync_sequence': 'Active',
-    'restart_renewal': 'Active',
-    'skip_request': None,  # stays in the current state (Active or Unenrolled)
+    'drop_batch': None,
+    'refresh_configuration': None,
+    'resync_sequence': None,
+    'renew_session': None,
+    'new_challenge': None,
+    'skip_request': None,
+    'reenroll': 'Unenrolled',
+    'await_enrollment_key': 'EnrollmentBlocked',
     'stop_until_upgrade': 'VersionBlocked',
     'suspend_until_active': 'Suspended',
-    'reenroll_required': 'ReenrollRequired',
-    'await_new_token': 'Unenrolled',
-    'trust_failure': 'TrustFailed',
-    'stop_until_reinstall': 'ReinstallRequired',
+    'stop_until_reinstall': 'Revoked',
     'identity_stop': 'IdentityConflict',
 }
-AGENT_STATES = ['Unenrolled', 'Active', 'Backoff', 'VersionBlocked', 'Suspended', 'TrustFailed',
-                'ReenrollRequired', 'ReinstallRequired', 'IdentityConflict']
+AGENT_STATES = ['Unenrolled', 'EnrollmentBlocked', 'Active', 'Backoff', 'VersionBlocked', 'Suspended',
+                'Revoked', 'IdentityConflict']
 # Prefixes allowed before conditional action variants in the 05 table.
 ACTION_PREFIXES = ['enrollAgent:', 'submitScan:', 'прочие агентские:', 'без Retry-After:']
 
@@ -64,24 +97,22 @@ PROBLEM_CODES = [
     ('unsupported_media_type', 415, _SCAN_OTHER_DROP),
     ('payload_too_large', 413, _SCAN_OTHER_DROP),
     ('schema_violation', 422, _SCAN_OTHER_REFRESH),
-    ('unsupported_schema_version', 422, 'drop_batch + refresh_configuration'),
-    ('unknown_check_id', 422, 'drop_batch + refresh_configuration'),
+    ('unsupported_schema_version', 422, 'stop_until_upgrade'),
     ('unexpected_subject', 422, 'drop_batch + refresh_configuration'),
     ('duplicate_observation', 422, 'drop_batch'),
     ('unknown_policy_version', 422, 'drop_batch + refresh_configuration'),
     ('batch_too_old', 422, 'drop_batch'),
     ('batch_time_inconsistent', 422, 'drop_batch'),
     ('agent_version_unsupported', 422, 'stop_until_upgrade'),
-    ('idempotency_conflict', 409, 'enrollAgent: reenroll_required; submitScan: drop_batch'),
+    ('idempotency_conflict', 409, 'enrollAgent: reenroll; submitScan: drop_batch'),
     ('sequence_conflict', 409, 'resync_sequence'),
     ('identity_conflict', 409, 'identity_stop'),
     ('organization_inactive', 403, 'suspend_until_active'),
-    ('certificate_expired', 401, 'reenroll_required'),
-    ('certificate_revoked', 401, 'stop_until_reinstall'),
-    ('certificate_unknown', 401, 'trust_failure'),
-    ('renewal_request_conflict', 409, 'restart_renewal'),
-    ('enrollment_token_invalid', 401, 'await_new_token'),
-    ('installation_already_enrolled', 409, 'stop_until_reinstall'),
+    ('enrollment_key_invalid', 401, 'await_enrollment_key'),
+    ('challenge_invalid', 401, 'new_challenge'),
+    ('session_invalid', 401, 'renew_session'),
+    ('device_unknown', 401, 'reenroll'),
+    ('device_revoked', 401, 'stop_until_reinstall'),
     ('rate_limited', 429, 'retry_after'),
     ('temporarily_unavailable', 503, 'retry_after; без Retry-After: retry_backoff'),
     ('session_required', 401, '—'),
@@ -93,6 +124,9 @@ PROBLEM_CODES = [
     ('if_match_required', 428, '—'),
     ('workflow_transition_forbidden', 409, '—'),
     ('lifecycle_transition_forbidden', 409, '—'),
+    ('connection_state_conflict', 409, '—'),
+    ('tenant_conflict', 409, '—'),
+    ('consent_not_granted', 422, '—'),
     ('resource_not_ready', 409, '—'),
     ('validation_failed', 422, '—'),
     ('policy_inputs_missing', 422, '—'),
@@ -101,58 +135,71 @@ PROBLEM_HTTP = {code: status for code, status, _ in PROBLEM_CODES}
 # Codes that invariants.json does not need to cover (generic transport throttling).
 UNCOVERED_CODES = ['rate_limited', 'temporarily_unavailable']
 
-COLLECTOR_REASONS = ['permission_denied', 'unsupported', 'collector_timeout', 'temporary_error']
-REASON_CODES = COLLECTOR_REASONS + [
-    'missing_observation', 'clock_inconsistent', 'unmapped_state', 'update_search_failed',
-    'update_search_outdated', 'update_source_mismatch', 'update_list_truncated', 'update_age_unconfirmed',
-    'os_version_unknown', 'os_inventory_missing', 'applicability_input_missing',
-    'policy_not_applicable', 'evidence_time_invalid',
+# Collection reasons: the agent sends the first four; the M365 collector sets all except collector_timeout.
+AGENT_COLLECTOR_REASONS = ['permission_denied', 'unsupported', 'collector_timeout', 'temporary_error']
+GRAPH_COLLECTOR_REASONS = ['permission_denied', 'temporary_error', 'license_missing', 'partial_data']
+COLLECTION_REASONS = AGENT_COLLECTOR_REASONS + ['license_missing', 'partial_data']
+REASON_CODES = COLLECTION_REASONS + [
+    'missing_observation', 'clock_inconsistent', 'unmapped_state', 'applicability_input_missing',
+    'policy_not_applicable', 'evidence_time_invalid', 'os_version_unknown', 'os_inventory_missing',
+    'release_catalog_stale', 'build_not_in_catalog', 'enforcement_unconfirmed',
 ]
 # reasonCode values allowed for an informational assessment (result=null) when data is missing.
-INFORMATIONAL_REASONS = COLLECTOR_REASONS + ['missing_observation', 'clock_inconsistent',
-                                             'applicability_input_missing']
+INFORMATIONAL_REASONS = COLLECTION_REASONS + ['missing_observation', 'clock_inconsistent',
+                                              'applicability_input_missing']
 RESULTS = ['pass', 'fail', 'unknown', 'not_applicable']
 
-EVENT_CAUSES = ['device_change', 'rule_change', 'policy_change', 'applicability_change', 'data_quality',
+EVENT_CAUSES = ['source_change', 'rule_change', 'policy_change', 'applicability_change', 'data_quality',
                 'manual_action', 'review_expired']
-_TRIGGERS = ['device_change', 'rule_change', 'policy_change']
+_TRIGGERS = ['source_change', 'rule_change', 'policy_change']
 # eventType -> (allowed causes, assessmentId: 'required' | 'nullable' | 'null')
 EVENT_TABLE = {
     'opened': (_TRIGGERS, 'required'),
-    # applicability_change: not_applicable from device facts of the batch without a policy_revision change.
+    # applicability_change: not_applicable from facts of the source without a policy_revision change.
     'resolved': (_TRIGGERS + ['applicability_change'], 'required'),
     'reopened': (_TRIGGERS, 'required'),
     'quality_changed': (['data_quality'], 'nullable'),
     'workflow_changed': (['manual_action', 'review_expired'], 'null'),
     'policy_changed': (['policy_change'], 'nullable'),
-    'object_retired': (['device_change', 'manual_action'], 'null'),
+    'subject_retired': (['source_change', 'manual_action'], 'null'),
 }
 WORKFLOW_STATES = ['new', 'in_progress', 'risk_accepted', 'suppressed']
-CAPABILITY_STATUSES = ['permission_missing', 'license_unconfirmed', 'partial']
-ENFORCEMENTS = ['schema', 'agent_api', 'portal_api', 'worker', 'db_rls', 'agent', 'infra']
+ENFORCEMENTS = ['schema', 'agent_api', 'portal_api', 'collector', 'evaluator', 'worker', 'db_rls', 'agent',
+                'infra']
 REPLAY_STATUSES = [200, 201, 202, 204]
 
-READ_ROLES = ['PlatformAdmin', 'ServiceManager', 'Technician']
-MANAGE_ROLES = ['PlatformAdmin', 'ServiceManager']
-PLATFORM_ROLES = ['PlatformAdmin']
+ROLES = ['Admin', 'Technician', 'Reader']
+READ_ROLES = ['Admin', 'Technician', 'Reader']
+WORK_ROLES = ['Admin', 'Technician']
+ADMIN_ROLES = ['Admin']
 LANGUAGES = ['nb', 'nn', 'en']
 ACCEPT_LANGUAGE_MAX = 35
-# Portal GET operations whose every read writes audit_event for any role.
-AUDIT_ALWAYS = ['downloadOrganizationExport', 'listAuditEvents', 'downloadReport']
-# Portal GET operations outside an organization context; a read by platform_role writes one platform_audit_event.
-PLATFORM_AUDIT_READS = ['listOrganizations']
+# Portal GET operations whose every read writes audit_event.
+AUDIT_READS = ['downloadOrganizationExport', 'listAuditEvents', 'downloadReport']
+# Portal operations outside /organizations/{organizationId}: reads across organizations or staff data.
+CROSS_ORG_OPERATIONS = ['listOrganizations', 'createOrganization', 'listFindingsAcrossOrganizations', 'listStaff',
+                        'getCurrentStaff', 'listWindowsReleases', 'importWindowsReleases', 'verifyWindowsReleaseMonth']
 # Actions of changeOrganizationLifecycle (OrganizationLifecycleChange.action and audit details).
 LIFECYCLE_ACTIONS = ['disable', 'enable', 'schedule_deletion', 'cancel_deletion']
 # Deletion order of retention_purge (04 «Сроки хранения», 05); keys of RetentionPurgeAuditDetails.deleted.
-RETENTION_PURGE_ORDER = ['finding_event', 'assessment', 'finding', 'observation', 'pending_update_episode',
-                         'scan_batch', 'scan_request', 'device_certificate', 'enrollment', 'enrollment_token',
-                         'device']
+RETENTION_PURGE_ORDER = ['finding_event', 'assessment', 'finding', 'observation', 'collection_run', 'scan_batch',
+                         'scan_request', 'subject', 'device_presence', 'device', 'revoked_installation']
 # AuditEvent.action -> schema of AuditEvent.details; details is null for every other action.
 AUDIT_DETAILS = {'organization.lifecycle_change': 'OrganizationLifecycleAuditDetails',
                  'finding.assignment_change': 'FindingAssignmentAuditDetails',
                  'retention.purge_summary': 'RetentionPurgeAuditDetails'}
 # Operations accepting Accept-Language and answering with Content-Language.
-LOCALIZED_OPERATIONS = ['listDeviceAssessments', 'listFindings', 'getFinding', 'patchFinding',
-                        'decideFindingRisk']
+LOCALIZED_OPERATIONS = ['listAssessments', 'listFindings', 'listFindingsAcrossOrganizations', 'getFinding',
+                        'patchFinding', 'decideFindingRisk']
 # Portal GET operations that may answer 409 (resource not ready).
 DOWNLOAD_OPERATIONS = ['downloadReport', 'downloadOrganizationExport']
+# Restrictive security actions written to the append-only security log before commit (04, 06).
+# organization.cancel_deletion is permissive, but it is logged too: replay must not execute a cancelled deletion.
+SECURITY_LOG_ACTIONS = ['device.revoke', 'enrollment_key.revoke', 'organization.disable',
+                        'organization.schedule_deletion', 'organization.cancel_deletion', 'organization.delete',
+                        'm365.disconnect']
+# Classes of members of the local Administrators group (03 «Правило WIN-008»).
+LOCAL_ADMIN_KINDS = ['builtin_administrator', 'local_account', 'domain', 'entra', 'well_known', 'unknown']
+RELEASE_KINDS = ['security_monthly', 'security_oob', 'nonsecurity_oob', 'preview', 'hotpatch']
+# OS families of the lifecycle table by editionId (03 «Жизненный цикл ОС»).
+OS_FAMILIES = ['home_pro', 'enterprise_education', 'ltsc', 'iot_ltsc']

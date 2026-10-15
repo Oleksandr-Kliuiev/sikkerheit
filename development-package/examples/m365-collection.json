@@ -1,0 +1,236 @@
+{
+  "schemaVersion": "1.0",
+  "collectionRunId": "55555555-5555-4555-8555-555555555555",
+  "tenantId": "22222222-2222-4222-8222-222222222222",
+  "startedAt": "2026-10-12T03:00:00Z",
+  "completedAt": "2026-10-12T03:05:00Z",
+  "state": "completed",
+  "entraP1": true,
+  "usersComplete": true,
+  "modules": [
+    {
+      "module": "tenant",
+      "status": "available"
+    },
+    {
+      "module": "licenses",
+      "status": "available"
+    },
+    {
+      "module": "users",
+      "status": "available"
+    },
+    {
+      "module": "auth_methods",
+      "status": "available"
+    },
+    {
+      "module": "roles",
+      "status": "available"
+    },
+    {
+      "module": "security_defaults",
+      "status": "available"
+    },
+    {
+      "module": "conditional_access",
+      "status": "available"
+    },
+    {
+      "module": "authorization_policy",
+      "status": "available"
+    },
+    {
+      "module": "sign_in_activity",
+      "status": "available"
+    },
+    {
+      "module": "per_user_mfa",
+      "status": "available"
+    }
+  ],
+  "observations": [
+    {
+      "checkId": "M365-001",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "user",
+        "key": "aaaaaaaa-0000-4000-8000-000000000001",
+        "userPrincipalName": "kari.nordmann@example.invalid"
+      },
+      "observedAt": "2026-10-12T03:04:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "accountEnabled": true,
+        "userType": "Member",
+        "directorySyncAccount": false,
+        "methodKinds": [
+          "password"
+        ]
+      }
+    },
+    {
+      "checkId": "M365-001",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "user",
+        "key": "aaaaaaaa-0000-4000-8000-000000000002",
+        "userPrincipalName": "ola.admin@example.invalid"
+      },
+      "observedAt": "2026-10-12T03:04:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "accountEnabled": true,
+        "userType": "Member",
+        "directorySyncAccount": false,
+        "methodKinds": [
+          "password",
+          "microsoft_authenticator"
+        ]
+      }
+    },
+    {
+      "checkId": "M365-002",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "user",
+        "key": "aaaaaaaa-0000-4000-8000-000000000002",
+        "userPrincipalName": "ola.admin@example.invalid"
+      },
+      "observedAt": "2026-10-12T03:04:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "accountEnabled": true,
+        "userType": "Member",
+        "roleTemplateIds": [
+          "62e90394-69f5-4237-9190-012177145e10"
+        ],
+        "assignment": "direct",
+        "methodKinds": [
+          "password",
+          "microsoft_authenticator"
+        ]
+      }
+    },
+    {
+      "checkId": "M365-003",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "tenant",
+        "key": "22222222-2222-4222-8222-222222222222"
+      },
+      "observedAt": "2026-10-12T03:04:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "securityDefaults": "disabled",
+        "conditionalAccess": "available",
+        "mfaPolicies": [
+          {
+            "policyId": "44444444-0000-4000-8000-000000000001",
+            "state": "enabledForReportingButNotEnforced",
+            "allUsers": true,
+            "allApplications": true,
+            "excludedApplications": 0,
+            "conditions": [],
+            "excludedUsersOutsidePolicy": 0,
+            "unresolvedExclusions": 0,
+            "allClientAppTypes": true,
+            "grantOperator": "AND",
+            "grantControls": [
+              "mfa"
+            ],
+            "authStrengthRequiresMfa": null
+          }
+        ],
+        "perUserMfa": {
+          "required": 0,
+          "notRequired": 2,
+          "unknown": 0
+        }
+      }
+    },
+    {
+      "checkId": "M365-004",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "tenant",
+        "key": "22222222-2222-4222-8222-222222222222"
+      },
+      "observedAt": "2026-10-12T03:04:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "securityDefaults": "disabled",
+        "conditionalAccess": "available",
+        "legacyBlockPolicies": []
+      }
+    },
+    {
+      "checkId": "M365-005",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "tenant",
+        "key": "22222222-2222-4222-8222-222222222222"
+      },
+      "observedAt": "2026-10-12T03:04:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "globalAdminUserIds": [
+          "aaaaaaaa-0000-4000-8000-000000000002"
+        ],
+        "disabledGlobalAdminUserIds": [],
+        "unresolvedGroupAssignments": 0
+      }
+    },
+    {
+      "checkId": "M365-006",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "tenant",
+        "key": "22222222-2222-4222-8222-222222222222"
+      },
+      "observedAt": "2026-10-12T03:04:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "permissionGrantPolicies": [
+          "ManagePermissionGrantsForSelf.microsoft-user-default-legacy"
+        ]
+      }
+    },
+    {
+      "checkId": "M365-007",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "user",
+        "key": "aaaaaaaa-0000-4000-8000-000000000001",
+        "userPrincipalName": "kari.nordmann@example.invalid"
+      },
+      "observedAt": "2026-10-12T03:04:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "accountEnabled": true,
+        "userType": "Member",
+        "directorySyncAccount": false,
+        "lastSuccessfulSignInAt": "2026-10-10T07:12:00Z",
+        "createdAt": "2024-03-01T09:00:00Z"
+      }
+    },
+    {
+      "checkId": "M365-007",
+      "collectorVersion": "0.1.0",
+      "subject": {
+        "type": "user",
+        "key": "aaaaaaaa-0000-4000-8000-000000000002",
+        "userPrincipalName": "ola.admin@example.invalid"
+      },
+      "observedAt": "2026-10-12T03:04:00Z",
+      "collectionStatus": "collected",
+      "evidence": {
+        "accountEnabled": true,
+        "userType": "Member",
+        "directorySyncAccount": false,
+        "lastSuccessfulSignInAt": null,
+        "createdAt": "2025-01-15T09:00:00Z"
+      }
+    }
+  ]
+}

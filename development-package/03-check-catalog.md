@@ -1,48 +1,338 @@
 # Каталог проверок и ограничений
 
-Каталог определяет измеряемые факты, условия вывода и границы интерпретации. Пороговые значения ниже — параметры политики по умолчанию v1, которую сервер создаёт вместе с организацией; любое изменение даёт новую неизменяемую ревизию политики и записывается в аудит. `checkId` сохраняется в наблюдении и совпадает с машинным каталогом `specs/check-catalog.json`. Каталог содержит 18 проверок, из них 11 WIN-*; для каждой он задаёт `defaultAssessmentMode` (`assessed` или `informational`), источник `source` (`agent`, `server` или `graph`) и тип объекта `subjectType`. Колонки «Объект» и «Режим по умолчанию» в таблицах ниже совпадают с этими полями каталога.
+Каталог определяет измеряемые факты, условия вывода и границы интерпретации. Пороговые значения ниже — параметры политики v1, которую сервер создаёт вместе с организацией; любое изменение даёт новую неизменяемую ревизию политики и запись в аудите. `checkId` хранится в наблюдении и совпадает с машинным каталогом `specs/check-catalog.json`.
+
+Каталог содержит 21 проверку. Семь проверок Microsoft 365 (M365-*) выполняются в P1. Одиннадцать проверок агента Windows (WIN-*) и три серверные проверки (SYS-*) — в P2. Для каждой проверки каталог задаёт:
+
+- `defaultAssessmentMode` — `assessed` или `informational`;
+- `source` — `graph`, `agent` или `server`;
+- `subjectType` — тип объекта.
+
+Колонки «Объект» и «Режим по умолчанию» в таблицах ниже совпадают с этими полями каталога.
 
 ## Семантика результата
 
-Агент возвращает для каждого наблюдения `collectionStatus` — только `collected` либо `unavailable`. Evidence передаётся только при `collected` и только по закрытой схеме своей проверки. `reasonCode` агента описывает исключительно сбор и принимает значения `permission_denied`, `unsupported`, `collector_timeout` или `temporary_error`. Проверку, которую на данной платформе выполнить нельзя, агент передаёт как `unavailable`/`unsupported`. Агент не решает, применима ли проверка: `not_applicable` выводит сервер из действующей `policy_revision`, в том числе по фактам WIN-011 и других наблюдений того же пакета (см. «Политика по умолчанию и входные настройки»). Внешняя невозможность проверки не означает not_applicable.
+Сборщик возвращает для каждого наблюдения `collectionStatus` — `collected` либо `unavailable`. Evidence передаётся только при `collected` и только по закрытой схеме проверки:
 
-Сервер оценивает наблюдение как `pass`, `fail`, `unknown` либо `not_applicable`. Успешное получение факта не означает pass. Причины unknown и not_applicable, которые выставляет только сервер при оценке, — `missing_observation`, `clock_inconsistent`, `unmapped_state`, `update_search_failed`, `update_search_outdated`, `update_source_mismatch`, `update_list_truncated`, `update_age_unconfirmed`, `os_version_unknown`, `os_inventory_missing`, `applicability_input_missing`, `policy_not_applicable` и `evidence_time_invalid`; вместе с четырьмя причинами сбора они образуют закрытый перечень `Assessment.reasonCode` из 17 значений. `clock_inconsistent` агент не передаёт: признак часов вычисляет Agent API при приёме пакета по алгоритму `05`, раздел «Время и часы устройства», и сохраняет в `scan_batch`; worker применяет сохранённый признак. Признак часов действует на все оценки пакета: оценка в режиме `assessed` получает `result=unknown` и `reasonCode=clock_inconsistent`, в режиме `informational` — `result=null` и `reasonCode=clock_inconsistent`; все они получают `assessmentScope=historical`, сохраняются в истории и не меняют текущую проекцию.
+- агента — `specs/observation.schema.json`;
+- M365 — `specs/graph-observation.schema.json`;
+- серверных проверок SYS-* — `evidenceSchema` в `specs/check-catalog.json`.
 
-При приёме с `receivedAt` сравниваются только `startedAt`, `completedAt` и `observations[].observedAt`. Метки времени внутри evidence при приёме не проверяются; правило для них задаёт проверка. Для WIN-004 `signatureLastUpdatedAt` позже `observedAt` этого наблюдения даёт unknown/`evidence_time_invalid`; для WIN-006 отношения времени в evidence задаёт шаг 2 раздела «Правило WIN-006», а `deadlineAt` в будущем ошибкой не считается. Из-за меток времени внутри evidence пакет не отклоняется.
+Причины недоступности описывают только сбор. Агент передаёт `permission_denied`, `unsupported`, `collector_timeout` или `temporary_error`. Сборщик M365 выставляет:
 
-`assessmentMode` равен `assessed` или `informational`. `defaultAssessmentMode` каталога — режим проверки в политике по умолчанию v1; фактический режим хранится явно в `policy_revision.configuration` для каждой проверки. Условие, при котором клиентская политика может перевести проверку в `assessed`, записано в колонке «Условие оценки». Наличие входных настроек — необходимое, но не достаточное условие: режим выбирает политика. Informational-оценка всегда имеет `result=null`, не создаёт finding и не участвует в оценке соответствия. Finding создаётся только для режима `assessed`. Оценка проверки определяется по порядку, действует первое совпадение: (1) признак часов пакета — unknown/`clock_inconsistent`; (2) применимость, если она зависит от другого наблюдения того же пакета (раздел «Политика по умолчанию и входные настройки»): вход отсутствует или `unavailable` — unknown/`applicability_input_missing`, применимость известна и проверка не применима — not_applicable/`policy_not_applicable`; (3) собственное наблюдение агентской проверки: отсутствует — unknown/`missing_observation`, `unavailable` — unknown с `reasonCode` наблюдения; (4) правило проверки. Порядок одинаков для обоих режимов; в режиме `informational` результат затем отображается по правилам переноса причин ниже. `reasonCode` допускается при `result` unknown или not_applicable, а также у informational-оценки с `result=null`, когда данных нет: причины недоступности наблюдения, `missing_observation`, `clock_inconsistent`, `applicability_input_missing`. В informational-оценку переносятся только причины недоступности наблюдения (коды сборщика), `missing_observation`, `applicability_input_missing` и `clock_inconsistent`: если правило ниже даёт unknown с такой причиной, в режиме `informational` оценка получает `result=null` с той же причиной. Остальные причины правил — `unmapped_state`, `update_search_failed`, `update_search_outdated`, `update_source_mismatch`, `update_list_truncated`, `update_age_unconfirmed`, `os_version_unknown`, `os_inventory_missing`, `evidence_time_invalid` и `policy_not_applicable` — informational-оценке не присваиваются: она получает `result=null` и `reasonCode=null`. `Finding.severity` принимает значения `critical` или `warning` и задана колонкой «Severity при fail» таблицы Windows: пороги warn и critical дают `result=fail` и severity `warning` или `critical` соответственно.
+- `permission_denied` — 403 на запрос;
+- `unsupported` — функции нет в tenant;
+- `temporary_error` — сбой или исчерпаны повторы;
+- `license_missing` — модулю нужна лицензия, которой нет по `subscribedSkus`;
+- `partial_data` — неполные страницы или нет обязательного свойства.
 
-Объект наблюдения задаётся полем `subject`. WIN-001 и WIN-002 относятся к тому (`volume`): в P1 это ровно один том ОС с `volumeId` и `role=os`, буква диска — только атрибут отображения `mountPoint`. Остальные проверки относятся к устройству (`device`). Внутри пакета ключ `(checkId, subject.type, localKey)` уникален: повтор отклоняет весь пакет с 422 `duplicate_observation`, а лишний или другой объект — с 422 `unexpected_subject`. Отсутствие ожидаемой пары «объект/проверка» для активной проверки даёт unknown с `missing_observation`. Канонический объект, ключи и ожидаемые пары определены в `05`, разделы «Канонический объект и идентичность устройства» и «Уникальность и ожидаемые объекты».
+Сборщик не решает, применима ли проверка: это делает сервер по действующей ревизии политики и фактам того же источника.
 
-Отдельно хранится `freshness=fresh|stale`. Окно свежести `freshnessWindowHours` задаётся в политике для каждой проверки, по умолчанию 72 часа от `observedAt`. Свежесть вычисляется при чтении на текущий момент и при формировании отчёта на `periodEnd`. Heartbeat обновляет `lastSeenAt`, но не свежесть оценок. Устаревший pass показывается как прошлый результат с датой и не считается в числителе `coverageAt`; в `coveragePeriod` pass, полученный в периоде, засчитывается и после устаревания. Изменение окна — это изменение политики (`policy_change`). Покрытие измеряется двумя метриками: `coverageAt` — доля свежих pass и fail среди обязательных применимых пар активных устройств на момент измерения — и `coveragePeriod` — доля пар, у которых за период есть хотя бы одна определённая оценка (`result` pass или fail; unknown, not_applicable, informational и оценки с признаком часов не засчитываются). Informational-оценки исключаются из числителя и знаменателя, not_applicable — из знаменателя; обе группы показываются отдельными счётчиками. «Не настроено политикой» — подмножество informational: пары в режиме informational из-за отсутствующих входных настроек политики (например, WIN-008 без `allowedSids`, WIN-010 без `expectedTenantId`); в отчёте оно показывается как часть informational. Точные определения, пример расчёта и места использования метрик — в `05`, раздел «Отчёт и покрытие».
+Сервер оценивает наблюдение как `pass`, `fail`, `unknown` либо `not_applicable`; успешное получение факта не означает pass. Причины unknown и not_applicable, которые выставляет только сервер:
+
+- `missing_observation`, `clock_inconsistent`, `unmapped_state`;
+- `applicability_input_missing`, `policy_not_applicable`, `evidence_time_invalid`;
+- `os_version_unknown`, `os_inventory_missing`;
+- `release_catalog_stale`, `build_not_in_catalog`;
+- `enforcement_unconfirmed`.
+
+Вместе с шестью причинами сбора они образуют закрытый перечень `Assessment.reasonCode` из 17 значений.
+
+Оценка определяется по порядку, действует первое совпадение:
+
+1. Признак часов пакета агента — unknown/`clock_inconsistent` (`05`, «Время и часы устройства»).
+2. Применимость, если она зависит от другого наблюдения того же пакета или от атрибутов субъекта. Вход отсутствует или `unavailable` — unknown/`applicability_input_missing`; применимость известна и проверка не применима — not_applicable/`policy_not_applicable`.
+3. Собственное наблюдение: отсутствует — unknown/`missing_observation`; `unavailable` — unknown с причиной наблюдения.
+4. Правило проверки.
+
+`assessmentMode` хранится в ревизии политики явно для каждой проверки; наличие входных настроек — необходимое, но не достаточное условие режима `assessed`.
+
+Informational-оценка всегда имеет `result=null`, `severity=null`, не создаёт finding и не участвует в compliance. В неё переносятся только причины отсутствия данных — шесть причин сбора, `missing_observation`, `clock_inconsistent` и `applicability_input_missing`. Остальные причины правил informational-оценке не присваиваются: `result=null`, `reasonCode=null`.
+
+`Finding.severity` — `critical` или `warning` по колонке «Severity при fail».
+
+Отдельно хранится `freshness=fresh|stale`. Окно свежести `freshnessWindowHours` задаётся в политике для каждой проверки: 48 часов для M365 (сбор раз в сутки), 72 часа для Windows. Свежесть вычисляется при чтении на текущий момент и при формировании отчёта на `periodEnd`. Устаревший pass показывается как прошлый результат с датой. Метрики покрытия и пример — `05`, раздел «Отчёт и покрытие».
+
+## Проверки Microsoft 365
+
+| ID | Проверка и данные | Объект | Режим по умолчанию | Условие оценки | Severity при fail | Права и ограничения |
+| --- | --- | --- | --- | --- | --- | --- |
+| M365-001 | Регистрация MFA пользователя: `accountEnabled`, `userType`, признак учётной записи синхронизации, `methodKinds` | user | assessed | По правилу M365-001 ниже; входные настройки не нужны | warning | `User.Read.All`, `UserAuthenticationMethod.Read.All`; без лицензии P1. Регистрация метода не доказывает обязательность MFA |
+| M365-002 | Регистрация MFA администратора: роли, способ назначения, `methodKinds` | user | assessed | По правилу M365-002 ниже; список ролей не пуст по схеме | critical; гость с ролью — warning | `RoleManagement.Read.Directory`, `GroupMember.ReadBasic.All`; активные назначения без временных активаций PIM |
+| M365-003 | Принуждение к MFA: Security Defaults, политики CA с MFA, per-user MFA | tenant | assessed | По правилу M365-003 ниже | critical | `Policy.Read.All`; Conditional Access требует Entra ID P1; per-user MFA — только Graph beta |
+| M365-004 | Блокировка устаревшей аутентификации: Security Defaults и политики CA | tenant | informational | Инвентаризация; правило для assessed — ниже | warning | `Policy.Read.All` |
+| M365-005 | Число включённых глобальных администраторов | tenant | assessed | fail вне [`minGlobalAdmins`, `maxGlobalAdmins`] (2…4) | warning | Активные назначения, прямые или через группу; отключённые учётные записи не считаются |
+| M365-006 | Согласие пользователей на приложения: `permissionGrantPolicies` | tenant | assessed | По правилу M365-006 ниже | warning | `Policy.Read.All` |
+| M365-007 | Неактивные учётные записи: последний успешный вход | user | informational | Инвентаризация; для assessed — `inactiveDays` (90) | warning | `AuditLog.Read.All`; требует Entra ID P1; лимит `signInActivity` — 10 запросов в минуту |
+
+Все запросы — Graph v1.0, кроме модуля `per_user_mfa` (раздел «Возможности подключения»). Приложение имеет только права чтения и ничего не меняет в tenant. Объём сохраняемых данных ограничен allowlist-схемой: номера телефонов, адреса и названия методов не сохраняются. Наблюдение, не прошедшее схему, сохраняется как unavailable/`partial_data`, а его модуль получает `partial`. Строки из Graph с недопустимыми символами (управляющие, `<`, `>`) нормализуются заменой символа на U+FFFD, а не отклоняются.
+
+Причина `partial_data` возникает двумя путями: модуль получил неполные данные, или правило M365-005 не смогло прочитать членов группы с ролью. Причины `permission_denied`, `temporary_error`, `license_missing` и `partial_data` переносятся в наблюдения из статусов модулей по таблице «Проверка → модули» ниже.
+
+Чего проверки не видят:
+
+- доступ сотрудников компании в tenant клиента через GDAP: он не отражается в назначениях ролей клиента (проверяет SP-01);
+- назначения eligible в PIM до активации;
+- регистрацию методов гостя в его домашнем tenant.
+
+Explanation называет эти ограничения там, где они влияют на вывод.
+
+### Правило M365-001 и M365-002
+
+Сборщик нормализует `@odata.type` методов аутентификации в `methodKinds`:
+
+- `microsoftAuthenticatorAuthenticationMethod` → `microsoft_authenticator`;
+- `fido2AuthenticationMethod` → `fido2`;
+- `windowsHelloForBusinessAuthenticationMethod` → `windows_hello_for_business`;
+- `platformCredentialAuthenticationMethod` → `platform_credential`;
+- `softwareOathAuthenticationMethod` → `software_oath`;
+- `phoneAuthenticationMethod` → `phone`;
+- `externalAuthenticationMethod` → `external`;
+- `emailAuthenticationMethod` → `email`;
+- `temporaryAccessPassAuthenticationMethod` → `temporary_access_pass`;
+- `passwordAuthenticationMethod` → `password`;
+- `qrCodePinAuthenticationMethod` → `qr_code_pin`;
+- остальные типы → `other`.
+
+`methodKinds` равен null, если методы пользователя не запрашивались.
+
+Метод MFA — `microsoft_authenticator`, `fido2`, `windows_hello_for_business`, `platform_credential`, `software_oath`, `hardware_oath`, `external`, а при `phoneMethodsAccepted=true` — также `phone`. Не считаются: `password`, `email` (используется только для сброса пароля), `temporary_access_pass` (временный), `qr_code_pin` (вход сотрудников с общими устройствами) и `other`. Аппаратные токены OATH Graph показывает только в beta. В P1 они не читаются: пользователь только с аппаратным токеном получит fail, а explanation назовёт эту причину. Гипотеза H-MFA2 в SP-01 решает, читать ли их в новой `ruleVersion`; до этого такой fail оформляется решением `suppressed`.
+
+M365-001 — объект: каждый пользователь tenant.
+
+- **Применимость.** Проверка применима к пользователю с `accountEnabled=true`, `userType=Member` (null считается Member), id вне `excludedUserIds` и без роли Directory Synchronization Accounts (`d29b2b05-8046-44ba-8758-1e26182fcf32`). Учётная запись синхронизации Entra Connect не может иметь MFA, и Security Defaults её тоже исключают. Остальные пользователи — not_applicable/`policy_not_applicable`; методы для них не запрашиваются.
+- **Результат.** Pass — есть хотя бы один метод MFA. Fail warning — метода MFA нет. Отказ 403 на методы пользователя — unknown/`permission_denied`, сбой — unknown/`temporary_error`.
+- **Границы вывода.** Explanation называет зарегистрированные виды методов и не утверждает, что MFA обязательна при входе: это оценивает M365-003.
+
+M365-002 — объект: пользователь, у которого есть или была в предыдущем полном сборе активная роль из `privilegedRoleTemplateIds`.
+
+- **Источник ролей.** Назначение прямое или через группу с назначаемыми ролями. Такие группы требуют Entra ID P1 и не бывают вложенными, поэтому члены читаются одним запросом `transitiveMembers`. Если членов группы прочитать не удалось, модуль `roles` получает `partial`: прямые администраторы оцениваются, M365-005 даёт unknown/`partial_data`.
+- **Что учитывается.** Назначения с областью административной единицы считаются: MFA нужна и ограниченному администратору. Временные активации PIM (назначения вида `Activated` при Entra ID P2) не учитываются, чтобы активация во время ночного сбора не давала ложных «новых» и «исправленных» проблем. Назначения eligible до активации не видны.
+- **Сбор методов.** Методы администраторов читаются всегда, даже если они в `excludedUserIds`: учётные записи аварийного доступа тоже должны иметь метод MFA, лучше FIDO2.
+- **Результат** по порядку:
+  1. Ролей больше нет (`roleTemplateIds` пуст) — not_applicable/`policy_not_applicable`; finding закрывается событием `resolved`/`applicability_change` и в отчёте попадает в «стали неприменимыми», а не в «исправлено».
+  2. `accountEnabled=false` — not_applicable/`policy_not_applicable`.
+  3. Гость (`userType=Guest`) — fail warning: методы гостя хранятся в его домашнем tenant и здесь не подтверждаются, а гость в привилегированной роли — отдельный риск. Explanation рекомендует выдавать такой доступ через GDAP или учётную запись в tenant.
+  4. Есть метод MFA — pass.
+  5. Иначе — fail critical.
+
+Обязательная MFA Microsoft для порталов администрирования, введённая в 2024–2025 годах, не делает регистрацию лишней: без метода MFA администратор остаётся уязвим в остальных сценариях входа.
+
+Роли политики v1 (`privilegedRoleTemplateIds`), идентификаторы шаблонов сверены со справочником встроенных ролей Microsoft Entra:
+
+| Роль | Template ID |
+| --- | --- |
+| Global Administrator | 62e90394-69f5-4237-9190-012177145e10 |
+| Privileged Role Administrator | e8611ab8-c189-46e8-94e1-60213ab1f814 |
+| Privileged Authentication Administrator | 7be44c8a-adaf-4e2a-84d6-ab2649e08a13 |
+| Security Administrator | 194ae4cb-b126-40b2-bd5b-6091b380977d |
+| Conditional Access Administrator | b1be1c3e-b65d-4f19-8427-f6fa0d97feb9 |
+| Exchange Administrator | 29232cdf-9323-42fd-ade2-1d097af3e4de |
+| SharePoint Administrator | f28a1f50-f6e7-4571-818b-6a12f2af6b6c |
+| User Administrator | fe930be7-5e62-47db-91af-98c3a49a38b1 |
+| Authentication Administrator | c4e39bd9-1100-46d3-8c65-fb160da0071f |
+| Authentication Policy Administrator | 0526716b-113d-4c15-b2c8-68e3c22b9f80 |
+| Password Administrator | 966707d0-3269-4727-9be2-8c3a10f19b9d |
+| Application Administrator | 9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3 |
+| Cloud Application Administrator | 158c047a-c907-4556-b7ef-446551a6b5f7 |
+| Intune Administrator | 3a2c62db-5318-420d-8d74-23affee5d9d5 |
+| Helpdesk Administrator | 729827e3-9c14-49f7-bb1b-9608f156bbb8 |
+| Billing Administrator | b0f54661-2d74-4c50-afa3-1ec803f12efe |
+| Directory Writers | 9360feb5-f418-4baa-8175-e2a00bac4301 |
+| Partner Tier2 Support | e00e864a-17c5-4a4b-9c06-f5b95a8d5bd8 |
+
+Microsoft помечает привилегированными и другие роли, например Hybrid Identity Administrator и Domain Name Administrator. Гипотеза H-ROLES в SP-01: доступен ли признак `isPrivileged` определений ролей в Graph v1.0. Если доступен, следующая версия правила дополняет список ролями с этим признаком; до этого Admin может добавить их в политику.
+
+### Правило M365-003
+
+Evidence:
+
+- `securityDefaults` — `enabled` или `disabled`;
+- `conditionalAccess` — `available` или `license_missing` (нет Entra ID P1 или P2 по `subscribedSkus`);
+- `mfaPolicies` — сводка политик CA с grant control `mfa` или authentication strength в любом state. По каждой политике хранятся:
+  - охват: все пользователи, все приложения и число исключённых приложений, все типы клиентов;
+  - заданные условия: риск пользователя и входа, внутренний риск, расположения с отдельным признаком «исключены только доверенные», платформы, фильтр устройств, потоки аутентификации, клиентские приложения;
+  - оператор grant (`AND` или `OR`) и набор grant controls;
+  - даёт ли authentication strength требование MFA (`requirementsSatisfied = mfa`);
+  - число исключённых пользователей вне `excludedUserIds` (прямо, через группы и роли) и число исключений, членов которых прочитать не удалось;
+- `perUserMfa` — счётчики per-user MFA включённых member-пользователей вне исключений или null.
+
+**Безусловная политика** — политика, у которой выполнено всё перечисленное:
+
+- state `enabled`;
+- все пользователи, все приложения без исключённых приложений, все типы клиентов;
+- нет условий. Исключение только доверенных расположений допускается, если `trustedLocationsExclusionAccepted=true`;
+- MFA требуется всегда: grant содержит `mfa` или authentication strength с `requirementsSatisfied = mfa`, и при операторе `OR` других grant controls нет. Grant «MFA или соответствующее либо гибридное устройство» допускается, если `deviceAlternativeAccepted=true`;
+- `excludedUsersOutsidePolicy` = 0 и `unresolvedExclusions` = 0. Исключения учётных записей аварийного доступа допустимы, если они внесены в `excludedUserIds`.
+
+Исключение гостей и внешних пользователей не мешает: M365-001 их не оценивает.
+
+Правило применяется по порядку, действует первое совпадение:
+
+| № | Условие | Результат |
+| --- | --- | --- |
+| 1 | `securityDefaults=enabled` | pass; explanation: Security Defaults требуют MFA «при необходимости», а не при каждом входе |
+| 2 | `conditionalAccess=available` и есть безусловная политика | pass; explanation называет политику и исключения |
+| 3 | `perUserMfa` не null, у всех пользователей per-user MFA в состоянии enabled или enforced (`notRequired` = 0, `unknown` = 0) | pass |
+| 4 | `conditionalAccess=available` и есть политики в state `enabled`, требующие MFA, но ни одна не безусловна | unknown/`enforcement_unconfirmed`: охват объединением или условиями политик не доказывается |
+| 5 | `perUserMfa` null — модуль `per_user_mfa` выключен по итогам H-MFA1 | unknown/`enforcement_unconfirmed`; рекомендация — включить Security Defaults или политику CA |
+| 6 | Иначе: Security Defaults выключены, безусловной политики нет, а per-user MFA у части пользователей не включён | fail critical |
+
+Политики в состоянии report-only (`enabledForReportingButNotEnforced`) и disabled MFA не требуют. Поэтому единственная report-only политика при выключенных Security Defaults и per-user MFA даёт fail, а не pass — это эталонный отрицательный случай (пример `examples/m365-collection.json`, AT-05).
+
+Модули `security_defaults` и, при Entra ID P1, `conditional_access` обязательны: их сбой (`temporary_error`, `permission_missing`) делает наблюдение M365-003 unavailable с той же причиной. Сбой не превращается в `disabled` и не даёт ложный fail.
+
+Per-user MFA читается только в Graph beta (`/beta/users/{id}/authentication/requirements`, право `Policy.Read.All`) и только когда шаги 1–2 не дают pass. Гипотеза H-MFA1 в SP-01: endpoint работает стабильно на трёх tenant. Если она не подтвердится, модуль `per_user_mfa` выключается (статус `skipped`), и шаг 5 даёт unknown.
+
+Гипотеза H-SD1 в SP-01: Microsoft вводит отдельное включение защит Security Defaults (preview). Нужно выяснить, как Graph это показывает. Если `isEnabled=true` перестанет означать включённую MFA для всех, шаг 1 в новой версии правила проверяет конкретную защиту, а до этого explanation оговаривает это ограничение.
+
+### Правило M365-004
+
+Informational по умолчанию: показывает, блокирует ли tenant устаревшую аутентификацию. Блокировку дают включённые Security Defaults либо политика CA с grant control block, которая отвечает всем условиям:
+
+- state `enabled`;
+- все пользователи и все приложения без исключённых приложений;
+- без условий;
+- типы клиентов Exchange ActiveSync и «другие клиенты»;
+- без исключений вне `excludedUserIds`.
+
+Если политика переводит проверку в `assessed`:
+
+- блокировка есть — pass;
+- Conditional Access доступен, Security Defaults выключены, такой политики нет — fail warning;
+- Conditional Access недоступен и Security Defaults выключены — unknown/`enforcement_unconfirmed`.
+
+Exchange Online выключает Basic-аутентификацию SMTP AUTH по умолчанию в конце декабря 2026 года, но администратор может включить её обратно, а окончательная дата отключения ещё не объявлена; поэтому инвентаризация остаётся полезной.
+
+### Правило M365-005
+
+Evidence:
+
+- `globalAdminUserIds` — включённые пользователи с активным назначением Global Administrator, прямым или через группу, без временных активаций PIM;
+- `disabledGlobalAdminUserIds` — отключённые учётные записи с этой ролью;
+- `unresolvedGroupAssignments` — группы с ролью, членов которых прочитать не удалось.
+
+Сервисные principal в число не входят.
+
+- `unresolvedGroupAssignments` > 0 — unknown/`partial_data`.
+- Число включённых администраторов вне [`minGlobalAdmins`, `maxGlobalAdmins`] — fail warning.
+- Иначе — pass.
+
+Explanation называет число и UPN администраторов и отдельно — отключённые учётные записи с ролью, у которых роль лучше снять. Рекомендация: два–четыре включённых глобальных администратора, включая учётную запись аварийного доступа. Один администратор — единая точка отказа, больше четырёх — лишняя поверхность атаки.
+
+### Правило M365-006
+
+Evidence — записи `ManagePermissionGrantsForSelf.*` из `defaultUserRolePermissions.permissionGrantPoliciesAssigned`. Префикс сравнивается без учёта регистра и сохраняется в каноническом написании; записи `ManagePermissionGrantsForOwnedResource.*` к согласию пользователей не относятся и не сохраняются.
+
+Известные политики Microsoft — данные правила:
+
+| Политика | Смысл | По умолчанию |
+| --- | --- | --- |
+| `…microsoft-user-default-legacy` | Пользователи согласуют любые приложения | fail |
+| `…microsoft-user-default-recommended` | Управляемая Microsoft политика, по умолчанию для новых tenant; допускает приложения непроверенных издателей для многих разрешений | fail, пока не разрешена политикой клиента |
+| `…microsoft-user-default-low` | Только проверенные издатели и разрешения низкого влияния | Разрешена (`allowedPermissionGrantPolicies` v1) |
+| Политика почтовых клиентов Microsoft (`…microsoft-user-default-allow-consent-apps`, в документации встречается и другое написание) | Согласие только для одобренных Microsoft почтовых приложений | Не влияет на результат; фактическое написание подтверждает SP-01 |
+
+Правило по порядку:
+
+1. Есть `…-legacy` — fail warning.
+2. Список пуст — согласие пользователей выключено — pass.
+3. Каждая запись входит в `allowedPermissionGrantPolicies` или является политикой почтовых клиентов — pass.
+4. Есть известная политика Microsoft вне разрешённых — fail warning.
+5. Иначе (собственная политика клиента) — unknown/`unmapped_state`; Admin может разрешить её после проверки.
+
+### Правило M365-007
+
+Informational по умолчанию: число дней с последнего успешного входа (`lastSuccessfulSignInAt` из `signInActivity`). Поле заполняется Microsoft с 1 декабря 2023 года; null означает, что успешного входа с этой даты не было. Применимость — как у M365-001. Без Entra ID P1 модуль получает `license_missing`, и оценка — `result=null` с этой причиной.
+
+Если политика переводит проверку в `assessed`, fail warning даёт любое из условий:
+
+- `lastSuccessfulSignInAt` старше `inactiveDays`;
+- `lastSuccessfulSignInAt` null при `createdAt` старше `inactiveDays`;
+- `lastSuccessfulSignInAt` null при `createdAt` null — учётная запись создана до июня 2018 года.
+
+Иначе — pass.
+
+## Возможности подключения
+
+Каждый модуль запуска сбора получает статус:
+
+- `available` — данные получены полностью;
+- `skipped` — модуль в этом запуске не нужен или выключен;
+- `permission_missing` — 403 Authorization_RequestDenied на основной запрос модуля;
+- `license_missing` — по `subscribedSkus` нет нужного плана, запрос не выполнялся;
+- `partial` — не все страницы, нет обязательного свойства, наблюдение вне схемы, отклонён `@odata.nextLink` или 403 на часть вложенных запросов (члены отдельных групп);
+- `temporary_error` — 5xx, таймаут или исчерпаны повторы.
+
+| Модуль | Endpoints | Права | Лицензия |
+| --- | --- | --- | --- |
+| tenant | `/organization` | `Organization.Read.All` | — |
+| licenses | `/subscribedSkus` | `Organization.Read.All` | — |
+| users | `/users` со списком полей | `User.Read.All` | — |
+| auth_methods | `/users/{id}/authentication/methods` в JSON batch | `UserAuthenticationMethod.Read.All` | — |
+| roles | `/roleManagement/directory/roleAssignments`, `/groups/{id}/transitiveMembers`; при P2 — `roleAssignmentScheduleInstances` | `RoleManagement.Read.Directory`, `GroupMember.ReadBasic.All` | — |
+| security_defaults | `/policies/identitySecurityDefaultsEnforcementPolicy` | `Policy.Read.All` | — |
+| conditional_access | `/identity/conditionalAccess/policies`; члены исключённых групп — `transitiveMembers` | `Policy.Read.All`, `GroupMember.ReadBasic.All` | Entra ID P1 |
+| authorization_policy | `/policies/authorizationPolicy` | `Policy.Read.All` | — |
+| sign_in_activity | `/users` с `signInActivity` | `User.Read.All`, `AuditLog.Read.All` | Entra ID P1 |
+| per_user_mfa | `/beta/users/{id}/authentication/requirements` | `Policy.Read.All` | — |
+
+Проверка → модули. Сбой обязательного модуля делает наблюдение проверки `unavailable` с причиной, перенесённой из статуса модуля. Условный модуль со статусом `license_missing` отражается в evidence, а не в причине.
+
+| Проверка | Обязательные модули | Условные модули |
+| --- | --- | --- |
+| M365-001 | users, roles; auth_methods — для пользователя, к которому проверка применима | — |
+| M365-002 | users, roles; auth_methods — для каждого администратора | — |
+| M365-003 | licenses, security_defaults; conditional_access — при Entra ID P1; per_user_mfa — когда он нужен по правилу | conditional_access без P1 (`conditionalAccess=license_missing`) |
+| M365-004 | licenses, security_defaults; conditional_access — при Entra ID P1 | conditional_access без P1 |
+| M365-005 | roles | — |
+| M365-006 | authorization_policy | — |
+| M365-007 | users, roles | sign_in_activity (без P1 — `license_missing` в оценке) |
+
+Как модули влияют на сбор и оценку:
+
+- **Лицензия P1 или P2.** Определяется только по планам `AAD_PREMIUM` (servicePlanId `41781fb2-bc02-4b7c-bd55-b576c07bb09d`) и `AAD_PREMIUM_P2` (`eec0eb4f-6444-4f95-aba0-50c24d67f998`) во включённых подписках, а не по имени SKU: например, `O365_BUSINESS_PREMIUM` — это Business Standard без P1.
+- **403 и лицензия.** Ответ 403 не считается доказательством отсутствия лицензии.
+- **Неполный ответ.** Ответ 200 без обязательного свойства не считается полным наблюдением.
+- **Перенос статуса в наблюдения.** `permission_missing` → `permission_denied`, `license_missing` → `license_missing`, `partial` → `partial_data`, `temporary_error` → `temporary_error`.
+- **Частичный доступ.** Tenant с частично доступными модулями остаётся подключённым с явным перечнем недоступных проверок; запуск получает `partial`.
+- **Ограничения запросов.** Запросы идут только к `graph.microsoft.com` по фиксированным путям; следующая страница — только по `@odata.nextLink` того же host и пути. Произвольные URL не выполняются.
+
+Фактическую достаточность прав, ответы без лицензии (в том числе Conditional Access в tenant без P1, поведение которого не документировано), стабильность модуля `per_user_mfa`, отражение Security Defaults по отдельным защитам (H-SD1), признак `isPrivileged` ролей (H-ROLES), написание политики почтовых клиентов и видимость доступа GDAP проверяет SP-01 на трёх tenant.
 
 ## Проверки Windows
 
 | ID | Проверка и данные | Объект | Режим по умолчанию | Условие оценки | Severity при fail | Права и ограничения |
 | --- | --- | --- | --- | --- | --- | --- |
-| WIN-001 | Свободное место на томе ОС: `totalBytes`, `freeBytes` | volume | assessed | fail с `severity=warning` при свободном месте менее 10% или 10 GiB (`warnFreePercent`, `warnFreeBytes`); fail с `severity=critical` при менее 5% или 2 GiB (`criticalFreePercent`, `criticalFreeBytes`). Для assessed входные настройки не нужны | по порогу | Обычное чтение; объект — том ОС (`volumeId`, `role=os`); эксплуатационный показатель, не доказательство защиты |
-| WIN-002 | BitLocker тома ОС: `volumeStatus`, `protectionStatus`, `encryptionPercentage` | volume | assessed | При `encryptionRequired=true` pass только при завершённом шифровании и активной защите; приостановленная защита или расшифровка — fail, в том числе при `volumeStatus=fully_encrypted`, `protectionStatus=off` и `encryptionPercentage=100` (эталонный отрицательный тест ниже). Для редакций из `notApplicableEditionIds` по `editionId` из WIN-011 того же пакета — not_applicable. Для assessed входные настройки не нужны | critical | Права вызова подтверждает SP-01; recovery password никогда не извлекается и не передаётся |
-| WIN-003 | Антивирусы: `products[]` до 10 элементов (`provider`, `productState`, `statusSource`, `rawState`) и объект `defender` (`amRunningMode`, `realTimeProtectionEnabled`) или null | device | informational | По таблице решений WIN-003 ниже: pass при активном одобренном продукте, unknown/`unmapped_state` при неопознанном состоянии одобренного, иначе fail. Для assessed нужен непустой `approvedProviders` или `defenderApproved=true` | critical | Defender передаётся одним элементом со `statusSource=defender`, без дубля из WSC; для стороннего продукта доступен только статус, который он сообщает WSC; больше 10 продуктов — `unavailable`/`unsupported` |
-| WIN-004 | Давность сигнатур Defender: `signatureLastUpdatedAt` | device | assessed | fail с `severity=warning` старше 3 суток (`warnDays`), с `severity=critical` старше 7 (`criticalDays`); `signatureLastUpdatedAt` позже `observedAt` этого наблюдения — unknown/`evidence_time_invalid`. Для assessed WIN-003 должна входить в `activeCheckIds` | по порогу | Применима только при `defenderApproved=true` и `amRunningMode=normal` по WIN-003 того же пакета, иначе not_applicable/`policy_not_applicable` (в том числе при `defender = null`); без пригодного наблюдения WIN-003 — unknown/`applicability_input_missing`; сторонний AV оценивается отдельной интеграцией |
-| WIN-005 | Брандмауэр: `domainEnabled`, `privateEnabled`, `publicEnabled` | device | assessed | Для штатного Windows Firewall включены все профили из `requiredProfiles` (по умолчанию domain, private, public). Для assessed входные настройки не нужны | critical | Альтернативный firewall требует явной политики и собственного источника |
-| WIN-006 | Windows Update: `configuredSource`, `auLastSearchSuccessAt`, `agentSearch`, `pendingSecurityUpdates[]` до 50 элементов, `pendingSecurityUpdatesTotal`, `truncated` | device | informational | По правилу WIN-006 ниже: unknown при неуспешном поиске, нарушенных отношениях времени в evidence (`evidence_time_invalid`), отсутствующей или устаревшей основе свежести либо чужом источнике; fail при просрочке хотя бы одного переданного обновления; unknown/`update_list_truncated` при усечённом списке без просрочки; unknown/`update_age_unconfirmed`, если история устройства не исключает просрочку (в том числе в первых пакетах нового устройства); pass при свежем успешном поиске без просрочки, без усечения и с подтверждённым возрастом. Для assessed нужен `expectedSource` | warning | Поиск может быть долгим (гипотеза H-WU2); WSUS-deadline и отсрочки учитываются через `referenceTimeBasis`; одна дата последнего KB недостаточна; заголовки и описания обновлений не передаются |
-| WIN-007 | Необходимость перезагрузки: `rebootRequired`, `lastBootAt`, `statusSource` (`windows_update_api`) | device | assessed | fail с `severity=warning`, если эпизод требования перезагрузки наблюдается не меньше `warnDays` (3) суток по правилу WIN-007 ниже. Для assessed входные настройки не нужны | по порогу | Отрицательный результат относится только к поддерживаемому Windows Update API, не ко всем установщикам; снятие требования без перезагрузки внутри одного сеанса не обнаруживается |
-| WIN-008 | Прямые члены группы локальных администраторов по известному SID группы: `memberSids` до 100, `membershipScope=direct_members` | device | informational | SID, не предусмотренный `allowedSids`, — fail. Для assessed нужен хотя бы один SID в `allowedSids` | warning | Не равнозначно полному раскрытию вложенных AD/Entra-групп и всех способов повышения прав |
-| WIN-009 | Secure Boot: `enabled`, `platform` (`uefi`, `legacy_bios`) | device | assessed | При `secureBootRequired=true` disabled или подтверждённое отсутствие поддержки — fail. Для assessed входные настройки не нужны | critical | Access denied — unknown/`permission_denied`; виртуальная машина не исключается автоматически |
-| WIN-010 | Присоединение устройства: `joinType` (`entra_joined`, `hybrid_joined`, `domain_joined`, `not_joined`), `tenantId`, `entraDeviceId` | device | informational | Информационная инвентаризация; проверка tenant — только при заданном `expectedTenantId`. Для assessed нужен `expectedTenantId` | warning | Собирается в контексте службы; пользовательская регистрация (workplace join) не наблюдается и не выводится, значения `registered` нет; `domain_joined` означает только локальный AD без Entra; устройство не даёт доступа к данным всего tenant; пользовательская Hello/PIN не выводится из контекста службы |
-| WIN-011 | OS-инвентарь: `editionId`, `displayVersion`, `build`, `ubr`, `architecture` (`x64`, `arm64`) | device | informational | Всегда informational, finding не создаёт. Факты используют SYS-002 и применимость WIN-002 | — | Обязательна в `activeCheckIds` каждой политики; источник API подтверждает SP-01 |
-| SYS-001 | Индикатор свежего полного сбора: `lastFullScanAt`, `lastSeenAt`, `hasFreshFullScan` | device | informational | Всегда informational. Значение истинно, если `completedAt` последнего полного сбора не старше `freshnessWindowHours` проверки SYS-001 (по умолчанию 72 часа). Полный сбор — принятый пакет с наблюдением для каждой проверки из `activeCheckIds` своей `policyVersion` (любой `collectionStatus`, включая `unavailable`), без признака часов. Повторную проверку агент выполняет как полный сбор всех `activeCheckIds`; частичных пакетов агент не отправляет. `lastFullScanAt` обновляет только полный сбор, по максимуму `completedAt`; оценку SYS-001 пересчитывают рост `lastFullScanAt` и задание `freshness_sweep` (`05`, «Отчёт и покрытие») | — | Вычисляется сервером; finding не создаёт, в coverage и compliance не входит; выключенный ПК не получает fail |
-| SYS-002 | ОС в матрице совместимости и на обслуживании: по последнему свежему WIN-011, матрице совместимости и таблице жизненного цикла | device | assessed | fail — редакция, версия или архитектура вне матрицы совместимости либо `observedAt` ≥ `servicingEndsAt` версии (исключающая граница, раздел «Матрица совместимости и жизненный цикл ОС»); unknown, если определить нельзя: `os_version_unknown` — только для версии из матрицы, которой нет в таблице жизненного цикла; `os_inventory_missing` — нет свежего WIN-011. Версия вне матрицы, в том числе отсутствующая в таблице, даёт fail, а не unknown. Для assessed входные настройки не нужны | critical | Вычисляется сервером; свежесть SYS-002 равна свежести WIN-011; таблица — в разделе «Матрица совместимости и жизненный цикл ОС» |
+| WIN-001 | Свободное место на томе ОС: `totalBytes`, `freeBytes` | volume | assessed | fail warning при менее 10% или 10 GiB; fail critical при менее 5% или 2 GiB | по порогу | Объект — том ОС (`volumeId`, `role=os`); эксплуатационный показатель, не доказательство защиты |
+| WIN-002 | BitLocker тома ОС: `volumeStatus`, `protectionStatus`, `encryptionPercentage` | volume | assessed | По таблице правила WIN-002 ниже: pass только при завершённом шифровании и включённой защите, приостановленная защита — fail (эталонный отрицательный тест). Редакции из `notApplicableEditionIds` по `editionId` WIN-011 — not_applicable | critical | Recovery password никогда не извлекается и не передаётся |
+| WIN-003 | Антивирусы: `products[]` до 10 элементов и объект `defender` | device | informational | По таблице решений WIN-003; для assessed нужен непустой `approvedProviders` или `defenderApproved=true` | critical | Сторонний продукт — только статус, который он сообщает Windows Security Center |
+| WIN-004 | Давность сигнатур Defender: `signatureLastUpdatedAt` | device | assessed | fail warning старше `warnDays` (3) суток, critical — старше `criticalDays` (7); время позже `observedAt` — unknown/`evidence_time_invalid`. Применима только при `defenderApproved=true` и `amRunningMode=normal` по WIN-003 того же пакета | по порогу | Без пригодного WIN-003 — unknown/`applicability_input_missing`. Плановый сбор начинается не раньше чем через 60 минут после загрузки ОС, чтобы после отпуска Defender успел обновить сигнатуры |
+| WIN-005 | Брандмауэр: `domainEnabled`, `privateEnabled`, `publicEnabled`, `firewallProducts[]` | device | assessed | Включены все профили из `requiredProfiles` либо активен одобренный сторонний firewall (правило WIN-005 ниже) | critical | Сторонний firewall — по статусу, который он сообщает Windows Security Center |
+| WIN-006 | Служба обновлений: `lastSearchSuccessAt`, `lastInstallSuccessAt`, `wsusConfigured` | device | informational | По правилу WIN-006 ниже | warning | Уровень установленных исправлений оценивает SYS-003 |
+| WIN-007 | Требование перезагрузки: `rebootRequired`, `lastBootAt` | device | assessed | Эпизод по правилу WIN-007 длится не меньше `warnDays` (3) суток — fail warning | warning | Снятие требования внутри одного сеанса между сборами не обнаруживается |
+| WIN-008 | Прямые члены группы локальных администраторов: `members[]` до 100 — SID, класс и RID | device | informational | По правилу WIN-008 ниже | warning | Вложенные группы AD и Entra не раскрываются |
+| WIN-009 | Secure Boot: `enabled`, `platform` | device | assessed | При `secureBootRequired=true` выключенный Secure Boot или `legacy_bios` — fail | critical | Нет доступа — unknown/`permission_denied` |
+| WIN-010 | Присоединение устройства: `joinType`, `tenantId`, `entraDeviceId` | device | informational | По правилу WIN-010 ниже; для assessed нужен `expectedTenantId` | warning | Регистрация уровня пользователя (workplace join) не наблюдается |
+| WIN-011 | OS-инвентарь: `editionId`, `displayVersion` (у старых сборок — `ReleaseId`), `build`, `ubr`, `architecture` | device | informational | Всегда informational; вход SYS-002, SYS-003 и применимости WIN-002 | — | Обязательна в `activeCheckIds` |
+| SYS-001 | Свежий полный сбор: `lastFullScanAt`, `lastSeenAt` | device | informational | Всегда informational: истинно, если последний полный сбор не старше окна свежести SYS-001 | — | Вычисляется сервером; выключенный ПК не получает fail |
+| SYS-002 | Версия ОС на обслуживании Microsoft | device | assessed | По подразделу «Жизненный цикл ОС» | critical | Вычисляется сервером по последнему collected WIN-011 в окне свежести; ОС вне матрицы агента даёт unknown, а не fail |
+| SYS-003 | Уровень установленных исправлений ОС | device | assessed | По подразделу «Правило SYS-003 и каталог выпусков» | по отставанию | Вычисляется сервером по WIN-011 и сверенным месяцам каталога выпусков |
 
 ### Политика по умолчанию и входные настройки
 
-Список разрешённых администраторов, источник обновлений, одобренные антивирусы и ожидаемый tenant согласуются по клиенту и записываются в параметры политики. Политика по умолчанию v1 включает в `activeCheckIds` все 11 WIN-проверок; режимы равны `defaultAssessmentMode` каталога: WIN-003, WIN-006, WIN-008, WIN-010, WIN-011 и SYS-001 — informational, остальные проверки P1 — assessed. Стартовые параметры — по таблице и правилам этого раздела; кроме того, `defenderApproved=true` и `approvedProviders=[]`, поэтому WIN-004 применима на устройствах с Defender в режиме normal; для WIN-006 `referenceTimeBasis=first_seen` и `expectedSource=null`; `notApplicableEditionIds=[]` у всех проверок, кроме WIN-002, у которой список равен [Core, CoreN, CoreSingleLanguage, CoreCountrySpecific]. Каждое обязательное поле политики имеет стартовое значение. Сохранение политики отклоняется с 422 `policy_inputs_missing` в трёх случаях: `assessed` без нужных входных настроек; `activeCheckIds` без WIN-011; активна WIN-004 без WIN-003. Без входных настроек проверка остаётся informational, а не создаёт ложное отклонение. Структура параметров — схема `PolicyConfiguration` в `05`.
+Разрешённые члены группы администраторов (например, SID ролей Entra на присоединённых к Entra ПК), одобренные антивирусы и firewall, ожидаемый tenant согласуются с клиентом и записываются в параметры политики. Политика v1 включает в `activeCheckIds` все проверки M365 и WIN; режимы равны `defaultAssessmentMode` каталога; стартовые параметры — `05`, подраздел «Политика клиента». Без входных настроек проверка остаётся informational и не создаёт ложных отклонений.
 
-Применимость одной проверки может зависеть от наблюдения другой проверки того же пакета: WIN-002 — от `editionId` из WIN-011 (`notApplicableEditionIds`, в политике v1 — Core, CoreN, CoreSingleLanguage, CoreCountrySpecific; у остальных проверок по умолчанию пустой список), WIN-004 — от объекта `defender` из WIN-003. Если такого наблюдения в пакете нет или оно `unavailable`, зависимая проверка получает unknown/`applicability_input_missing`, а не not_applicable. Это правило применяется, только если у пакета нет признака часов; при признаке часов все оценки пакета получают `clock_inconsistent`. Если применимость известна и проверка не применима, она получает not_applicable/`policy_not_applicable`.
+Применимость проверки может зависеть от наблюдения другой проверки того же пакета:
+
+- WIN-002 — от `editionId` из WIN-011 (`notApplicableEditionIds`; в политике v1 — Core, CoreN, CoreSingleLanguage, CoreCountrySpecific);
+- WIN-004 — от объекта `defender` из WIN-003.
+
+Если такого наблюдения в пакете нет или оно `unavailable`, зависимая проверка получает unknown/`applicability_input_missing`, а не not_applicable.
 
 ### Правило WIN-003
 
-**Одобренный продукт** — элемент `products[]` с `provider` из `approvedProviders` (точное совпадение без учёта регистра), а также Defender при `defenderApproved=true`. Defender опознаётся по элементу со `statusSource=defender`; его состояние берётся из объекта `defender`. Defender активен только при `amRunningMode=normal` и `realTimeProtectionEnabled=true`; режимы `passive`, `edr_block`, `sxs_passive`, `not_running` и `other` активным антивирусом не считаются. **Активный продукт** — продукт с `productState=on`, для Defender — по правилу выше. Таблица решений применяется по порядку, действует первое совпадение:
+**Одобренный продукт** — элемент `products[]`, у которого `provider` начинается с записи из `approvedProviders` (без учёта регистра, поэтому смена версии в названии продукта не ломает сопоставление), а также Defender при `defenderApproved=true`. SP-04 проверяет, стабилен ли GUID продукта в Windows Security Center и не надёжнее ли сопоставлять по нему. Defender опознаётся по элементу со `statusSource=defender`. Он активен только при `amRunningMode=normal` и `realTimeProtectionEnabled=true`; режимы `passive`, `edr_block`, `sxs_passive`, `not_running` и `other` активным антивирусом не считаются. **Активный продукт** — продукт с `productState=on`, Defender — по правилу выше.
 
 | № | Условие | Результат |
 | --- | --- | --- |
@@ -51,107 +341,222 @@
 | 3 | Одобренные продукты есть, все в `off`, `snoozed` или `expired` либо Defender не активен | fail |
 | 4 | Ни одного одобренного продукта (включая пустой `products[]`) | fail |
 
-`collectionStatus=unavailable` даёт unknown с `reasonCode` наблюдения; в режиме `informational` — `result=null` с тем же `reasonCode`. Лабораторная матрица SP-01 состоит из пяти конфигураций: только Defender; сторонний AV активен; сторонний AV вместе с MDE или Smart App Control; сторонний AV истёк; snoozed. При политике «одобрен только Defender» ожидаются pass/fail/fail/fail/fail, при политике «Defender + VendorX» — pass/pass/pass/fail/fail.
+Лабораторная матрица SP-04 состоит из пяти конфигураций:
+
+1. только Defender;
+2. активен сторонний антивирус;
+3. сторонний антивирус вместе с MDE или Smart App Control;
+4. у стороннего антивируса истекла лицензия;
+5. snoozed.
+
+При политике «одобрен только Defender» ожидаются pass/fail/fail/fail/fail, при политике «Defender + VendorX» — pass/pass/pass/fail/fail.
+
+### Правило WIN-002
+
+При `encryptionRequired=false` проверка даёт not_applicable/`policy_not_applicable`. При `encryptionRequired=true`:
+
+| volumeStatus | protectionStatus | Результат |
+| --- | --- | --- |
+| fully_encrypted | on | pass |
+| fully_encrypted | off | fail: защита приостановлена (эталонный отрицательный тест ниже) |
+| fully_encrypted | unknown | unknown/`unmapped_state` |
+| encrypting | любой | unknown/`unmapped_state`: идёт первичное шифрование, итог покажет следующий сбор |
+| encryption_paused, decrypting, decryption_paused, fully_decrypted | любой | fail |
+
+Значение `Win32_EncryptableVolume` вне этих перечней агент передаёт как unavailable/`unsupported` (`02`, «Выполнение локальной проверки»).
+
+### Правило WIN-005
+
+1. Включены все профили из `requiredProfiles` — pass.
+2. Иначе среди `firewallProducts[]` есть продукт, у которого `provider` начинается с записи из `approvedFirewallProviders` (без учёта регистра), в `productState=on` — pass.
+3. Иначе одобренный продукт есть, но его состояние `unknown` — unknown/`unmapped_state`.
+4. Иначе — fail.
+
+### Правило WIN-008
+
+Агент передаёт для каждого прямого члена группы SID, класс и RID относительно SID машины или домена присоединения. Класс определяется через LSA.
+
+| kind | Член группы |
+| --- | --- |
+| builtin_administrator | Встроенная учётная запись Administrator (RID 500 SID машины); убрать её из группы нельзя |
+| local_account | Другая локальная учётная запись или группа ПК, в том числе учётная запись Windows LAPS или RMM |
+| domain | Учётная запись или группа домена, к которому присоединён ПК |
+| entra | SID Entra (`S-1-12-1-…`): пользователь, группа или роль каталога |
+| well_known | Известный SID Windows |
+| unknown | SID другого домена или SID, который не удалось разрешить |
+
+Член группы разрешён, если это `builtin_administrator` при `allowBuiltinAdministrator=true`, `domain` с RID из `allowedDomainRids` (512 — Domain Admins) или SID из `allowedSids`. Локальных учётных записей вне `allowedSids` допускается не больше `maxOtherLocalAccounts` (например, 1 для учётной записи LAPS). Все члены разрешены и лимит соблюдён — pass, иначе fail warning с перечнем лишних членов. Windows добавляет в группу ПК, присоединённого к Entra, SID ролей «Global Administrator» и «Microsoft Entra Joined Device Local Administrator» и по умолчанию — пользователя, выполнившего присоединение. Поэтому перед переводом в assessed SID ролей этого tenant вносятся в `allowedSids`, а пользователь с правами администратора остаётся отклонением.
+
+### Правило WIN-010
+
+Без `expectedTenantId` проверка informational и только показывает присоединение. При заданном `expectedTenantId`:
+
+| joinType | tenantId | Результат |
+| --- | --- | --- |
+| entra_joined, hybrid_joined | равен `expectedTenantId` | pass |
+| entra_joined, hybrid_joined | другой | fail |
+| entra_joined, hybrid_joined | null | unknown/`unmapped_state` |
+| domain_joined, not_joined | — | fail |
 
 ### Правило WIN-006
 
-Evidence содержит `configuredSource` (`windows_update`, `wsus`, `other_approved`); `auLastSearchSuccessAt` — время последнего успешного поиска службы автоматического обновления или null (из `IAutomaticUpdatesResults.LastSearchSuccessDate`); `agentSearch` — `{mode: offline_cache или online, completedAt, resultCode: not_started, succeeded, succeeded_with_errors, failed или aborted}`; `pendingSecurityUpdates[]` — до 50 уникальных элементов по возрастанию min(`deadlineAt`, `firstSeenPendingAt`), каждый с `updateId`, `revisionNumber`, `kbArticleIds[]`, `categoryIds[]`, `msrcSeverity` (Critical, Important, Moderate, Low или null), `lastDeploymentChangeAt`, `deadlineAt` (оба могут быть null) и `firstSeenPendingAt`; а также `pendingSecurityUpdatesTotal` и `truncated`. Security-обновления отбираются по CategoryID (Security Updates `0FA1201D-4330-4FA8-8AE9-B877473B6441`), а не по локализованному названию. Агент читает `LastSearchSuccessDate` до начала `agentSearch`, а `observedAt` фиксирует после завершения поиска. `firstSeenPendingAt` агент хранит в локальной SQLite по паре (`configuredSource`, `updateId`): это `observedAt` первого сбора этого источника, в котором обновление найдено; запись удаляется только после поиска с `resultCode=succeeded` того же `configuredSource`, в результате которого этого `updateId` нет, а значение позже `observedAt` текущего сбора агент заменяет этим `observedAt`. Поэтому в корректном evidence `agentSearch.completedAt` и каждый `firstSeenPendingAt` не позже `observedAt`, а при `offline_cache` `auLastSearchSuccessAt` не позже `agentSearch.completedAt`. При `resultCode=succeeded` поле `agentSearch.completedAt` не равно null (условие схемы). Длина `pendingSecurityUpdates[]` равна min(`pendingSecurityUpdatesTotal`, 50), а `truncated=true` тогда и только тогда, когда `pendingSecurityUpdatesTotal` больше 50 (межполевой инвариант тела). Нарушение любого из этих двух условий отклоняет пакет с 422 `schema_violation`. `lastDeploymentChangeAt` в P1 на результат не влияет.
+Evidence — время последнего успешного поиска и последней успешной установки службы автоматического обновления (`LastSearchSuccessDate`, `LastInstallationSuccessDate`) и признак политики WSUS. Это показатель работоспособности службы обновлений, а не уровня исправлений: уровень оценивает SYS-003.
 
-История ожидания. Время поиска наблюдения — его основа свежести: `auLastSearchSuccessAt` при `agentSearch.mode=offline_cache` и `agentSearch.completedAt` при `online`. Пригодное наблюдение — наблюдение `collected` из пакета без признака часов, на котором не срабатывают шаги 1 и 2 правила ниже и время поиска которого не null; полное наблюдение — пригодное с `truncated=false`. История ведётся отдельно для каждого источника — `configuredSource` наблюдения: наблюдение источника X обновляет и закрывает эпизоды только источника X и задаёт `previousCompleteAt` только для X. Источник различается только категорией `configuredSource`: смена сервера WSUS или инструмента внутри `other_approved` новую историю не начинает. Пригодные наблюдения устройства и источника упорядочиваются по (время поиска, `observedAt`, sequence пакета), а не по порядку поступления пакетов. Эпизод ожидания обновления — наибольшая по этому порядку группа пригодных наблюдений одного источника, в которой первое и последнее наблюдения передают его `updateId`, а полных наблюдений без этого `updateId` нет; усечённое наблюдение без него эпизод не прерывает. Для наблюдения, передающего обновление, `firstSeenAt` — время поиска первого наблюдения его эпизода, `previousCompleteAt` — время поиска последнего полного наблюдения без этого `updateId`, стоящего перед эпизодом, либо null, если такого наблюдения нет. Оба значения зависят только от наблюдений, стоящих в порядке не позже оцениваемого; агент их не передаёт, история ведётся и в режиме `informational`. Начало открытого эпизода (после которого нет полного наблюдения того же источника без обновления) сервер хранит в записи `pending_update_episode` с ключом (`deviceId`, `source`, `updateId`) (`05`, «Сущности и ограничения») дольше срока хранения observation и пересчитывает при каждом принятом пригодном наблюдении: поздний пакет может сдвинуть `firstSeenAt` раньше, сдвинуть `previousCompleteAt` позже или разделить эпизод; если после закрытия эпизода наблюдений с обновлением нет, запись удаляется. Если наблюдение, определяющее значение, удалено по сроку хранения и значение не сохранено в записи, `firstSeenAt` — время поиска самого раннего известного наблюдения эпизода, а `previousCompleteAt` = null. Worker включает наблюдение в историю и оценивает его в одной транзакции `evaluate_batch` под блокировкой строки `device`. Изменение истории не пересчитывает сохранённые оценки, кроме переоценки текущей проекции по `05`, «Выбор текущего состояния», п. 5 — если поздний пакет изменил историю пары (`configuredSource` наблюдения текущей проекции, `updateId`); оценки, созданные позже, в том числе при пересчёте по `policy_change` и `rule_change`, используют историю на момент оценки. Новый `deviceId` начинает историю с нуля; потеря или откат локальной SQLite агента при том же `deviceId` её не меняет.
+По умолчанию проверка informational, потому что поиск может управляться WSUS или RMM. Если политика переводит её в `assessed`:
 
-Оценка для `expectedSource` использует только историю этого источника; наблюдение другого источника даёт unknown/`update_source_mismatch` (шаг 4) и историю ожидаемого источника не меняет. Смена `expectedSource` политикой начинает оценку по истории нового источника; если она пуста, переданное обновление с точкой отсчёта `firstSeenRef` даёт unknown/`update_age_unconfirmed` по шагу 7, если раньше не сработал другой шаг. `firstSeenRef` переданного обновления = min(`firstSeenAt`, `firstSeenPendingAt`), где `firstSeenAt` берётся из истории источника наблюдения: агентское значение может сделать отсчёт только строже. `referenceAt` равен `deadlineAt` при `referenceTimeBasis=deadline` и наличии `deadlineAt`, иначе `firstSeenRef`. Правило применяется к наблюдению `collected` из пакета без признака часов по порядку; действует первое совпадение. Время в evidence сравнивается с `observedAt` этого наблюдения (при `offline_cache` также `auLastSearchSuccessAt` с `agentSearch.completedAt`), но не с `receivedAt`; `deadlineAt` и `lastDeploymentChangeAt` не проверяются.
-
-| № | Условие | Результат |
-| --- | --- | --- |
-| 1 | `agentSearch.resultCode ≠ succeeded` | unknown/`update_search_failed` |
-| 2 | Нарушено отношение времени: `agentSearch.completedAt` позже `observedAt`; при `offline_cache` непустой `auLastSearchSuccessAt` позже `agentSearch.completedAt`; `firstSeenPendingAt` хотя бы одного переданного обновления позже `observedAt` | unknown/`evidence_time_invalid` |
-| 3 | Основы свежести нет (`auLastSearchSuccessAt=null` при `offline_cache`) либо `observedAt` − основа больше `maxSearchAgeHours` (по умолчанию 72 ч, допустимо 1…168); разность, равная `maxSearchAgeHours`, ещё свежая | unknown/`update_search_outdated` |
-| 4 | `configuredSource ≠ expectedSource`; история ожидаемого источника при этом не меняется | unknown/`update_source_mismatch` |
-| 5 | Хотя бы для одного переданного обновления `referenceAt` + grace(`msrcSeverity`) < `observedAt`, независимо от `truncated` и истории ожидания | fail |
-| 6 | `truncated=true`, а просроченных среди переданных нет: отброшенное обновление с меньшим grace может оказаться просроченным | unknown/`update_list_truncated` |
-| 7 | Хотя бы у одного переданного обновления точка отсчёта — `firstSeenRef` (основа `first_seen` либо `deadline` без `deadlineAt`), а `previousCompleteAt` истории источника `expectedSource` равен null или `previousCompleteAt` + grace(`msrcSeverity`) + `maxSearchAgeHours` < `observedAt`: история устройства по этому источнику не исключает просрочку | unknown/`update_age_unconfirmed` |
-| 8 | Иначе: успешный поиск со свежей основой, согласованным временем и ожидаемым источником, без просрочки, усечения и неподтверждённого возраста | pass |
-
-`graceDaysBySeverity` по умолчанию: critical 7, important 14, moderate 30, low 30, unrated 14 суток. Будущий `deadlineAt` ошибкой не считается и просрочки не даёт. Pass гарантирует, что ни одно переданное обновление не просрочено, а обновление с точкой отсчёта `firstSeenRef` не может ожидать установки дольше grace + `maxSearchAgeHours`; поэтому `maxSearchAgeHours` ограничен сверху 168 ч — временная граница до ответа на вопрос 15 в `08`. Первые пакеты нового устройства с давно ожидающим обновлением дают unknown/`update_age_unconfirmed` до установки и fail по шагу 5 по истечении grace от `firstSeenRef`. Explanation называет точку отсчёта и её источник, при `update_age_unconfirmed` — момент, после которого неустановленное обновление даст fail (поля `basisSnapshot` — `05`, «Сущности и ограничения»). В режиме `informational` результат — `result=null`, причины шагов 1–4, 6 и 7 не переносятся (`reasonCode=null`), см. «Семантика результата».
-
-Гипотезы P0 проверяет SP-01. H-WU1: на WU, WSUS (одобрение и deadline) и WUfB (отсрочка) служба читает поля IUpdate, а `Deadline` даёт воспроизводимую точку отсчёта для `referenceTimeBasis=deadline`; если гипотеза не подтвердится, остаётся узкая форма — только основа `first_seen` с историей ожидания. Вне критерия H-WU1 протокол SP-01 фиксирует: (а) на ПК с давно ожидающим security-обновлением — `pendingSecurityUpdates`, `firstSeenPendingAt`, `LastSearchSuccessDate` и `LastDeploymentChangeTime` первых сборов как фикстуру AT-05; (б) не позже ли `LastDeploymentChangeTime` момента, когда обновление стало ожидающим на устройстве, на WU, WSUS и WUfB, в том числе при переиздании ревизии. `lastDeploymentChangeAt` может войти в оценку только в новой `ruleVersion` WIN-006 по ADR и только после подтверждения (б); неподтверждённое (б) лишь запрещает его использовать. H-WU2: офлайн-поиск вместе с `LastSearchSuccessDate` укладывается в p95 < 30 с на 5 или более ПК, включая WSUS; `LastSearchSuccessDate` не старше 48 часов не менее чем в 95% замеров (null — непрошедший замер); в каждом замере выполняются отношения времени шага 2 правила (в том числе `LastSearchSuccessDate` прочитан как UTC); результат совпадает с online-поиском. При нарушении отношений времени сборщик WIN-006 исправляется и замер повторяется; до успешного повтора WIN-006 остаётся informational. Если H-WU2 не подтвердится, поиск выполняется фоновым заданием с отменой и лимитом 600 с вне бюджета сессии 120 с, а результат попадает в следующий пакет; если и этого недостаточно, WIN-006 остаётся informational.
+1. `lastSearchSuccessAt` позже `observedAt` — unknown/`evidence_time_invalid`.
+2. `lastSearchSuccessAt` null или старше `maxSearchAgeDays` (7) до `observedAt` — fail warning.
+3. Иначе — pass.
 
 ### Правило WIN-007
 
-Эпизод — подряд идущие по sequence наблюдения `rebootRequired=true` с одним `lastBootAt` (UTC, из `LastBootUpTime`); наблюдения с признаком часов исключаются. Fail с `severity=warning` ставится, если `observedAt` последнего наблюдения эпизода минус `observedAt` первого не меньше `warnDays` (3 суток). Это нижняя граница, поэтому вывод формулируется как «наблюдается не менее N дней в текущем сеансе загрузки», а длительность записывается в explanation. Эпизод сбрасывают значение `false`, смена `lastBootAt` и новый deviceId; пропуск данных при том же `lastBootAt` эпизод не прерывает. Поздний пакет, изменивший эпизод, — значение `false` внутри эпизода разделяет его, значение `true` может удлинить его до `warnDays`, — вызывает новую оценку WIN-007 текущей проекции (`05`, «Выбор текущего состояния», п. 5). Поведение `LastBootUpTime` при Fast Startup проверяет SP-01. Запасной путь: если SP-01 не подтвердит источник эпизода, WIN-007 переводится в informational «требование перезагрузки обнаружено» без длительности.
+Эпизод требования перезагрузки — последовательность принятых по `sequence` сборов текущего сеанса загрузки, в каждом из которых `rebootRequired=true`. Сбор относится к тому же сеансу, если его `lastBootAt` отличается от начала сеанса (`device.rebootEpisodeBootAt`) не больше чем на 2 минуты: `LastBootUpTime` — расчётное значение и сдвигается при коррекции часов и гибернации.
+
+- **Начало эпизода** — `observedAt` первого такого сбора (`device.rebootEpisodeSince`).
+- **Сброс.** Значение `false` или `lastBootAt`, отличающийся больше чем на 2 минуты, эпизод прерывают; следующий `true` начинает новый.
+- **Пропуски.** Сбор без наблюдения WIN-007 или с `unavailable` эпизод не прерывает. Пакеты с признаком часов в эпизод не входят.
+- **Результат.** Fail warning — `observedAt` текущего сбора минус начало эпизода не меньше `warnDays`.
+
+Вывод формулируется только как наблюдение: «требование перезагрузки зафиксировано во всех сборах с T; последний запуск ПК — B». Непрерывность требования между сборами не утверждается: оно могло исчезнуть и возникнуть снова, и такое снятие внутри сеанса не обнаруживается.
+
+Поведение `LastBootUpTime` при Fast Startup, после синхронизации времени и после гибернации проверяет SP-04. Если источник окажется ненадёжным, WIN-007 переводится в informational «требование перезагрузки обнаружено» без длительности.
 
 ### Эталонный отрицательный тест BitLocker
 
-В синтетическом примере `examples/scan-batch.json` у WIN-002 записаны `volumeStatus=fully_encrypted`, `protectionStatus=off` и `encryptionPercentage=100`. При `encryptionRequired=true` ожидается fail, а не pass: защита приостановлена, хотя том полностью зашифрован. Случай закреплён в domain-тесте AT-05, в записи реестра инвариантов `specs/invariants.json` с ожидаемым результатом fail и в сборочной проверке, что пример его содержит.
+В синтетическом примере `examples/scan-batch.json` у WIN-002 записаны `volumeStatus=fully_encrypted`, `protectionStatus=off` и `encryptionPercentage=100`. При `encryptionRequired=true` ожидается fail, а не pass: защита приостановлена, хотя том полностью зашифрован. Случай закреплён в domain-тесте AT-14, в записи реестра инвариантов с ожидаемым результатом fail и в сборочной проверке, что пример его содержит.
 
 ### Сбор данных и источники
 
-Сборщики обращаются к WMI/CIM, COM и Win32 API напрямую из .NET. Запуск `powershell.exe`, `cmd.exe` и любых дочерних процессов (`Process.Start`) запрещён; исключение возможно только через ADR-02 с замером в SP-01. Evidence передаётся только по закрытой схеме проверки, произвольный вывод команд не передаётся. Кандидаты API, которые подтверждает SP-01:
+Сборщики обращаются к WMI/CIM, COM и Win32 API напрямую из .NET. Запуск `powershell.exe`, `cmd.exe` и любых дочерних процессов запрещён (`02`, «Выполнение локальной проверки»). Evidence передаётся только по закрытой схеме проверки. Кандидаты API, которые подтверждает SP-04:
 
 | Проверка | Источник |
 | --- | --- |
-| Defender | `MSFT_MpComputerStatus` (документация архивная) |
+| Свободное место, том ОС | `GetVolumeNameForVolumeMountPoint` для `volumeId` тома ОС, `Win32_Volume` |
 | BitLocker | `Win32_EncryptableVolume` |
-| Антивирусы | WSC (`IWSCProductList`) |
-| Windows Update | WUA (`IUpdateSearcher`, `IAutomaticUpdatesResults`) |
-| Перезагрузка | `ISystemInformation.RebootRequired` + `Win32_OperatingSystem.LastBootUpTime` |
-| Entra join | `NetGetAadJoinInformation` и сведения о домене |
-| Secure Boot, локальные группы | Конкретные Win32 API по итогам SP-01 |
+| Defender | `MSFT_MpComputerStatus` |
+| Антивирусы и сторонний firewall | Windows Security Center (`IWSCProductList`) |
+| Брандмауэр | `INetFwPolicy2` |
+| Служба обновлений | `IAutomaticUpdatesResults` (`LastSearchSuccessDate`, `LastInstallationSuccessDate`), политика `WUServer` и `UseWUServer` |
+| Перезагрузка | `ISystemInformation.RebootRequired`, `Win32_OperatingSystem.LastBootUpTime` |
+| Локальные администраторы | `NetLocalGroupGetMembers` по известному SID группы, класс и RID — через LSA |
+| Secure Boot | `GetFirmwareEnvironmentVariable` либо реестр `SecureBoot\State` |
+| Присоединение к Entra | `NetGetAadJoinInformation` и сведения о домене |
+| OS-инвентарь | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` (`EditionID`, `DisplayVersion`, у старых сборок `ReleaseId`, `CurrentBuild`, `UBR`); архитектура — `IsWow64Process2` |
 
-Источники остальных проверок, учётную запись сборщика и точные права каждого вызова на поддерживаемых редакциях Windows устанавливает SP-01. Каждый сборщик ограничен 30 секундами; бюджет всей сессии — 120 секунд. При исчерпании бюджета оставшиеся проверки получают `unavailable/collector_timeout`. Укладывается ли поиск Windows Update в эти лимиты, проверяет гипотеза H-WU2 (правило WIN-006).
+Учётная запись LocalSystem, права и время каждого вызова на поддерживаемых редакциях фиксирует протокол SP-04. Каждый сборщик ограничен 30 секундами, сессия — 120 секундами; при исчерпании бюджета оставшиеся проверки получают `unavailable/collector_timeout`. Изоляция зависшего вызова — `02`, «Выполнение локальной проверки».
 
-Документация командлетов [BitLocker](https://learn.microsoft.com/en-us/powershell/module/bitlocker/get-bitlockervolume?view=windowsserver2025-ps) и [Defender](https://learn.microsoft.com/en-us/powershell/module/defender/get-mpcomputerstatus?view=windowsserver2025-ps) используется только для семантики полей; способ сбора — WMI (`Win32_EncryptableVolume`, `MSFT_MpComputerStatus`), PowerShell не используется. Состояние сторонних продуктов описывает [Windows Security Center](https://learn.microsoft.com/en-us/windows/win32/api/iwscapi/).
+## Поддержка ОС и уровень патчей
 
-## Матрица совместимости и жизненный цикл ОС
+SYS-001…SYS-003 вычисляет сервер; их наблюдения имеют `source=server`, а evidence — закрытые структуры `evidenceSchema` в `specs/check-catalog.json`: SYS-001 — `lastFullScanAt` и `lastSeenAt`; SYS-002 — продукт, семейство, версия, build, архитектура и `servicingEndsAt`; SYS-003 — ветка, UBR, уровень устройства, ожидаемый месяц, отставание, KB недостающего выпуска и `verifiedThroughMonth`. Вход SYS-002 и SYS-003 — последнее collected наблюдение WIN-011 в окне свежести WIN-011 из пакетов, которые могли менять проекцию, а время оценки — время сервера (`05`, «Выбор текущего состояния» и «Время и часы устройства»).
 
-Матрица совместимости агента P1: Windows 11 Pro x64, версии 25H2 и 26H2. Enterprise, Education, 24H2 и другие языки ОС добавляются по ответу на вопрос 1 в `08` (раздел «Вопросы перед планированием команды») и по итогам SP-01. Windows 10 в P1 не входит. Устройства вне матрицы в пилот не включаются. Если устройство выходит из матрицы во время пилота, SYS-002 даёт fail (редакция, версия или архитектура вне матрицы, в том числе версия, которой нет в таблице жизненного цикла) или unknown/`os_inventory_missing` (нет свежего WIN-011), а устройство до обновления исключается из знаменателей NFR-01 и NFR-02.
+### Матрица совместимости агента
 
-Факты об ОС собирает WIN-011, вывод о поддержке делает SYS-002. Таблица жизненного цикла — версионируемые данные правила SYS-002, а не параметр клиентской политики: даты Microsoft одинаковы для всех клиентов, поэтому изменение таблицы даёт `rule_change`. Значения сверены 2026-10-13.
+| Продукт | Версии | Семейства | Архитектура |
+| --- | --- | --- | --- |
+| Windows 11 | 21H2 (22000) и новее | home_pro, enterprise_education, ltsc, iot_ltsc | x64 |
+| Windows 10 | LTSC 2019 (1809, 17763) и новее | home_pro, enterprise_education, ltsc, iot_ltsc | x64 |
 
-Конвенция времени. «Последний день обслуживания» — календарная дата окончания обновлений (End of updates) редакций Home и Pro со страницы Windows 11 release information (`10`), в формате YYYY-MM-DD. `servicingEndsAt` — исключающая граница: начало следующего календарного дня в часовом поясе America/Los_Angeles, переведённое в UTC по смещению, которое действует в этот момент (−07:00 летом, −08:00 зимой). Данные правила и код хранят только `servicingEndsAt` как UTC-мгновение `YYYY-MM-DDTHH:MM:SSZ`; локальное время и подпись часового пояса не хранятся. Время со страницы Microsoft Lifecycle, подписанное PT, не используется.
+MSI устанавливается только на клиентскую ОС (`MsiNTProductType=1`) с нативной архитектурой x64 (`06`, «Распространение агента через RMM»). ARM64 и серверы — P3: если агент всё же работает на такой ОС, WIN-011 сообщает фактическую архитектуру и редакцию, а SYS-002 даёт unknown/`os_version_unknown`, а не fail, потому что Microsoft такую ОС может поддерживать. Windows 10 22H2 и старые версии Windows 11 включены, чтобы клиент видел устаревшую ОС: SYS-002 даёт для них fail. Оплаченный ESU (только 22H2) оформляется решением `risk_accepted` по SYS-002 со сроком пересмотра не позже окончания оплаченного года ESU. Windows 11 26H1 выпускается для новых устройств на отдельных новых процессорах, обновление на неё с других версий не предлагается. В лаборатории SP-04 испытываются версии с действующим обслуживанием и Windows 10 22H2, а LTSC, IoT LTSC и Education — если они есть у клиентов (вопрос 3 в `08`).
+
+### Жизненный цикл ОС
+
+Семейство определяется по `editionId` из WIN-011:
 
 | Семейство | editionId |
 | --- | --- |
 | home_pro | Core, CoreN, CoreSingleLanguage, CoreCountrySpecific, Professional, ProfessionalN, ProfessionalEducation, ProfessionalEducationN, ProfessionalWorkstation, ProfessionalWorkstationN |
-| enterprise_education | Enterprise, Education и N-варианты. Строки обслуживания добавляются после ответа на вопрос 1 в `08` и SP-01, с повторной сверкой; до этого редакции вне матрицы и SYS-002 даёт fail |
+| enterprise_education | Enterprise, EnterpriseN, Education, EducationN, IoTEnterprise, ServerRdsh |
+| ltsc | EnterpriseS, EnterpriseSN |
+| iot_ltsc | IoTEnterpriseS |
 
-| Семейство | displayVersion | Последний день обслуживания | servicingEndsAt |
-| --- | --- | --- | --- |
-| home_pro | 24H2 | 2026-10-13 | 2026-10-14T07:00:00Z |
-| home_pro | 25H2 | 2027-10-12 | 2027-10-13T07:00:00Z |
-| home_pro | 26H1 | 2028-03-14 | 2028-03-15T07:00:00Z |
-| home_pro | 26H2 | 2028-10-10 | 2028-10-11T07:00:00Z |
+Продукт определяется по `build`: ниже 22000 — Windows 10, от 22000 — Windows 11. Версия — `DisplayVersion`, а у сборок без него (2004 и старше) — `ReleaseId`. Строка таблицы выбирается по семейству и `build`, поэтому отсутствие версии в реестре старой сборки результат не меняет.
 
-Правило: fail, если редакция, версия или архитектура вне матрицы совместимости либо `observedAt` последнего свежего WIN-011 ≥ `servicingEndsAt` его версии; unknown/`os_version_unknown` — только для версии из матрицы, которой нет в таблице; unknown/`os_inventory_missing` — нет свежего WIN-011. Строки таблицы вне матрицы хранят даты обслуживания на случай её расширения. Давность патчей по UBR в P1 не обещается.
+Конвенция времени. «Последний день обслуживания» — дата окончания обновлений со страниц Windows release information и Microsoft Lifecycle. `servicingEndsAt` — исключающая граница: начало следующего календарного дня в America/Los_Angeles, переведённое в UTC по действующему в этот момент смещению (−07:00 летом, −08:00 зимой). Данные правила хранят только `servicingEndsAt`.
 
-## Проверки Microsoft 365
+Таблица — данные правила SYS-002, а не параметр клиентской политики; её изменение выпускается новой версией сервиса и даёт `rule_change`. Значения сверены 2026-10-15.
 
-Все endpoints ниже относятся к Graph v1.0. Таблица показывает application permissions для фонового доступа; администратор клиента отдельно выдаёт consent. Consent запрашивает только права включённых модулей: выключенный модуль в запрашиваемые права не входит. Право чтения может охватывать весь tenant, поэтому объём запрашиваемых и сохраняемых данных ограничивается allowlist.
+| Продукт | Семейство | displayVersion | build | Последний день обслуживания | servicingEndsAt |
+| --- | --- | --- | --- | --- | --- |
+| Windows 10 | ltsc | 1809 | 17763 | 2029-01-09 | 2029-01-10T08:00:00Z |
+| Windows 10 | iot_ltsc | 1809 | 17763 | 2029-01-09 | 2029-01-10T08:00:00Z |
+| Windows 10 | ltsc | 21H2 | 19044 | 2027-01-12 | 2027-01-13T08:00:00Z |
+| Windows 10 | iot_ltsc | 21H2 | 19044 | 2032-01-13 | 2032-01-14T08:00:00Z |
+| Windows 10 | home_pro | 22H2 | 19045 | 2025-10-14 | 2025-10-15T07:00:00Z |
+| Windows 10 | enterprise_education | 22H2 | 19045 | 2025-10-14 | 2025-10-15T07:00:00Z |
+| Windows 11 | home_pro | 21H2 | 22000 | 2023-10-10 | 2023-10-11T07:00:00Z |
+| Windows 11 | enterprise_education | 21H2 | 22000 | 2024-10-08 | 2024-10-09T07:00:00Z |
+| Windows 11 | home_pro | 22H2 | 22621 | 2024-10-08 | 2024-10-09T07:00:00Z |
+| Windows 11 | enterprise_education | 22H2 | 22621 | 2025-10-14 | 2025-10-15T07:00:00Z |
+| Windows 11 | home_pro | 23H2 | 22631 | 2025-11-11 | 2025-11-12T08:00:00Z |
+| Windows 11 | enterprise_education | 23H2 | 22631 | 2026-11-10 | 2026-11-11T08:00:00Z |
+| Windows 11 | home_pro | 24H2 | 26100 | 2026-10-13 | 2026-10-14T07:00:00Z |
+| Windows 11 | enterprise_education | 24H2 | 26100 | 2027-10-12 | 2027-10-13T07:00:00Z |
+| Windows 11 | ltsc | 24H2 | 26100 | 2029-10-09 | 2029-10-10T07:00:00Z |
+| Windows 11 | iot_ltsc | 24H2 | 26100 | 2034-10-10 | 2034-10-11T07:00:00Z |
+| Windows 11 | home_pro | 25H2 | 26200 | 2027-10-12 | 2027-10-13T07:00:00Z |
+| Windows 11 | enterprise_education | 25H2 | 26200 | 2028-10-10 | 2028-10-11T07:00:00Z |
+| Windows 11 | home_pro | 26H1 | 28000 | 2028-03-14 | 2028-03-15T07:00:00Z |
+| Windows 11 | enterprise_education | 26H1 | 28000 | 2029-03-13 | 2029-03-14T07:00:00Z |
+| Windows 11 | home_pro | 26H2 | 26300 | 2028-10-10 | 2028-10-11T07:00:00Z |
+| Windows 11 | enterprise_education | 26H2 | 26300 | 2029-10-09 | 2029-10-10T07:00:00Z |
 
-| ID | Данные и endpoint | Application permissions | Условия и вывод |
-| --- | --- | --- | --- |
-| M365-001 | `/reports/authenticationMethods/userRegistrationDetails`, сопоставление с `/users?$select=id,accountEnabled,userType,userPrincipalName` | `AuditLog.Read.All`, `User.Read.All` | P2. Доступ к отчёту требует Entra P1/P2. Проверять регистрацию активных member accounts; отсутствующий пользователь в отчёте — unknown, отключённый исключается по применимости |
-| M365-002 | `/policies/identitySecurityDefaultsEnforcementPolicy` | `Policy.Read.All` | P2. Информационная запись isEnabled. Disabled не означает общую слабость: клиент может использовать Conditional Access |
-| M365-003 | `/identity/conditionalAccess/policies` | `Policy.Read.All` | P2. Инвентаризация состояния enabled/report-only/disabled и условий; эксплуатация CA требует подходящей лицензии. P2 не доказывает покрытие каждого сценария |
-| M365-004 | `/deviceManagement/managedDevices` с `$select` необходимых полей | `DeviceManagementManagedDevices.Read.All` | P2 optional. Нужна активная лицензия Intune, управляемое устройство и свежий lastSyncDateTime; compliant относится к назначенным политикам Intune |
-| M365-005 | `/auditLogs/signIns` с диапазоном времени и минимальной проекцией | `AuditLog.Read.All`; для `appliedConditionalAccessPolicies` — `Policy.Read.All`, уже запрашиваемое для M365-002/003, либо `Policy.Read.ConditionalAccess`; без права свойство опускается | P3. Graph-выгрузка требует Entra P1/P2; некоторые риск-детали P2. Отсутствие входа в период не доказывает запрет доступа |
+Правило SYS-002 на время оценки t:
 
-Права сверены 2026-10-13 с [отчётом регистрации](https://learn.microsoft.com/en-us/graph/api/authenticationmethodsroot-list-userregistrationdetails?view=graph-rest-1.0), [users](https://learn.microsoft.com/en-us/graph/api/user-list?view=graph-rest-1.0), [Security Defaults](https://learn.microsoft.com/en-us/graph/api/identitysecuritydefaultsenforcementpolicy-get?view=graph-rest-1.0), [CA policies](https://learn.microsoft.com/en-us/graph/api/conditionalaccessroot-list-policies?view=graph-rest-1.0), [Intune](https://learn.microsoft.com/en-us/graph/api/intune-devices-manageddevice-list?view=graph-rest-1.0) и [signIns](https://learn.microsoft.com/en-us/graph/api/signin-list?view=graph-rest-1.0). Для CA policies наименьшее application-право — `Policy.Read.All`, более широкого нет. Endpoint или permission нельзя автоматически подменять по совпадению названий. Фактическую достаточность прав каждого модуля, поведение без лицензий и отсутствие прав выключенного модуля в consent проверяет SP-03 на лицензированном test tenant.
+1. Нет collected WIN-011 в окне свежести — unknown/`os_inventory_missing`.
+2. Архитектура не x64 или `editionId` вне таблицы семейств (например, серверная редакция) — unknown/`os_version_unknown`: ОС вне матрицы агента.
+3. Есть строка с тем же семейством и `build`: t ≥ `servicingEndsAt` — fail, иначе — pass.
+4. Строки нет:
+   - `build` ниже 19045 у home_pro и enterprise_education или ниже наименьшего `build` своего семейства у ltsc и iot_ltsc — fail: обслуживание всех таких версий закончено;
+   - иначе (новая версия до обновления таблицы, Insider) — unknown/`os_version_unknown`.
 
-Для M365-001 `isMfaRegistered` и `isMfaCapable` сохраняются отдельно. Pass подтверждает выполнение требования регистрации, но не обязательность MFA. Источник может обновляться с задержкой до 36 часов; свежесть оценивает также время источника, если оно доступно. [Условия отчёта](https://learn.microsoft.com/en-us/entra/identity/authentication/howto-authentication-methods-activity).
+Explanation называет дату окончания обслуживания и, для Windows 10 22H2, возможность ESU.
 
-Полный анализ покрытия CA требует групп, исключений, authentication strengths, ресурсов и сценариев; связанные права и дополнительный проект относятся к P3. Windows sign-in не считается нарушением только потому, что CA не применялась. [Различия сценариев](https://learn.microsoft.com/en-us/entra/identity/monitoring-health/concept-sign-in-log-activity-details).
+### Правило SYS-003 и каталог выпусков
 
-## Возможности интеграции
+SYS-003 сравнивает установленный уровень исправлений (`build`.`ubr` из WIN-011) с каталогом выпусков Windows и считает отставание в месяцах безопасности, а не в числе выпусков.
 
-Каждый модуль имеет `capabilityStatus=available|permission_missing|license_unconfirmed|partial|unsupported|temporary_error|disconnected`. `partial` означает, что результат получен не полностью: не все страницы или не все обязательные свойства. `license_unconfirmed` означает необходимость уточнения, а не доказанное отсутствие лицензии. Проверяются выдача token, endpoint, pagination и полученные свойства. 200 с отсутствующим обязательным свойством не считается полным успешным наблюдением.
+Каталог — платформенная таблица `windows_release` с ключом (продукт, ветка `build`, `ubr`). Продукт в P2 один — `client`: серверные выпуски общей ветки 26100 (Windows Server 2025) не импортируются. Каждая запись содержит KB, `releaseAt`, вид и `securityMonth` — месяц, исправления безопасности которого включены в выпуск:
 
-Частично доступный tenant остаётся подключённым с явным списком недоступных проверок. Обработка Graph GET ограничивается разрешёнными hosts, конкретным tenant, разрешёнными paths и проверенными nextLink; произвольный внешний URL не выполняется.
+- `security_monthly` — ежемесячный выпуск безопасности второго вторника;
+- `security_oob` — внеочередной выпуск с исправлениями безопасности;
+- `nonsecurity_oob` и `preview` — без новых исправлений безопасности; `securityMonth` — месяц выпуска безопасности, на котором они построены;
+- `hotpatch` — выпуск hotpatch: меняет UBR без перезагрузки, и его UBR может быть ниже UBR обычного выпуска того же месяца (май 2026: hotpatch 26100.8390 и обычный выпуск 26100.8457).
 
-Контракты P2-интеграций в версии 0.2.0 не фиксируются и в OpenAPI отсутствуют: capabilities, provenance и время источника, полнота страниц и partial results, допустимые тексты выводов для `isMfaRegistered`, `isMfaCapable`, Security Defaults и CA report-only, а также идентификаторы сопоставления устройств Intune — обязательный результат WP-08 и условие допуска P2.
+`autoOffered` отмечает, предлагает ли Windows Update выпуск автоматически; в P2 он только дополняет пояснение. Ветки 24H2 (26100), 25H2 (26200) и 26H2 (26300) хранятся отдельно, потому что часть внеочередных выпусков выходит не для всех веток.
+
+Записи импортируются черновиком (`importWindowsReleases`) и участвуют в оценке только после сверки месяца Admin (`verifyWindowsReleaseMonth`). Месяц без новых записей подтверждается флагом `noNewReleases`. `verifiedThroughMonth` — последний месяц, до которого сверены все месяцы подряд. Пополнение каталога не меняет `ruleVersion`: `verifiedThroughMonth` пишется в `basisSnapshot`, а сверка месяца ставит `patch_level_sweep`, и отставшие устройства получают события с `source_change`. Ошибочная сверенная запись исправляется новой версией сервиса с новой `ruleVersion` SYS-003 и пересчётом с `rule_change`.
+
+Обозначения для устройства с веткой B и UBR u в момент оценки t:
+
+- **Уровень устройства** — `securityMonth` сверенной записи ветки B с точным совпадением UBR; без точного совпадения — наибольший `securityMonth` сверенных записей ветки, кроме `hotpatch`, с UBR не выше u.
+- **Ожидаемый месяц** E(t) — последний месяц M, у которого дата второго вторника + `graceDays` (14) ≤ дата t в UTC.
+- **Отставание** — число месяцев с записью `security_monthly` ветки B после уровня устройства и не позже E(t). Ветка, обслуживание которой закончилось, новых месяцев не получает, поэтому отставание не растёт: устаревшую ОС оценивает SYS-002.
+
+Правило:
+
+1. Нет collected WIN-011 в окне свежести — unknown/`os_inventory_missing`.
+2. Ветки нет в каталоге (например, Insider) — unknown/`build_not_in_catalog`.
+3. `verifiedThroughMonth` раньше E(t) — unknown/`release_catalog_stale`: месяц, срок grace которого наступил, ещё не сверен.
+4. Отставание 0 — pass; от 1 до `criticalBehindMonths` − 1 — fail warning; не меньше `criticalBehindMonths` (2) — fail critical. UBR ниже самой ранней записи ветки даёт отставание не меньше `criticalBehindMonths`.
+
+Внеочередные выпуски отставание не увеличивают: месяц считается один раз, и hotpatch даёт тот же уровень, что обычный выпуск своего месяца. Explanation называет build и UBR, уровень устройства, ожидаемый месяц, KB недостающего выпуска безопасности ветки и число пропущенных месяцев, а при доступном внеочередном выпуске безопасности с `autoOffered` — и его KB. Обновление, которое установлено, но ждёт перезагрузки, UBR ещё не меняет и даёт отставание вместе с WIN-007. SYS-003 не оценивает обновления Office, драйверов и стороннего ПО.
+
+Месяц сверяется по RB-13 в течение 7 суток после второго вторника, а внеочередные выпуски безопасности — по мере выхода. Предпочтительный источник — API MSRC CVRF (`api.msrc.microsoft.com/cvrf/v3.0`): без аутентификации, с KB и `FixedBuild` по продуктам. Документы CVRF меняются и после выпуска, а данные бывают неточными, поэтому записи месяца до использования сверяются Admin со страницей Windows release information. Альтернатива — Graph Windows Updates API: он только в beta и требует лицензий Autopatch. Окончательный источник и формат импорта выбирает SP-04. Задание `release_catalog_check` поднимает оповещение, если месяц не сверен через 7 суток после второго вторника; при `graceDays` 14 это неделя запаса до unknown. Сверка через 1–13 суток после выпуска не даёт ни одного unknown по календарю 2026–2027, в том числе в месяцы с интервалом 35 суток между выпусками. При `graceDays` меньше 7 сверка должна идти быстрее, иначе SYS-003 этой организации временно даёт unknown.
 
 ## Следующие модули
 
-Проверка конкретных приложений начинается с согласованного каталога vendor/version. WinGet используется как дополнительный источник, а unknown version сохраняется явно. [Ограничения версий WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/upgrade).
+Модули P3 оцениваются отдельно, после пилотов:
 
-Настройки блокировки экрана и пользовательский Windows Hello требуют измерения правильного пользовательского контекста. Backup требует интеграции с конкретным поставщиком и отдельного подтверждения восстановления. Secure Score остаётся дополнительным индикатором внедрения контролей, без трактовки как вероятности взлома. [Смысл Secure Score](https://learn.microsoft.com/microsoft-365/security/defender/microsoft-secure-score?view=o365-worldwide).
+- **Microsoft 365:**
+  - сопоставление устройств Intune по подтверждённому `entraDeviceId` (без сопоставления по имени и UPN);
+  - соответствие Intune;
+  - инциденты и состояние Defender;
+  - Secure Score — как индикатор внедрения контролей, а не вероятности взлома;
+  - назначения eligible в PIM;
+  - журналы входов.
+- **Windows:**
+  - каталог приложений vendor/version и сторонние обновления; WinGet — дополнительный источник, неизвестная версия хранится явно;
+  - блокировка экрана и Windows Hello — нужен пользовательский контекст измерения;
+  - резервное копирование — нужна интеграция с поставщиком и подтверждение восстановления;
+  - ARM64 и серверы;
+  - сертификаты Secure Boot 2023: сертификаты Microsoft 2011 для Secure Boot истекают в 2026 году, а WIN-009 видит только, включён ли Secure Boot.

@@ -1,20 +1,20 @@
 """Checks of specs/invariants.json: fields, expectedError forms, coverage and document anchors."""
 import re
 
-from contract_catalog import (AGENT_STATES, CAPABILITY_STATUSES, COLLECTOR_REASONS, ENFORCEMENTS, EVENT_TABLE,
-                              INFORMATIONAL_REASONS, PROBLEM_HTTP, REASON_CODES, REPLAY_STATUSES, RESULTS,
-                              UNCOVERED_CODES)
+from contract_catalog import (AGENT_STATES, CAPABILITY_STATUSES, CHECKS, COLLECTION_REASONS, ENFORCEMENTS,
+                              EVENT_TABLE, INFORMATIONAL_REASONS, PROBLEM_HTTP, REASON_CODES, REPLAY_STATUSES,
+                              RESULTS, UNCOVERED_CODES)
 from doc_tables import headings, row_ids
 
 FIELDS = ['id', 'rule', 'sourceDoc', 'phase', 'enforcement', 'negativeExample', 'expectedError', 'acceptance']
-# Sections that must carry at least one P1 record: organization lifecycle, scheduler and fencing,
-# privileged collection boundary.
+# Sections that must carry at least one record: organization lifecycle, background jobs, local collection
+# boundary, M365 connection and collection, security log.
 REQUIRED_SECTIONS = [('05-data-and-api.md', 'Жизненный цикл организации'),
-                     ('02-architecture-and-stack.md', 'Очередь заданий'),
-                     ('02-architecture-and-stack.md', 'Выполнение локальной проверки')]
-# The five P2 records: nextLink, partial without a property, MFA registration is not a requirement,
-# Intune mapping, consent beyond enabled modules.
-P2_TOPICS = ['nextLink', 'partial_property', 'mfa_registered_not_required', 'intune_mapping', 'extra_consent']
+                     ('02-architecture-and-stack.md', 'Фоновые задания'),
+                     ('02-architecture-and-stack.md', 'Выполнение локальной проверки'),
+                     ('05-data-and-api.md', 'Подключение M365 и сбор'),
+                     ('04-security-and-privacy.md', 'Журнал безопасности')]
+EFFECTS = ['none', 'single']
 
 
 def form_error(expected, record, audit_pattern):
@@ -46,17 +46,39 @@ def form_error(expected, record, audit_pattern):
         if replay.get('http') not in REPLAY_STATUSES or replay.get('duplicate') is not True or len(replay) != 2:
             return 'replay form invalid'
     elif keys == {'agentState'}:
-        if expected['agentState'] not in AGENT_STATES:
-            return 'unknown agent state'
+        if expected['agentState'] not in AGENT_STATES or record.get('phase') != 'P2':
+            return 'agentState only for P2 with a known state'
     elif keys == {'rows'}:
         if expected['rows'] != 0 or record.get('enforcement') != 'db_rls':
             return 'rows form only {rows: 0} with enforcement=db_rls'
     elif keys == {'capabilityStatus'}:
-        if expected['capabilityStatus'] not in CAPABILITY_STATUSES or record.get('phase') != 'P2':
-            return 'capabilityStatus only for P2 with a closed value'
+        if expected['capabilityStatus'] not in CAPABILITY_STATUSES or record.get('enforcement') != 'collector':
+            return 'capabilityStatus only with enforcement=collector and a closed value'
+    elif keys == {'effect'}:
+        if expected['effect'] not in EFFECTS:
+            return 'effect must be none or single'
     else:
         return 'unknown expectedError form'
     return None
+
+
+def _check_record(report, record, docs, acceptance_ids, audit_pattern):
+    rid = record.get('id', '?')
+    report.check(re.fullmatch(r'INV-[0-9]{3}', str(rid)) is not None, 'contract', f'{rid}: id format')
+    report.check(sorted(record) == sorted(FIELDS), 'contract', f'{rid}: fields differ from the required set')
+    report.check(record.get('phase') in ('P1', 'P2'), 'contract', f'{rid}: phase')
+    report.check(record.get('enforcement') in ENFORCEMENTS, 'contract', f'{rid}: enforcement')
+    report.check(bool(record.get('negativeExample')), 'contract', f'{rid}: negativeExample empty')
+    problem = form_error(record.get('expectedError'), record, audit_pattern)
+    report.check(problem is None, 'contract', f'{rid}: expectedError {problem}')
+    source = record.get('sourceDoc', {})
+    text = docs.get(source.get('file'))
+    report.check(text is not None, 'docs', f'{rid}: sourceDoc file {source.get("file")} missing')
+    if text is not None:
+        report.check(source.get('section') in headings(text), 'docs',
+                     f'{rid}: heading «{source.get("section")}» absent in {source.get("file")}')
+    report.check(record.get('acceptance') in acceptance_ids, 'docs',
+                 f'{rid}: acceptance {record.get("acceptance")} absent in 07')
 
 
 def check_invariants(report, ctx, docs):
@@ -66,24 +88,8 @@ def check_invariants(report, ctx, docs):
     report.check(len(ids) == len(set(ids)), 'contract', 'Duplicate INV id')
     acceptance_ids = row_ids(docs.get('07-delivery-plan-and-acceptance.md', ''))
     for record in records:
-        rid = record.get('id', '?')
-        report.check(re.fullmatch(r'INV-[0-9]{3}', str(rid)) is not None, 'contract', f'{rid}: id format')
-        report.check(sorted(record) == sorted(FIELDS), 'contract', f'{rid}: fields differ from the required set')
-        report.check(record.get('phase') in ('P1', 'P2'), 'contract', f'{rid}: phase')
-        report.check(record.get('enforcement') in ENFORCEMENTS, 'contract', f'{rid}: enforcement')
-        report.check(bool(record.get('negativeExample')), 'contract', f'{rid}: negativeExample empty')
-        problem = form_error(record.get('expectedError'), record, audit_pattern)
-        report.check(problem is None, 'contract', f'{rid}: expectedError {problem}')
-        source = record.get('sourceDoc', {})
-        text = docs.get(source.get('file'))
-        report.check(text is not None, 'docs', f'{rid}: sourceDoc file {source.get("file")} missing')
-        if text is not None:
-            report.check(source.get('section') in headings(text), 'docs',
-                         f'{rid}: heading «{source.get("section")}» absent in {source.get("file")}')
-        report.check(record.get('acceptance') in acceptance_ids, 'docs',
-                     f'{rid}: acceptance {record.get("acceptance")} absent in 07')
-    p1 = [r for r in records if r.get('phase') == 'P1']
-    expected = [r.get('expectedError', {}) for r in p1]
+        _check_record(report, record, docs, acceptance_ids, audit_pattern)
+    expected = [r.get('expectedError', {}) for r in records]
     codes = {e.get('code') for e in expected}
     for code in PROBLEM_HTTP:
         if code not in UNCOVERED_CODES:
@@ -94,18 +100,23 @@ def check_invariants(report, ctx, docs):
     events = {e['event']['eventType'] for e in expected if 'event' in e}
     for event_type in EVENT_TABLE:
         report.check(event_type in events, 'contract', f'invariants.json: event row {event_type} not covered')
-    sections = {(r['sourceDoc']['file'], r['sourceDoc']['section']) for r in p1 if 'sourceDoc' in r}
+    sections = {(r['sourceDoc']['file'], r['sourceDoc']['section']) for r in records if 'sourceDoc' in r}
     for section in REQUIRED_SECTIONS:
         report.check(section in sections, 'contract', f'invariants.json: no record for {section[1]}')
     informational = [e for e in expected if e.get('assessmentMode') == 'informational']
-    report.check(any(e.get('reasonCode') in COLLECTOR_REASONS for e in informational), 'contract',
-                 'invariants.json: no informational record with a collector reasonCode')
+    report.check(any(e.get('reasonCode') in COLLECTION_REASONS for e in informational), 'contract',
+                 'invariants.json: no informational record with a collection reasonCode')
     report.check(any('reasonCode' not in e for e in informational), 'contract',
                  'invariants.json: no informational record without reasonCode')
-    bitlocker = [r for r in p1 if r.get('expectedError') == {'assessmentMode': 'assessed', 'result': 'fail'}
-                 and 'WIN-002' in r.get('negativeExample', '') + r.get('rule', '')]
-    report.check(bool(bitlocker), 'contract', 'invariants.json: BitLocker reference record missing')
-    p2 = [r for r in records if r.get('phase') == 'P2']
-    report.check(len(p2) == len(P2_TOPICS), 'contract', 'invariants.json: P2 records must be exactly the five topics')
-    report.summary.update(invariants=len(records), invariantsP1=len(p1), invariantsP2=len(p2))
+    text = {r['id']: r.get('rule', '') + ' ' + r.get('negativeExample', '') for r in records}
+    fail = {'assessmentMode': 'assessed', 'result': 'fail'}
+    for check, marker in (('WIN-002', 'BitLocker'), ('M365-003', 'report-only')):
+        found = [r for r in records if r.get('expectedError') == fail and check in text[r['id']]]
+        report.check(bool(found), 'contract', f'invariants.json: {check} reference record ({marker}) missing')
+    for cid, _, _, mode, _, _ in CHECKS:
+        if mode == 'assessed':
+            report.check(any(cid in value for value in text.values()), 'contract',
+                         f'invariants.json: assessed check {cid} has no record')
+    phases = [r.get('phase') for r in records]
+    report.summary.update(invariants=len(records), invariantsP1=phases.count('P1'), invariantsP2=phases.count('P2'))
     return set(ids)

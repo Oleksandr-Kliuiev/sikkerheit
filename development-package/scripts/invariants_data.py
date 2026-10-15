@@ -1,43 +1,50 @@
 """Registry of invariants that JSON Schema does not express (source of specs/invariants.json).
 
-IDs are assigned in list order: P1, then P2, then P1_ADDED. New records go to the end of the last
-block, so that existing INV-nnn identifiers stay stable.
+IDs are assigned in list order: P1, then P2. New records go to the end of their block before a release;
+after a release IDs stay stable and new records are appended to the end of the last block.
 """
 
 DOCS = {'02': '02-architecture-and-stack.md', '03': '03-check-catalog.md', '04': '04-security-and-privacy.md',
         '05': '05-data-and-api.md', '06': '06-azure-and-operations.md'}
 
-INTAKE = ('05', 'Порядок приёма пакета')
-UNIQUE = ('05', 'Уникальность и ожидаемые объекты')
-CLOCK = ('05', 'Время и часы устройства')
-EXTRA = ('05', 'Инварианты вне JSON Schema')
-ERRORS = ('05', 'Ошибки и действия агента')
-AGENT_FSM = ('05', 'Конечный автомат агента')
+TENANCY = ('02', 'Разделение клиентов')
+JOBS = ('02', 'Фоновые задания')
+LOCAL = ('02', 'Выполнение локальной проверки')
+DEPLOY = ('02', 'Развёртывание и окружения')
+SEMANTICS = ('03', 'Семантика результата')
+MFA_RULE = ('03', 'Правило M365-001 и M365-002')
+ENFORCEMENT_RULE = ('03', 'Правило M365-003')
+ADMINS_RULE = ('03', 'Правило M365-005')
+CONSENT_RULE = ('03', 'Правило M365-006')
+INACTIVE_RULE = ('03', 'Правило M365-007')
+CAPABILITY = ('03', 'Возможности подключения')
+WINDOWS = ('03', 'Проверки Windows')
+WIN006 = ('03', 'Правило WIN-006')
+WIN007 = ('03', 'Правило WIN-007')
+BITLOCKER = ('03', 'Эталонный отрицательный тест BitLocker')
+LIFECYCLE_OS = ('03', 'Жизненный цикл ОС')
+PATCH = ('03', 'Правило SYS-003 и каталог выпусков')
+ROLES = ('04', 'Вход сотрудников и роли')
+CONNECT = ('04', 'Подключение и отзыв')
+ENROLL_KEY = ('04', 'Ключ регистрации организации')
+SESSION = ('04', 'Ключ устройства и сессия')
+SECURITY_LOG = ('04', 'Журнал безопасности')
+UNTRUSTED = ('04', 'Недоверенные строки и выдача отчёта')
+POLICY = ('05', 'Политика клиента')
 LIFECYCLE = ('05', 'Жизненный цикл организации')
+COLLECTION = ('05', 'Подключение M365 и сбор')
 TRANSITIONS = ('05', 'Таблица переходов finding')
 WORKFLOW = ('05', 'Автомат workflowState')
 CURRENT = ('05', 'Выбор текущего состояния')
-IDENTITY = ('05', 'Канонический объект и идентичность устройства')
+SCHEDULER = ('05', 'Фоновые задания и планировщик')
+SUBJECTS = ('05', 'Субъекты и идентичность устройства')
+REGISTRATION = ('05', 'Регистрация и сессия')
+INTAKE = ('05', 'Порядок приёма пакета')
+CLOCK = ('05', 'Время и часы устройства')
+AGENT_FSM = ('05', 'Конечный автомат агента')
 PORTAL = ('05', 'API портала')
 REPORT = ('05', 'Отчёт и покрытие')
-SEMANTICS = ('03', 'Семантика результата')
-WINDOWS = ('03', 'Проверки Windows')
-OS_MATRIX = ('03', 'Матрица совместимости и жизненный цикл ОС')
-ENROLL = ('04', 'Enrollment-токены')
-CERT = ('04', 'Профиль и продление сертификата')
-XFCC = ('04', 'Доверие ingress и XFCC')
-ROLES = ('04', 'Вход в портал и роли')
-UNTRUSTED = ('04', 'Недоверенные строки и выдача отчёта')
-LOCAL = ('02', 'Выполнение локальной проверки')
-JOBS = ('02', 'Очередь заданий')
-TENANCY = ('02', 'Разделение клиентов')
-RESTORE = ('06', 'Журнал жизненного цикла и restore в карантине')
-M365 = ('03', 'Проверки Microsoft 365')
-CAPABILITY = ('03', 'Возможности интеграции')
-GRAPH = ('04', 'Разрешения интеграций')
-AGENT_API = ('05', 'API агента')
-CONTEXT = ('04', 'Контекст организации и аудит PlatformAdmin')
-WIN006 = ('03', 'Правило WIN-006')
+RESTORE = ('06', 'Резервное копирование и восстановление')
 
 
 def http(status, code):
@@ -52,499 +59,492 @@ def event(event_type, cause):
     return {'event': {'eventType': event_type, 'cause': cause}}
 
 
+def audit(action):
+    return {'audit': action}
+
+
+def state(name):
+    return {'agentState': name}
+
+
+def effect(kind):
+    return {'effect': kind}
+
+
+A, I = 'assessed', 'informational'
+
 # (rule, sourceDoc, enforcement, negativeExample, expectedError, acceptance)
 P1 = [
-    # Agent API intake (order of checks: 05 «Порядок приёма пакета»).
-    ('Тело submitScan с Content-Encoding или Content-Type не application/json отклоняется до разбора JSON.',
-     INTAKE, 'agent_api', 'Пакет с Content-Encoding: gzip.', http(415, 'unsupported_media_type'), 'AT-04'),
-    ('Тело submitScan больше maxBatchBytes отклоняется до разбора.', INTAKE, 'agent_api',
-     'Пакет размером maxBatchBytes + 1 байт.', http(413, 'payload_too_large'), 'AT-04'),
-    ('Тело, которое не разбирается как JSON, отклоняется; агент удаляет пакет.', INTAKE, 'agent_api',
-     'Обрезанный JSON в submitScan.', http(400, 'invalid_json'), 'AT-04'),
-    ('Повтор с тем же Idempotency-Key и теми же байтами возвращает исходный receipt без повторной оценки '
-     'независимо от возраста пакета.', INTAKE, 'agent_api',
-     'Потеря ответа и повтор после границы maxBatchAgeDays.', {'replay': {'http': 202, 'duplicate': True}}, 'AT-04'),
-    ('Тот же Idempotency-Key с другими байтами отклоняется.', INTAKE, 'agent_api',
-     'Повтор scanId с изменённым observedAt.', http(409, 'idempotency_conflict'), 'AT-04'),
-    ('scanId в теле равен заголовку Idempotency-Key.', INTAKE, 'agent_api',
-     'Idempotency-Key отличается от scanId.', http(422, 'schema_violation'), 'AT-04'),
-    ('agentVersion ниже minimumAgentVersion отклоняется, Problem содержит minimumAgentVersion.', INTAKE,
-     'agent_api', 'agentVersion 0.0.9 при minimumAgentVersion 0.1.0.', http(422, 'agent_version_unsupported'),
-     'AT-13'),
-    ('Неподдерживаемый schemaVersion отклоняется.', INTAKE, 'agent_api', 'schemaVersion 2.0.',
-     http(422, 'unsupported_schema_version'), 'AT-04'),
-    ('machineFingerprint пакета совпадает с зафиксированным при регистрации.', IDENTITY, 'agent_api',
-     'Клон VM отправляет пакет с другим признаком машины.', http(409, 'identity_conflict'), 'AT-04'),
-    ('Пакет старше maxBatchAgeDays по completedAt относительно receivedAt отклоняется.', INTAKE, 'agent_api',
-     'Пакет возрастом maxBufferDays + 3 суток.', http(422, 'batch_too_old'), 'AT-04'),
-    ('Внутренне противоречивый пакет — completedAt раньше startedAt либо observedAt вне [startedAt, completedAt] — '
-     'отклоняется. Метки позже receivedAt + 5 мин пакет не отклоняют, а метки времени внутри evidence при приёме '
-     'не проверяются.', CLOCK, 'agent_api', 'observedAt наблюдения WIN-005 на 2 мин позже completedAt пакета.',
-     http(422, 'batch_time_inconsistent'), 'AT-04'),
-    ('policyVersion пакета известна серверу и не из будущего.', INTAKE, 'agent_api',
-     'policyVersion больше текущей версии политики.', http(422, 'unknown_policy_version'), 'AT-06'),
-    ('Тот же sequence с другим scanId вызывает ресинхронизацию, не чаще раза в 24 ч.', IDENTITY, 'agent_api',
-     'Восстановление VM из checkpoint повторяет sequence.', http(409, 'sequence_conflict'), 'AT-04'),
-    ('Ресинхронизация sequence пишется в аудит устройства.', IDENTITY, 'agent_api',
-     'Принятая ресинхронизация после sequence_conflict.', {'audit': 'device.sequence_rollback'}, 'AT-04'),
-    ('checkId из каталога вне activeCheckIds версии политики пакета отклоняется.', UNIQUE, 'agent_api',
-     'Наблюдение WIN-008 при activeCheckIds без WIN-008.', http(422, 'unknown_check_id'), 'AT-04'),
-    ('Ключ (checkId, subject.type, localKey) уникален внутри пакета.', UNIQUE, 'agent_api',
-     'Два наблюдения WIN-005 с subject.type=device.', http(422, 'duplicate_observation'), 'AT-04'),
-    ('Для WIN-001 и WIN-002 ожидается ровно один volume с role=os; лишний объект отклоняется.', UNIQUE,
-     'agent_api', 'Два тома с role=os для WIN-001.', http(422, 'unexpected_subject'), 'AT-04'),
-    ('freeBytes не больше totalBytes (межполевой инвариант тела).', EXTRA, 'agent_api',
-     'WIN-001 с freeBytes больше totalBytes.', http(422, 'schema_violation'), 'AT-05'),
-    ('В режиме assessed отсутствующая ожидаемая пара даёт unknown без отклонения пакета.', UNIQUE, 'worker',
-     'Пакет без наблюдения WIN-005 при активной WIN-005.', result('assessed', 'unknown', 'missing_observation'), 'AT-04'),
-    ('Пакет с признаком часов сохраняется в истории и не меняет текущую проекцию. Признак действует на все '
-     'оценки пакета: assessed получают unknown, informational — result=null, обе с clock_inconsistent.', CLOCK,
-     'worker', 'completedAt раньше maxAcceptedSourceTime при большем sequence.',
-     result('assessed', 'unknown', 'clock_inconsistent'), 'AT-04'),
-    ('Рост droppedBatchCount в heartbeat пишется в аудит устройства.', INTAKE, 'agent_api',
-     'droppedBatchCount вырос с 0 до 2.', {'audit': 'device.data_loss'}, 'AT-04'),
-    # Identity, enrollment and certificates.
-    ('Истёкший, отозванный или исчерпанный enrollment-токен и токен неактивной организации не регистрируют '
-     'устройство; при конкурентных запросах создаётся не больше maxUses записей enrollment (гарантия транзакции '
-     'регистрации Portal API); идентичный повтор записанной регистрации в окне 7 суток регистрацией не считается.',
-     ENROLL, 'portal_api',
-     'Одиннадцатая регистрация пакетным токеном с maxUses 10.', http(401, 'enrollment_token_invalid'), 'AT-02'),
-    ('Проверки enrollAgent выполняются в едином порядке 05, раздел «API агента»; первая сработавшая определяет '
-     'ответ. В частности, идемпотентный повтор (шаг 2) проверяется раньше срока, отзыва и исчерпания токена, а '
-     'active-сертификат с validTo > now при reenrollAllowedUntil, который не задан или истёк, даёт 409 '
-     'installation_already_enrolled (шаг 7; неактивированный pending не учитывается).',
-     AGENT_API, 'portal_api',
-     'enrollAgent с installationId активного устройства с действующим active-сертификатом, новым '
-     'registrationRequestId и reenrollAllowedUntil=null.',
-     http(409, 'installation_already_enrolled'), 'AT-02'),
-    ('Agent API принимает ровно один X-Forwarded-Client-Cert с зарегистрированным hash и цепочкой '
-     'внутреннего CA.', XFCC, 'agent_api', 'Дублированный XFCC или XFCC из соседнего приложения.',
-     http(401, 'certificate_unknown'), 'AT-02'),
-    ('Тот же renewalRequestId с другим CSR отклоняется.', CERT, 'agent_api',
-     'Повтор renew с тем же id и новым CSR.', http(409, 'renewal_request_conflict'), 'AT-17'),
-    ('Повтор renew с тем же renewalRequestId и CSR возвращает прежний сертификат.', CERT, 'agent_api',
-     'Потеря ответа renew и повтор.', {'replay': {'http': 200, 'duplicate': True}}, 'AT-17'),
-    ('Истёкший сертификат не принимается; восстановление — повторная регистрация.', CERT, 'agent_api',
-     'Запрос сертификатом тестового профиля после истечения срока.', http(401, 'certificate_expired'), 'AT-17'),
-    ('Обрыв TLS при истёкшем локальном сертификате переводит агент в ReenrollRequired.', AGENT_FSM, 'agent',
-     'Ingress обрывает рукопожатие с истёкшим сертификатом.', {'agentState': 'ReenrollRequired'}, 'AT-17'),
-    ('agent_version_unsupported останавливает отправку scans до обновления.', AGENT_FSM, 'agent',
-     'Ответ 422 agent_version_unsupported на submitScan.', {'agentState': 'VersionBlocked'}, 'AT-13'),
-    ('identity_conflict останавливает агент до решения ServiceManager; сертификат не отзывается.', AGENT_FSM,
-     'agent', 'Ответ 409 identity_conflict клону.', {'agentState': 'IdentityConflict'}, 'AT-04'),
-    # Organization lifecycle (05 «Жизненный цикл организации»).
-    ('Агенты организации в статусе disabled или deletion_scheduled получают отказ и приостанавливаются.',
-     LIFECYCLE, 'agent_api', 'submitScan после disable организации.', http(403, 'organization_inactive'), 'AT-12'),
-    ('schedule_deletion требует готового экспорта после перехода в disabled либо exportWaived=true.',
-     LIFECYCLE, 'portal_api', 'schedule_deletion без экспорта и без exportWaived.',
-     http(409, 'lifecycle_transition_forbidden'), 'AT-12'),
-    ('После удаления организации агенты получают certificate_revoked до validTo сертификата: sha256, revokedAt и '
-     'validTo хранятся в платформенной таблице revoked_certificate без связи с организацией, а вход в контекст с '
-     'purpose=agent ищет hash в ней и в device_certificate одним запросом.', LIFECYCLE,
-     'agent_api', 'getAgentConfiguration сертификатом устройства удалённой организации сразу после завершения '
-     'organization_delete.', http(401, 'certificate_revoked'), 'AT-12'),
-    ('Restore выполняется в карантине: журнал жизненного цикла применяется до открытия доступа, отозванное '
-     'устройство остаётся отозванным, а повторное применение delete переносит сертификаты удалённой организации в '
-     'revoked_certificate.', RESTORE, 'infra', 'Restore на точку до отзыва устройства или до удаления организации.',
-     http(401, 'certificate_revoked'), 'AT-12'),
-    # Portal API.
-    ('Запрос портала без действительной сессии отклоняется.', PORTAL, 'portal_api', 'GET findings без cookie.',
-     http(401, 'session_required'), 'AT-01'),
-    ('Мутация портала без верного CSRF-токена отклоняется.', PORTAL, 'portal_api',
-     'PATCH finding без X-CSRF-Token.', http(403, 'csrf_failed'), 'AT-01'),
-    ('Technician не принимает решения о риске.', WORKFLOW, 'portal_api', 'Technician вызывает decideFindingRisk.',
-     http(403, 'forbidden'), 'AT-08'),
-    ('Сущность недоступной организации неотличима от отсутствующей.', TENANCY, 'portal_api',
-     'getFinding с findingId чужой организации.', http(404, 'not_found'), 'AT-01'),
-    ('Cursor связан с организацией и фильтром.', PORTAL, 'portal_api', 'Cursor другой организации.',
-     http(400, 'invalid_cursor'), 'AT-01'),
-    ('Устаревший If-Match отклоняется.', WORKFLOW, 'portal_api', 'patchFinding с прошлой ревизией.',
-     http(412, 'revision_mismatch'), 'AT-08'),
-    ('Мутации finding и политики требуют If-Match.', WORKFLOW, 'portal_api', 'patchFinding без If-Match.',
-     http(428, 'if_match_required'), 'AT-08'),
-    ('Решение о риске допустимо только при technicalState=open.', WORKFLOW, 'portal_api',
-     'decideFindingRisk risk_accepted для resolved finding.', http(409, 'workflow_transition_forbidden'), 'AT-08'),
-    ('reviewAt решения о риске лежит в (now, now + 365 сут].', WORKFLOW, 'portal_api',
-     'reviewAt через 400 суток.', http(422, 'validation_failed'), 'AT-08'),
-    ('PATCH не принимает risk_accepted и suppressed.', WORKFLOW, 'schema', 'patchFinding workflowState=risk_accepted.',
-     http(422, 'schema_violation'), 'AT-08'),
-    ('Файл отчёта выдаётся только в состоянии ready.', REPORT, 'portal_api', 'downloadReport для queued отчёта.',
-     http(409, 'resource_not_ready'), 'AT-07'),
-    ('periodStart раньше periodEnd (межполевой инвариант тела).', EXTRA, 'portal_api',
-     'createReport с periodStart = periodEnd.', http(422, 'schema_violation'), 'AT-07'),
-    ('maxBatchAgeDays не меньше maxBufferDays + 1 (межполевой инвариант тела).', EXTRA, 'portal_api',
-     'createPolicyRevision с maxBufferDays 7 и maxBatchAgeDays 7.', http(422, 'schema_violation'), 'AT-04'),
-    ('Режим assessed требует входных настроек; WIN-011 обязательна; WIN-004 активна только вместе с WIN-003.',
-     EXTRA, 'portal_api', 'WIN-008 в режиме assessed с пустым allowedSids.', http(422, 'policy_inputs_missing'),
+    # Staff sign-in, roles and isolation.
+    ('Запрос портала без действующей сессии отклоняется.', ROLES, 'portal_api',
+     'GET /api/v1/organizations без cookie.', http(401, 'session_required'), 'AT-02'),
+    ('Токен входа без признака MFA (amr без mfa), из другого tenant или без app role не создаёт сессию.',
+     ROLES, 'portal_api', 'Вход учётной записью без MFA.', http(401, 'session_required'), 'AT-02'),
+    ('Мутация портала без X-CSRF-Token или с токеном другой сессии отклоняется.', ROLES, 'portal_api',
+     'PATCH finding без заголовка X-CSRF-Token.', http(403, 'csrf_failed'), 'AT-02'),
+    ('Reader не выполняет изменений; Technician не выполняет операций с ролью Admin (решения о риске, '
+     'политика, жизненный цикл, ключи, подключение M365).', ROLES, 'portal_api',
+     'Technician вызывает decideFindingRisk.', http(403, 'forbidden'), 'AT-02'),
+    ('Сущность другой организации по ID в пути отвечает 404 без раскрытия существования.', TENANCY,
+     'portal_api', 'getFinding с findingId другой организации.', http(404, 'not_found'), 'AT-01'),
+    ('Cursor связан с операцией, организацией и фильтром; чужой или изменённый cursor отклоняется.', PORTAL,
+     'portal_api', 'Cursor listFindings организации A в запросе организации B.', http(400, 'invalid_cursor'),
+     'AT-01'),
+    ('Без установленной области запрос к клиентской таблице возвращает 0 строк.', TENANCY, 'db_rls',
+     'SELECT из finding на новом соединении без app.set_scope.', {'rows': 0}, 'AT-01'),
+    ('Изменения клиентских таблиц (INSERT, UPDATE, DELETE) возможны только в области одной организации: в области '
+     'чтения all и для строк чужой организации они затрагивают 0 строк.', TENANCY, 'db_rls',
+     'DELETE FROM finding в области чтения all.', {'rows': 0}, 'AT-01'),
+    ('Область чтения all открывается только в транзакции READ ONLY и только операциями и системными компонентами '
+     'из перечня 02.', TENANCY, 'db_rls', 'UPDATE в транзакции планировщика с областью all.', {'rows': 0},
+     'AT-01'),
+    ('Задание обрабатывает только сущности своей organizationId: inputId другой организации не читается.',
+     TENANCY, 'db_rls', 'report_generate с reportId другой организации.', {'rows': 0}, 'AT-01'),
+    # Microsoft 365 connection.
+    ('startTenantConsent строит ссылку только для expectedTenantId, полученного из tenantHint; tenant компании без '
+     'allowCompanyTenant отклоняется.', CONNECT, 'portal_api', 'tenantHint — домен самой компании.',
+     http(422, 'validation_failed'), 'AT-03'),
+    ('verifyTenantConnection активирует подключение, только если токен для ожидаемого tenant выдан и /organization '
+     'вернул тот же id; иначе подключение не меняется.', CONNECT, 'portal_api',
+     'Проверка до того, как администратор клиента выдал consent.', http(422, 'consent_not_granted'), 'AT-03'),
+    ('Tenant, подключённый к другой организации, или tenant, отличный от действующего подключения, не '
+     'подключается.', CONNECT, 'portal_api', 'startTenantConsent для tenant, подключённого к другой организации.',
+     http(409, 'tenant_conflict'), 'AT-03'),
+    ('requestCollection при подключении не в статусе active и verifyTenantConnection без ожидаемого tenant '
+     'отклоняются.', COLLECTION, 'portal_api', 'Внеплановый сбор после disconnectTenant.',
+     http(409, 'connection_state_conflict'), 'AT-03'),
+    ('disconnectTenant сначала пишет журнал безопасности, затем прекращает сбор; повтор идемпотентен.',
+     SECURITY_LOG, 'portal_api', 'Двойной вызов disconnectTenant.', audit('m365.disconnect'), 'AT-03'),
+    ('Сбор сверяет tenant ответом /organization; другой id прерывает запуск (failureCode=tenant_mismatch) без '
+     'записи наблюдений.', COLLECTION, 'collector', 'Подключение указывает на tenant T, токен выдан для U.',
+     audit('m365.tenant_mismatch'), 'AT-03'),
+    ('Если токен для tenant не выдан из-за отозванного consent, запуск получает failed/consent_missing, '
+     'поднимается оповещение, а открытые finding не закрываются.', COLLECTION, 'collector',
+     'Приложение удалено из tenant клиента.', audit('m365.collection_failed'), 'AT-03'),
+    ('Запуск, во время которого подключение отключено, tenant сменился или организация перестала быть active, '
+     'ничего не записывает и получает failed/cancelled.', COLLECTION, 'collector',
+     'disconnectTenant во время запуска.', effect('none'), 'AT-03'),
+    # Microsoft 365 collection robustness.
+    ('Следующая страница Graph запрашивается только по @odata.nextLink с хостом graph.microsoft.com и тем же '
+     'путём; иной URL прерывает модуль со статусом partial.', CAPABILITY, 'collector',
+     'nextLink на https://example.invalid/v1.0/users.', {'capabilityStatus': 'partial'}, 'AT-04'),
+    ('Ответ 200 без обязательного свойства не считается полным: модуль получает partial.', CAPABILITY,
+     'collector', 'Список методов без @odata.type у элемента.', {'capabilityStatus': 'partial'}, 'AT-04'),
+    ('403 Authorization_RequestDenied модуля даёт permission_missing; отсутствие лицензии этим не '
+     'доказывается.', CAPABILITY, 'collector', '403 на /identity/conditionalAccess/policies в tenant с P1.',
+     {'capabilityStatus': 'permission_missing'}, 'AT-04'),
+    ('Модуль, требующий Entra ID P1, в tenant без плана P1 или P2 по subscribedSkus получает license_missing без '
+     'запроса.', CAPABILITY, 'collector', 'Tenant Business Standard.', {'capabilityStatus': 'license_missing'},
+     'AT-04'),
+    ('429 и 503 Graph соблюдают Retry-After; после исчерпания попыток модуль получает temporary_error.',
+     CAPABILITY, 'collector', 'Пять ответов 429 подряд.', {'capabilityStatus': 'temporary_error'}, 'AT-04'),
+    ('Обязательный модуль проверки с temporary_error делает её наблюдение unavailable с той же причиной: M365-003 '
+     'при сбое Conditional Access в tenant с P1 — unknown/temporary_error, а не fail.', CAPABILITY, 'evaluator',
+     '429 подряд на политики CA.', result(A, 'unknown', 'temporary_error'), 'AT-04'),
+    ('Наблюдение, которое не проходит allowlist-схему, сохраняется как unavailable/partial_data, а модуль получает '
+     'partial.', COLLECTION, 'collector', 'Неожиданное значение userType у одного пользователя.',
+     result(A, 'unknown', 'partial_data'), 'AT-04'),
+    ('Отказ 403 при чтении методов пользователя даёт unknown/permission_denied, а не fail.', MFA_RULE,
+     'evaluator', '403 на /users/{id}/authentication/methods.', result(A, 'unknown', 'permission_denied'),
+     'AT-04'),
+    ('403 на членов группы с ролью даёт модулю roles статус partial: прямые администраторы оцениваются, а M365-005 '
+     '— unknown/partial_data.', ADMINS_RULE, 'evaluator',
+     'Глобальный администратор назначен группе с ролью, 403 на её членов.', result(A, 'unknown', 'partial_data'),
+     'AT-04'),
+    ('Проверка, зависящая от модуля без лицензии, даёт license_missing: в режиме informational — result=null с '
+     'этой причиной.', SEMANTICS, 'evaluator', 'M365-007 в tenant без Entra ID P1.',
+     result(I, None, 'license_missing'), 'AT-05'),
+    # Microsoft 365 rules.
+    ('M365-001: включённый member-пользователь без метода из MFA_METHOD_KINDS — fail; password, email и '
+     'temporary_access_pass методом MFA не считаются.', MFA_RULE, 'evaluator',
+     'methodKinds = [password, email].', result(A, 'fail'), 'AT-05'),
+    ('M365-001: при phoneMethodsAccepted=false пользователь только с phone — fail.', MFA_RULE, 'evaluator',
+     'methodKinds = [password, phone].', result(A, 'fail'), 'AT-05'),
+    ('M365-001 и M365-007: пользователь из excludedUserIds, гость, отключённый или учётная запись синхронизации '
+     'Entra Connect — not_applicable.', MFA_RULE, 'evaluator', 'Учётная запись аварийного доступа в excludedUserIds.',
+     result(A, 'not_applicable', 'policy_not_applicable'), 'AT-05'),
+    ('M365-002 не учитывает excludedUserIds: методы администраторов читаются всегда, и администратор аварийного '
+     'доступа только с паролем — fail critical.', MFA_RULE, 'evaluator',
+     'Администратор в excludedUserIds, methodKinds = [password].', result(A, 'fail'), 'AT-05'),
+    ('M365-002: гость с привилегированной ролью — fail warning независимо от методов.', MFA_RULE, 'evaluator',
+     'Гостевая учётная запись с ролью Global Administrator.', result(A, 'fail'), 'AT-05'),
+    ('M365-002: пользователь, у которого снята последняя привилегированная роль, — not_applicable; finding '
+     'закрывается событием resolved/applicability_change.', MFA_RULE, 'evaluator', 'Роль Global Administrator снята.',
+     result(A, 'not_applicable', 'policy_not_applicable'), 'AT-06'),
+    ('Временная активация роли в PIM не создаёт пару M365-002 и не меняет счёт M365-005.', ADMINS_RULE,
+     'collector', 'Активация роли во время ночного сбора.', effect('none'), 'AT-05'),
+    ('M365-003: единственная политика CA с MFA в режиме report-only при выключенных Security Defaults и per-user MFA '
+     '— fail, а не pass.', ENFORCEMENT_RULE, 'evaluator', 'Пример examples/m365-collection.json.', result(A, 'fail'),
      'AT-05'),
-    ('Строки SAFE_TEXT не содержат < и >, управляющих и bidi-символов.', UNTRUSTED, 'schema',
-     'Organization.name со строкой <script>.', http(422, 'schema_violation'), 'AT-07'),
-    # Tenancy, roles and audit.
-    ('Запрос без контекста организации возвращает 0 строк (FORCE ROW LEVEL SECURITY).', TENANCY, 'db_rls',
-     'Первый SELECT из клиентской таблицы на новом соединении без app.begin_org_context.', {'rows': 0}, 'AT-01'),
-    ('Каждый вход с purpose=portal в режиме PlatformAdmin (субъект с platform_role, даже при членстве в '
-     'организации), кроме createOrganization, пишет audit_event platform.access внутри app.begin_org_context после '
-     'установки контекста и до первого чтения данных, в той же транзакции; в режиме restore аудит пишет команда '
-     'восстановления.', CONTEXT, 'db_rls', 'PlatformAdmin с членством читает listFindings.',
-     {'audit': 'platform.access'}, 'AT-01'),
-    # Evaluation (03 and 05).
-    ('В режиме assessed наблюдение unavailable применимой проверки (применимость известна и не даёт '
-     'not_applicable) даёт unknown с reasonCode наблюдения.', SEMANTICS, 'worker',
-     'WIN-002 unavailable/permission_denied; WIN-011 collected, editionId=Professional.', result('assessed', 'unknown', 'permission_denied'), 'AT-05'),
-    ('В режиме assessed неподдерживаемый сбор применимой проверки даёт unknown, а не fail.', SEMANTICS, 'worker', 'WIN-009 unavailable/unsupported.',
-     result('assessed', 'unknown', 'unsupported'), 'AT-05'),
-    ('В режиме assessed временная ошибка сборщика применимой проверки даёт unknown.', SEMANTICS, 'worker', 'WIN-005 unavailable/temporary_error.',
-     result('assessed', 'unknown', 'temporary_error'), 'AT-05'),
-    ('Ожидание результата сборщика — 30 с, по истечении collector_timeout; зависшая привилегированная работа '
-     'принудительно завершается не позже 120 с; дочерние процессы не запускаются; в режиме assessed оценка — '
-     'unknown/collector_timeout.', LOCAL, 'agent',
-     'Сборщик WIN-005 не отвечает 60 с.', result('assessed', 'unknown', 'collector_timeout'),
-     'AT-03'),
-    ('Эталонный отрицательный тест BitLocker в режиме assessed: fully_encrypted при protectionStatus=off и encryptionRequired=true '
-     'даёт fail.', WINDOWS, 'worker', 'WIN-002 из examples/scan-batch.json.', result('assessed', 'fail'), 'AT-05'),
-    ('WIN-003 в режиме assessed: ни один одобренный продукт не активен, а у одного одобренного productState=unknown.', WINDOWS,
-     'worker', 'Одобренный VendorX с productState=unknown и rawState без сопоставления.',
-     result('assessed', 'unknown', 'unmapped_state'), 'AT-05'),
-    ('WIN-006 в режиме assessed: неуспешный поиск обновлений даёт unknown.', WINDOWS, 'worker', 'agentSearch.resultCode=failed.',
-     result('assessed', 'unknown', 'update_search_failed'), 'AT-05'),
-    ('WIN-006 в режиме assessed: основа свежести поиска старше maxSearchAgeHours (разность, равная '
-     'maxSearchAgeHours, — ещё свежая) даёт unknown.', WINDOWS, 'worker',
-     'auLastSearchSuccessAt 100 ч назад при offline_cache.', result('assessed', 'unknown', 'update_search_outdated'), 'AT-05'),
-    ('WIN-006 в режиме assessed: configuredSource отличается от expectedSource.', WINDOWS, 'worker',
-     'configuredSource=wsus при expectedSource=windows_update.', result('assessed', 'unknown', 'update_source_mismatch'),
+    ('M365-003: включённые политики с MFA есть, но ни одна не охватывает всех пользователей, все приложения и все '
+     'типы клиентов — unknown/enforcement_unconfirmed.', ENFORCEMENT_RULE, 'evaluator',
+     'Политика MFA только для группы «Ansatte».', result(A, 'unknown', 'enforcement_unconfirmed'), 'AT-05'),
+    ('M365-003: политика на всех с условием (риск, расположения, платформы, устройства) или с grant «MFA или '
+     'устройство» даёт unknown/enforcement_unconfirmed, если параметры политики клиента этого не разрешают.',
+     ENFORCEMENT_RULE, 'evaluator', 'Политика MFA только при высоком риске входа.',
+     result(A, 'unknown', 'enforcement_unconfirmed'), 'AT-05'),
+    ('M365-003: authentication strength без requirementsSatisfied = mfa или исключённые пользователи вне '
+     'excludedUserIds не дают pass.', ENFORCEMENT_RULE, 'evaluator', 'Из политики исключена группа из 30 '
+     'пользователей.', result(A, 'unknown', 'enforcement_unconfirmed'), 'AT-05'),
+    ('M365-003: per-user MFA enabled или enforced у всех включённых member-пользователей вне исключений даёт pass '
+     'и в tenant с Entra ID P1.', ENFORCEMENT_RULE, 'evaluator',
+     'Business Premium без политики CA с MFA, per-user MFA enforced у всех.', result(A, 'pass'), 'AT-05'),
+    ('M365-003: в tenant без Conditional Access и без Security Defaults хотя бы один включённый member-пользователь с '
+     'per-user MFA disabled даёт fail critical; если модуль per_user_mfa выключен — unknown/enforcement_unconfirmed.',
+     ENFORCEMENT_RULE, 'evaluator', 'Tenant Business Standard, perUserMfa.notRequired = 3.', result(A, 'fail'),
      'AT-05'),
-    ('WIN-006 в режиме assessed: усечённый список без просрочки среди переданных элементов даёт unknown.', WINDOWS, 'worker',
-     'truncated=true, все переданные обновления в пределах grace.', result('assessed', 'unknown', 'update_list_truncated'),
+    ('M365-005: число включённых глобальных администраторов вне [minGlobalAdmins, maxGlobalAdmins] — fail warning; '
+     'отключённые учётные записи не считаются.', ADMINS_RULE, 'evaluator',
+     'Один включённый и один отключённый глобальный администратор при minGlobalAdmins=2.', result(A, 'fail'),
      'AT-05'),
-    ('WIN-006 в режиме assessed: просрочка хотя бы одного переданного обновления даёт fail независимо от truncated.', WINDOWS,
-     'worker', 'truncated=true и одно Critical обновление старше 7 суток.', result('assessed', 'fail'), 'AT-05'),
-    ('SYS-002 в режиме assessed: версия, редакция или архитектура вне матрицы совместимости даёт fail.', OS_MATRIX, 'worker',
-     'WIN-011 displayVersion=27H1.', result('assessed', 'fail'), 'AT-05'),
-    ('SYS-002 в режиме assessed: нет свежего WIN-011.', OS_MATRIX, 'worker', 'Последний WIN-011 старше окна свежести.',
-     result('assessed', 'unknown', 'os_inventory_missing'), 'AT-05'),
-    ('В режиме assessed межпроверочная применимость берётся из того же пакета; без пригодного входа зависимая проверка unknown. '
-     'Правило применяется, только если у пакета нет признака часов.',
-     SEMANTICS, 'worker', 'WIN-002 в пакете без WIN-011.', result('assessed', 'unknown', 'applicability_input_missing'),
+    ('M365-006: политика согласия ManagePermissionGrantsForSelf.microsoft-user-default-legacy — fail; пустой '
+     'список или только разрешённые политики — pass.', CONSENT_RULE, 'evaluator',
+     'permissionGrantPolicies = [...microsoft-user-default-legacy].', result(A, 'fail'), 'AT-05'),
+    ('M365-006: известная политика Microsoft вне allowedPermissionGrantPolicies — fail; по умолчанию так '
+     'оценивается …microsoft-user-default-recommended.', CONSENT_RULE, 'evaluator',
+     'permissionGrantPolicies = [...microsoft-user-default-recommended].', result(A, 'fail'), 'AT-05'),
+    ('M365-006: собственная политика согласия клиента вне allowedPermissionGrantPolicies — unknown/unmapped_state.',
+     CONSENT_RULE, 'evaluator', 'Собственная политика согласия клиента.', result(A, 'unknown', 'unmapped_state'),
      'AT-05'),
-    ('В режиме assessed редакция из notApplicableEditionIds даёт not_applicable.', SEMANTICS, 'worker',
-     'WIN-011 editionId=Core, WIN-002 при стартовой политике.', result('assessed', 'not_applicable', 'policy_not_applicable'),
-     'AT-05'),
-    ('WIN-007 в режиме assessed: перезагрузка между двумя rebootRequired=true начинает новый эпизод и не даёт ложного fail.',
-     WINDOWS, 'worker', 'Два наблюдения rebootRequired=true с разным lastBootAt через 4 суток.', result('assessed', 'pass'),
+    ('M365-007 в режиме assessed: lastSuccessfulSignInAt и createdAt равны null — fail, потому что учётная запись '
+     'создана до июня 2018 года и с декабря 2023 года не входила.', INACTIVE_RULE, 'evaluator',
+     'Учётная запись 2016 года без входа.', result(A, 'fail'), 'AT-05'),
+    ('Наблюдение, которого нет в запуске для активной проверки и известного субъекта, даёт '
+     'unknown/missing_observation.', SEMANTICS, 'evaluator', 'Запуск без методов одного пользователя.',
+     result(A, 'unknown', 'missing_observation'), 'AT-05'),
+    ('Informational-оценка с причиной правила, а не отсутствия данных, получает result=null без reasonCode.',
+     SEMANTICS, 'evaluator', 'M365-004 informational при неизвестной форме политики.', result(I, None), 'AT-05'),
+    # Findings and history.
+    ('Свежий fail без finding создаёт open/new и событие opened с cause=source_change.', TRANSITIONS,
+     'evaluator', 'Пользователь без MFA в первом сборе.', event('opened', 'source_change'), 'AT-06'),
+    ('Свежий pass при open — resolved с cause=source_change; только эта категория считается исправлением.',
+     TRANSITIONS, 'evaluator', 'Пользователь зарегистрировал Authenticator.', event('resolved', 'source_change'),
      'AT-06'),
-    # Finding events (05 «Таблица переходов finding», «Допустимые сочетания eventType и cause»).
-    ('Свежий fail без finding создаёт open/new и событие opened.', TRANSITIONS, 'worker',
-     'Первый fail WIN-005.', event('opened', 'device_change'), 'AT-06'),
-    ('Свежий pass открытого finding даёт resolved; workflowState не меняется. Исправлением считается только '
-     'resolved с device_change.', TRANSITIONS, 'worker', 'fail → pass WIN-005.', event('resolved', 'device_change'),
+    ('Fail после resolved — reopened; workflowState=new, если нет действующего решения о риске.', TRANSITIONS,
+     'evaluator', 'Метод MFA удалён через неделю.', event('reopened', 'source_change'), 'AT-06'),
+    ('Новая ревизия политики, после которой проверка неприменима или выключена, закрывает finding событием '
+     'policy_changed/policy_change.', TRANSITIONS, 'evaluator', 'Пользователь добавлен в excludedUserIds.',
+     event('policy_changed', 'policy_change'), 'AT-06'),
+    ('Неприменимость по фактам источника без смены политики закрывает finding событием '
+     'resolved/applicability_change.', TRANSITIONS, 'evaluator', 'Пользователь с открытым M365-001 отключён.',
+     event('resolved', 'applicability_change'), 'AT-06'),
+    ('Смена ruleVersion пересчитывает текущие проекции с cause=rule_change.', CURRENT, 'evaluator',
+     'Новая версия правила M365-003 начинает учитывать authentication strength.', event('opened', 'rule_change'),
      'AT-06'),
-    ('Свежий fail resolved finding даёт reopened; действующее решение о риске сохраняется.', TRANSITIONS,
-     'worker', 'fail → pass → fail WIN-005.', event('reopened', 'device_change'), 'AT-06'),
-    ('Смена ruleVersion пересчитывает проекции с rule_change и не входит в исправления.', CURRENT, 'worker',
-     'Новая ruleVersion WIN-001 открывает finding.', event('opened', 'rule_change'), 'AT-06'),
-    ('Перевод проверки в not_applicable или informational политикой закрывает finding событием policy_changed.',
-     TRANSITIONS, 'worker', 'Исключение WIN-005 из activeCheckIds.', event('policy_changed', 'policy_change'),
-     'AT-06'),
-    ('Отзыв устройства выводит его объекты.', TRANSITIONS, 'worker', 'revokeDevice с открытым finding.',
-     event('object_retired', 'manual_action'), 'AT-06'),
-    ('По наступлении reviewAt решение истекает: workflowState=new, одно событие review_expired.', WORKFLOW,
-     'worker', 'Двойной запуск review_expiry после reviewAt.', event('workflow_changed', 'review_expired'), 'AT-08'),
-    # Scheduler and fencing (02 «Очередь заданий»).
-    ('freshness_sweep идемпотентен: переход свежести открытого finding пишет одно событие quality_changed.',
-     JOBS, 'worker', 'Два такта планировщика в одном часе в двух репликах worker.',
-     event('quality_changed', 'data_quality'), 'AT-14'),
-    ('Завершение задания с устаревшим leaseToken откатывается и не создаёт второго бизнес-эффекта.', JOBS,
-     'worker', 'Lease истекает у живого worker, второй worker обрабатывает тот же evaluate_batch.',
-     event('opened', 'device_change'), 'AT-14'),
+    ('Смена качества открытого finding (fresh ↔ stale или переход к unknown) пишет quality_changed/data_quality '
+     'один раз; повтор freshness_sweep второго события не пишет.', TRANSITIONS, 'evaluator',
+     'Сбор M365 не выполнялся 49 часов.', event('quality_changed', 'data_quality'), 'AT-06'),
+    ('Исчезновение пользователя из полного списка /users или тома из пакета выводит его finding событием '
+     'subject_retired/source_change; при usersComplete=false пользователи не выводятся.', CURRENT, 'evaluator',
+     'Пользователь удалён в tenant.', event('subject_retired', 'source_change'), 'AT-06'),
+    ('assessed без входных настроек, activeCheckIds без WIN-011 и WIN-004 без WIN-003 отклоняются.', POLICY,
+     'portal_api', 'WIN-010 assessed при expectedTenantId = null.', http(422, 'policy_inputs_missing'), 'AT-06'),
+    ('maxBatchAgeDays меньше maxBufferDays + 1, minGlobalAdmins больше maxGlobalAdmins и порог warning строже '
+     'порога critical (WIN-001, WIN-004) отклоняются.', POLICY, 'portal_api', 'warnDays=10 при criticalDays=7.',
+     http(422, 'validation_failed'), 'AT-06'),
+    # Workflow and risk decisions.
+    ('patchFinding и decideFindingRisk без If-Match отклоняются.', WORKFLOW, 'portal_api',
+     'PATCH без If-Match.', http(428, 'if_match_required'), 'AT-08'),
+    ('patchFinding и decideFindingRisk с устаревшей ревизией отклоняются.', WORKFLOW, 'portal_api',
+     'Два сотрудника меняют срок одновременно.', http(412, 'revision_mismatch'), 'AT-08'),
+    ('PATCH с workflowState=risk_accepted или suppressed отклоняется схемой.', WORKFLOW, 'schema',
+     'FindingPatch {workflowState: risk_accepted}.', http(422, 'schema_violation'), 'AT-08'),
+    ('risk_accepted и suppressed допустимы только при technicalState=open; withdrawn — только из них.', WORKFLOW,
+     'portal_api', 'Принятие риска для resolved.', http(409, 'workflow_transition_forbidden'), 'AT-08'),
+    ('reviewAt вне (now, now + 365 сут] и assigneeId не из сотрудников с ролью Admin или Technician '
+     'отклоняются.', WORKFLOW, 'portal_api', 'reviewAt через 400 суток.', http(422, 'validation_failed'),
+     'AT-08'),
+    ('Каждое решение о риске пишет workflow_changed/manual_action с actorId и заполняет workflowDecidedBy.',
+     WORKFLOW, 'portal_api', 'Решение без записи события.', event('workflow_changed', 'manual_action'), 'AT-08'),
+    ('Наступление reviewAt возвращает finding в new событием workflow_changed/review_expired; повтор задания '
+     'второго события не пишет.', WORKFLOW, 'worker', 'review_expiry выполнен дважды за час.',
+     event('workflow_changed', 'review_expired'), 'AT-08'),
+    ('Изменение ответственного или срока пишет аудит finding.assignment_change только с изменившимися полями.',
+     WORKFLOW, 'portal_api', 'Смена assigneeId без записи аудита.', audit('finding.assignment_change'), 'AT-08'),
+    # Organization lifecycle, exports, retention.
+    ('Переход вне таблицы жизненного цикла, в том числе schedule_deletion без экспорта после disable и без '
+     'exportWaived, отклоняется.', LIFECYCLE, 'portal_api', 'schedule_deletion из active.',
+     http(409, 'lifecycle_transition_forbidden'), 'AT-09'),
+    ('Повтор changeOrganizationLifecycle с тем же idempotencyKey возвращает прежний результат без второго '
+     'эффекта.', LIFECYCLE, 'portal_api', 'Повтор disable после таймаута.', {'replay': {'http': 200,
+                                                                                     'duplicate': True}},
+     'AT-09'),
+    ('Тот же idempotencyKey с другим телом отклоняется.', LIFECYCLE, 'portal_api',
+     'disable и enable с одним idempotencyKey.', http(409, 'idempotency_conflict'), 'AT-09'),
+    ('Ограничивающий переход сначала пишется в журнал безопасности; если запись не создана, переход не '
+     'выполняется и операция отвечает 503.', SECURITY_LOG, 'portal_api', 'Хранилище журнала недоступно при disable.',
+     http(503, 'temporarily_unavailable'), 'AT-09'),
+    ('retention_purge удаляет данные в порядке RETENTION_PURGE_ORDER и пишет сводку retention.purge_summary.',
+     LIFECYCLE, 'worker', 'Удаление finding раньше его событий.', audit('retention.purge_summary'), 'AT-09'),
+    ('Выдача файла экспорта и чтение журнала аудита пишут аудит при каждом чтении.', PORTAL, 'portal_api',
+     'downloadOrganizationExport без записи аудита.', audit('organization_export.download'), 'AT-09'),
+    # Reports.
+    ('Выдача отчёта или экспорта до состояния ready отклоняется.', REPORT, 'portal_api',
+     'downloadReport для queued.', http(409, 'resource_not_ready'), 'AT-07'),
+    ('createReport с границами не ISO-недели в timezone организации отклоняется.', REPORT, 'portal_api',
+     'periodStart во вторник.', http(422, 'validation_failed'), 'AT-07'),
+    ('Отчёт без перевода правила на языке организации получает failed/translation_missing и оповещение '
+     'сотрудникам; резервный язык не подставляется.', REPORT, 'worker', 'Нет nn-текста новой ruleVersion.',
+     audit('report.failed'), 'AT-07'),
+    ('downloadReport пишет аудит report.download при каждом чтении.', UNTRUSTED, 'portal_api',
+     'Скачивание без записи аудита.', audit('report.download'), 'AT-07'),
+    # Jobs and scheduler.
+    ('Периодическое задание одного периода создаётся один раз при нескольких экземплярах сервиса.', JOBS,
+     'worker', 'Два экземпляра во время развёртывания создают weekly_report.', effect('single'), 'AT-10'),
+    ('Задание с истёкшим lease захватывается заново; завершение прежним владельцем с устаревшим leaseToken не '
+     'даёт эффекта.', SCHEDULER, 'worker', 'Пауза процесса дольше lease.', effect('none'), 'AT-10'),
+    ('Сбор M365 одной организации не выполняется параллельно: внеплановый запрос объединяется с незавершённым '
+     'запуском.', SCHEDULER, 'worker', 'requestCollection во время планового запуска.', effect('single'), 'AT-10'),
+    # Restore.
+    ('После PITR команда восстановления повторно применяет все записи журнала безопасности с occurredAt не раньше '
+     'точки restore минус 5 минут в порядке времени; повтор идемпотентен.', RESTORE, 'infra',
+     'Отключение организации после точки restore.', audit('restore.replay_applied'), 'AT-11'),
+    ('Файлы Blob без строк в восстановленной базе переносятся в карантин restore-orphans с удалением через 30 суток; '
+     'учебное восстановление их только перечисляет.', RESTORE, 'infra', 'Отчёт создан после точки restore.',
+     effect('none'), 'AT-11'),
+    ('Отмена удаления, записанная в журнал после планирования, после restore возвращает организацию в disabled; '
+     'любое удаление после restore выполняется не раньше чем через 7 суток.', RESTORE, 'infra',
+     'Удаление запланировано до точки restore, отменено после неё, срок уже прошёл.', effect('none'), 'AT-11'),
+    ('Записи журнала безопасности нельзя изменить или удалить до конца срока неизменяемости.', SECURITY_LOG,
+     'infra', 'Удаление blob identity приложения.', effect('none'), 'AT-11'),
+    ('Периодическое задание без организации уникально по (type, periodKey): индекс NULLS NOT DISTINCT не даёт '
+     'второй сводки Teams.', SCHEDULER, 'worker', 'Два экземпляра при переключении слотов планируют teams_digest '
+     'за одни сутки.', effect('single'), 'AT-10'),
+    ('Задания выполняет только production-слот: в слоте staging они выключены настройкой слота, а слот '
+     'останавливается после переключения.', DEPLOY, 'infra', 'Прежняя версия в staging после swap захватывает '
+     'retention_purge.', effect('none'), 'AT-10'),
 ]
 
 P2 = [
-    ('Неполная выборка Graph без пройденного nextLink не даёт вывода по отсутствующим страницам.', CAPABILITY,
-     'worker', 'Ответ Graph с @odata.nextLink, который не запрошен.', {'capabilityStatus': 'partial'}, 'AT-15'),
-    ('Свойство, которое не вернулось из-за прав или лицензии, не трактуется как значение.', CAPABILITY,
-     'worker', 'Sign-in без appliedConditionalAccessPolicies.', {'capabilityStatus': 'partial'}, 'AT-15'),
-    ('Регистрация MFA не означает требования MFA политикой доступа: если политики Conditional Access не '
-     'прочитаны из-за неподтверждённой лицензии, вывод о требовании MFA не делается.', M365, 'worker',
-     'isMfaRegistered=true, политики CA не читаются: лицензия Entra ID P1 не подтверждена.',
-     {'capabilityStatus': 'license_unconfirmed'}, 'AT-10'),
-    ('Устройство сопоставляется с Intune только по подтверждённому идентификатору.', M365, 'worker',
-     'Совпадение только по имени устройства.', {'capabilityStatus': 'partial'}, 'AT-11'),
-    ('Consent запрашивается только для включённых модулей; модуль, включённый после consent, не расширяет '
-     'выданные права сам и до нового consent работает без своего права.', GRAPH, 'infra',
-     'Модуль M365-004 включён после consent без DeviceManagementManagedDevices.Read.All.',
-     {'capabilityStatus': 'permission_missing'}, 'AT-09'),
-]
-
-# P1 records added after the P2 block; numbering continues after P2.
-P1_ADDED = [
-    ('Зарегистрированный сертификат устройства в состоянии superseded после окончания перекрытия, например в '
-     'образе старше ротации, получает 401 certificate_expired; в той же транзакции сервер записывает '
-     'device.reenrollAllowedUntil = now + 7 суток и аудит device.reenroll_allowed, независимо от validTo, если '
-     'запрос дошёл до приложения. Отозванный сертификат или отозванное устройство это поле не выставляют. '
-     'Повторная регистрация при reenrollAllowedUntil > now, том же installationId и совпадающем признаке машины '
-     'выдаёт pending-сертификат тому же deviceId, история сохраняется: useCount увеличивается, создаётся запись '
-     'enrollment, reenrollAllowedUntil обнуляется, пишутся аудит device.reenroll_over_active и оповещение — в '
-     'транзакции регистрации Portal API; неактивированный pending отзывается (аудит device.pending_revoked) и '
-     'перекрытие прежних superseded заканчивается — в транзакции выпуска Issuer; прежний active переходит в '
-     'superseded при первом mTLS-запросе новым; previousCertificateValidUntil = null.', CERT, 'agent_api',
-     'Восстановленный образ старше ротации отправляет heartbeat старым сертификатом после перекрытия.',
-     http(401, 'certificate_expired'), 'AT-17'),
-    ('enrollAgent с уже зарегистрированным installationId и несовпадающим признаком машины отклоняется; '
-     'агент переходит в IdentityConflict; identityState существующего устройства не меняется, пишется аудит '
-     'device.enroll_identity_conflict.', IDENTITY, 'portal_api',
-     'Повторная регистрация после истечения сертификата с installationId другой машины.',
-     http(409, 'identity_conflict'), 'AT-02'),
-    ('Проверка, ставшая not_applicable по фактам устройства в пакете без смены policy_revision, закрывает '
-     'finding событием resolved с applicability_change; это не исправление.', TRANSITIONS, 'worker',
-     'WIN-011 editionId сменился на Core при открытом finding WIN-002 и той же ревизии политики.',
-     event('resolved', 'applicability_change'), 'AT-06'),
-    ('WIN-004 в режиме assessed: signatureLastUpdatedAt позже observedAt этого наблюдения даёт unknown/evidence_time_invalid; '
-     'пакет не отклоняется.',
-     WINDOWS, 'worker', 'signatureLastUpdatedAt на двое суток позже observedAt.',
-     result('assessed', 'unknown', 'evidence_time_invalid'), 'AT-05'),
-    ('Пакет с чужим или просроченным scanRequestId принимается как обычный сбор: scanRequestId игнорируется, '
-     'пишется запись диагностики, новых кодов нет.', PORTAL, 'agent_api',
-     'Пакет с scanRequestId другого устройства и свежим pass WIN-005 после исправления.',
-     event('resolved', 'device_change'), 'AT-05'),
-    ('Повторная проверка по requestDeviceScan (только вариант A) закрывает исправленную проблему событием '
-     'resolved с device_change.', PORTAL, 'worker',
-     'Пакет с действующим scanRequestId и pass WIN-005 после исправления.',
-     event('resolved', 'device_change'), 'AT-05'),
-    ('SYS-002 в режиме assessed: версия из матрицы совместимости, которой нет в таблице жизненного цикла, даёт unknown.',
-     OS_MATRIX, 'worker', 'Тестовая версия данных правила: матрица расширена версией 27H1, строки 27H1 в таблице '
-     'жизненного цикла ещё нет; WIN-011 displayVersion=27H1.',
-     result('assessed', 'unknown', 'os_version_unknown'), 'AT-05'),
-    # Enrollment and certificates.
-    ('Новый выпуск (renew с новым renewalRequestId или выпуск по записи enrollment) в транзакции выпуска Issuer под '
-     'блокировкой строки устройства отзывает неактивированный pending и устанавливает overlapEndsAt равным моменту '
-     'выдачи у каждого superseded с overlapEndsAt > now; активация pending выполняется под той же блокировкой, '
-     'поэтому у устройства в любой момент не больше одного pending и не больше двух действующих сертификатов. '
-     'Идемпотентный повтор новым выпуском не является и перекрытие не меняет.', CERT, 'agent_api',
-     'После активации B сертификат A superseded в перекрытии; renew сертификатом B с новым renewalRequestId выдаёт '
-     'C; затем heartbeat сертификатом A.', http(401, 'certificate_expired'), 'AT-17'),
-    ('Идентичный повтор enrollAgent (тот же токен, registrationRequestId, CSR и installationId) в течение 7 суток от '
-     'записи enrollment проверяется раньше срока, отзыва и исчерпания токена и, если устройство записи не отозвано и '
-     'её сертификат действующий, возвращает прежний ответ; если сбой '
-     'Issuer после commit транзакции регистрации помешал выпуску, повтор выпускает недостающий сертификат записи. '
-     'useCount не меняется, новых enrollment и device нет, у записи не больше одного сертификата.', AGENT_API,
-     'portal_api', 'Регистрация записана, Issuer недоступен (ответ 503); одноразовый токен истёк; через 2 ч повтор '
-     'с тем же токеном, registrationRequestId, CSR и installationId.', {'replay': {'http': 201, 'duplicate': True}},
-     'AT-02'),
-    ('Тело enrollAgent больше 16384 байт отклоняется до разбора JSON и до проверки токена; лимит портальных '
-     'запросов 64 KiB к enrollAgent не применяется.', AGENT_API, 'portal_api',
-     'Тело enrollAgent размером 16385 байт с недействительным токеном.', http(413, 'payload_too_large'), 'AT-02'),
-    # Organization context and audit.
-    ('Ошибка вставки audit_event при входе субъекта с platform_role в контекст организации прерывает транзакцию: '
-     'контекст откатывается, данные клиента не выдаются; ответ портала отправляется только после COMMIT.',
-     CONTEXT, 'db_rls', 'PlatformAdmin вызывает listFindings; вставка audit_event отклонена тестовым триггером.',
-     http(503, 'temporarily_unavailable'), 'AT-01'),
-    ('Контекст организации устанавливается один раз за транзакцию и действует до её конца: соединение, '
-     'возвращённое в pool после запроса организации A, без нового вызова app.begin_org_context видит 0 строк; '
-     'повторный вызов функции в той же транзакции отклоняется.', CONTEXT, 'db_rls',
-     'Соединение после запроса организации A взято запросом организации B; SELECT из finding до вызова функции.',
-     {'rows': 0}, 'AT-01'),
-    ('listOrganizations не входит в контекст организации: app.list_accessible_organizations возвращает субъекту с '
-     'platform_role все неудалённые организации и до выдачи строк пишет ровно одну запись platform_audit_event '
-     'platform.access (target listOrganizations) на запрос, даже при членстве, и ни одной audit_event; участнику '
-     'без platform_role — только организации с его членством, без записи аудита.', CONTEXT, 'db_rls',
-     'PlatformAdmin, член одной из трёх организаций, вызывает listOrganizations.', {'audit': 'platform.access'},
-     'AT-01'),
-    ('Переход changeOrganizationLifecycle в одной транзакции со сменой статуса пишет audit_event организации и '
-     'platform_audit_event с action=organization.lifecycle_change, одним correlationId и одинаковыми details '
-     '{lifecycleAction, reason, exportWaived}; listAuditEvents возвращает reason без изменений; повтор с тем же '
-     'idempotencyKey новых записей не создаёт; reason не попадает в журнал жизненного цикла, операционные логи и '
-     'Log Analytics.', LIFECYCLE, 'portal_api', 'disable с reason «R-7f3c <img src=x onerror=alert(1)>».',
-     {'audit': 'organization.lifecycle_change'}, 'AT-12'),
-    ('patchFinding, изменивший assigneeId или dueAt, пишет audit_event finding.assignment_change с details.from и '
-     'details.to только для изменившихся полей; если ни одно из них не изменилось, запись не создаётся; смена '
-     'workflowState в details не входит.', WORKFLOW, 'portal_api',
-     'patchFinding с новыми assigneeId и dueAt у finding в состоянии risk_accepted.',
-     {'audit': 'finding.assignment_change'}, 'AT-08'),
-    ('FindingPatch.assigneeId — entraUserId участника этой организации с ролью ServiceManager или Technician '
-     '(OrganizationMember.entraUserId); organization_member.id и entraUserId сотрудника без членства в этой '
-     'организации, в том числе участника только другой организации или отозванного участника, отклоняются.',
-     WORKFLOW, 'portal_api', 'patchFinding с assigneeId, равным organization_member.id участника.',
-     http(422, 'validation_failed'), 'AT-08'),
-    # Lifecycle journal and restore.
-    ('Понижение роли ServiceManager → Technician и отзыв назначения записываются в журнал жизненного цикла до '
-     'изменения БД и переживают restore.', RESTORE, 'infra',
-     'Restore на точку до понижения роли ServiceManager → Technician; после открытия доступа пользователь вызывает '
-     'decideFindingRisk.', http(403, 'forbidden'), 'AT-12'),
-    ('Replay применяет по каждому объекту запись журнала с наибольшей targetVersion; порядок добавления и '
-     'occurredAt не учитываются.', RESTORE, 'infra',
-     'Запись enable создана в журнале позже записи disable той же организации, но с меньшей targetVersion; '
-     'restore на точку до disable; агент вызывает submitScan.', http(403, 'organization_inactive'), 'AT-12'),
-    ('Ограничивающая запись, созданная в журнале без commit в БД, применяется при restore; версия неудачной '
-     'попытки повторно не используется.', RESTORE, 'infra',
-     'revokeDevice: запись в журнале создана, commit сорвался (ответ 503); restore; агент устройства вызывает '
-     'submitHeartbeat.', http(401, 'certificate_revoked'), 'AT-12'),
-    ('Restore в карантине отзывает все неотозванные enrollment-токены восстановленной базы: погашения и useCount '
-     'после точки restore в ней не отражены.', RESTORE, 'infra',
-     'Batch-токен исчерпан после точки restore (в восстановленной базе useCount < maxUses); после открытия доступа '
-     'enrollAgent этим токеном с новым registrationRequestId.', http(401, 'enrollment_token_invalid'), 'AT-12'),
-    # WIN-006 and assessment modes.
-    ('WIN-006 в режиме assessed: при agentSearch.mode=offline_cache и auLastSearchSuccessAt=null основы свежести '
-     'нет; успешный поиск агента её не заменяет, результат unknown/update_search_outdated; наблюдение непригодно '
-     'для истории ожидания.', WIN006, 'worker',
-     'offline_cache, resultCode=succeeded, auLastSearchSuccessAt=null, configuredSource=expectedSource='
-     'windows_update, полный пустой список.', result('assessed', 'unknown', 'update_search_outdated'), 'AT-05'),
-    ('WIN-006 в режиме assessed: agentSearch.completedAt или firstSeenPendingAt хотя бы одного переданного '
-     'обновления позже observedAt, а при offline_cache также auLastSearchSuccessAt позже agentSearch.completedAt, '
-     'дают unknown/evidence_time_invalid раньше проверки свежести и просрочки; пакет не отклоняется, наблюдение '
-     'непригодно для истории ожидания.', WIN006, 'worker',
-     'offline_cache со свежей основой, configuredSource=expectedSource; Critical-обновление с firstSeenPendingAt '
-     'на 3 суток позже observedAt.', result('assessed', 'unknown', 'evidence_time_invalid'), 'AT-05'),
-    ('WIN-006 в режиме assessed: deadlineAt в будущем не нарушает отношений времени; при '
-     'referenceTimeBasis=deadline такое обновление не просрочено и не требует подтверждения возраста.', WIN006,
-     'worker', 'expectedSource=configuredSource=windows_update, referenceTimeBasis=deadline, online/succeeded с '
-     'completedAt за 1 ч до observedAt; единственное Critical-обновление: deadlineAt через 10 суток, '
-     'firstSeenPendingAt 30 суток назад; total=1, truncated=false.', result('assessed', 'pass'), 'AT-05'),
-    ('Длина pendingSecurityUpdates в WIN-006 равна min(pendingSecurityUpdatesTotal, 50), а truncated=true тогда и '
-     'только тогда, когда pendingSecurityUpdatesTotal > 50 (межполевой инвариант тела).', EXTRA, 'agent_api',
-     'WIN-006 с pendingSecurityUpdates=[], pendingSecurityUpdatesTotal=3, truncated=false.',
-     http(422, 'schema_violation'), 'AT-05'),
-    ('WIN-006 в режиме assessed: если точка отсчёта переданного обновления — firstSeenRef (основа first_seen либо '
-     'deadline без deadlineAt), просрочки и усечения нет, а previousCompleteAt равен null или previousCompleteAt + '
-     'grace + maxSearchAgeHours раньше observedAt, результат unknown/update_age_unconfirmed, а не pass.', WIN006,
-     'worker', 'Первый пакет нового устройства, referenceTimeBasis=first_seen, свежий успешный поиск, '
-     'configuredSource=expectedSource; Important-обновление, опубликованное 60 дней назад; firstSeenPendingAt = '
-     'observedAt этого сбора, серверный firstSeenAt — время поиска этого сбора, previousCompleteAt = null.',
-     result('assessed', 'unknown', 'update_age_unconfirmed'), 'AT-05'),
-    ('WIN-006 в режиме assessed: при основе first_seen либо deadline без deadlineAt точка отсчёта firstSeenRef = '
-     'min(серверный firstSeenAt, firstSeenPendingAt); история ожидания хранится сервером по (deviceId, '
-     'configuredSource, updateId) и '
-     'не зависит от состояния агента.', WIN006, 'worker',
-     'Потеря локальной SQLite при том же deviceId, referenceTimeBasis=first_seen, свежий успешный поиск, '
-     'configuredSource=expectedSource: firstSeenPendingAt Important-обновления = observedAt, серверный firstSeenAt '
-     '— 15 суток назад.', result('assessed', 'fail'), 'AT-05'),
-    ('В режиме informational наблюдение unavailable применимой проверки даёт result=null с reasonCode наблюдения; '
-     'finding не создаётся.', SEMANTICS, 'worker',
-     'WIN-002 unavailable/permission_denied, WIN-011 collected с editionId=Professional, политика с WIN-002 в '
-     'режиме informational.', result('informational', None, 'permission_denied'), 'AT-05'),
-    ('В режиме informational причина правила, которая не переносится (unmapped_state, update_*, '
-     'evidence_time_invalid, os_version_unknown, os_inventory_missing, policy_not_applicable), даёт result=null и '
-     'reasonCode=null; finding не создаётся.', SEMANTICS, 'worker',
-     'WIN-006 при политике v1 (informational) с agentSearch.resultCode=failed.', result('informational', None),
-     'AT-05'),
-    # Device clock, current projection and OS lifecycle.
-    ('Признак часов вычисляется один раз — при приёме, в транзакции записи scan_batch под блокировкой строки '
-     'устройства, по receivedAt и значениям устройства до этого пакета (lastAcceptedSequence, '
-     'maxAcceptedSourceTime, heartbeatClockSkewExceeded) — и хранится в scan_batch вместе с projectionEligible; '
-     'worker его не пересчитывает, повтор возвращает исходный receipt. lastAcceptedSequence учитывает и пакеты с '
-     'признаком, maxAcceptedSourceTime — только пакеты без признака.', CLOCK, 'agent_api',
-     'Принят sequence 100; затем sequence 101 с completedAt раньше maxAcceptedSourceTime при нормальном последнем '
-     'heartbeat; задание пакета 101 повторено после истечения lease; WIN-005 в политике в режиме assessed.',
-     result('assessed', 'unknown', 'clock_inconsistent'), 'AT-04'),
-    ('Пакеты устройства обрабатываются в порядке приёма: на шаге 11 приёма под блокировкой строки устройства '
-     'пакету присваивается монотонный номер acceptOrder (внутреннее поле scan_batch и job, в API не выдаётся). '
-     'claim_jobs не меняется; в транзакции evaluate_batch под блокировкой строки устройства задание, у устройства '
-     'которого есть ранее принятый пакет (меньший acceptOrder), ещё не обработанный и не в терминальном отказе, '
-     'откладывается через nextAttemptAt без эффектов и без увеличения attempts. Терминальные отказы (failed, '
-     'processing_failed) следующие пакеты не блокируют; evaluate_batch переходит в failed после 10 попыток или '
-     'через 24 ч от первой попытки, что раньше; позднейшая обработка отказавшего пакета подчиняется п. 5: при '
-     'sequence не больше projectionSequence он поздний. Текущую проекцию меняет только пакет с projectionEligible, если его sequence больше '
-     'device.projectionSequence. Пакеты с признаком часов и поздние пакеты пополняют только историю и событий не '
-     'создают, кроме переоценки проверки текущей проекции, если такой пакет изменил историю, от которой зависит '
-     'её оценка: историю ожидания WIN-006 пары (configuredSource наблюдения проекции, updateId) или эпизод '
-     'WIN-007 (05, «Выбор текущего состояния», п. 5). Момент свежести для эффектов evaluate_batch — receivedAt '
-     'обрабатываемого пакета. При одной ревизии политики, одной ruleVersion и без терминальных отказов проекция, '
-     'projectionSequence, technicalState, эпизоды WIN-007, история WIN-006, clockStatus и lastFullScanAt '
-     'определяются последовательностью принятых пакетов и не зависят от расписания Worker; события и '
-     'workflowState могут различаться.',
-     CURRENT, 'worker',
-     'Finding WIN-005 нет; приняты пакет 100 — fail и пакет 101 — unknown; Worker пытается выполнить задание '
-     'пакета 101 раньше задания пакета 100: задание 101 откладывается, пакет 100 открывает finding, пакет 101 '
-     'его не закрывает — итог совпадает с прямым порядком.',
-     event('opened', 'device_change'), 'AT-04'),
-    ('SYS-002 в режиме assessed: окончание обслуживания — исключающее UTC-мгновение servicingEndsAt из данных '
-     'правила; observedAt, равное servicingEndsAt или позже, даёт fail, а observedAt на 1 с раньше по сроку '
-     'обслуживания fail не даёт.', OS_MATRIX, 'worker',
-     'SYS-002 в политике в режиме assessed; WIN-011 Professional x64 displayVersion=25H2 с '
-     'observedAt=2027-10-13T07:00:00Z (servicingEndsAt версии 25H2).', result('assessed', 'fail'), 'AT-05'),
-    # Clock jump forward, timezone and report period rules.
-    ('Пакет, у которого startedAt, completedAt или какое-либо observedAt позже receivedAt + 5 мин, не отклоняется: '
-     'он принимается с признаком часов, его оценки исторические, текущая проекция не меняется, droppedBatchCount '
-     'не растёт.', CLOCK, 'agent_api',
-     'Часы устройства на 6 мин впереди: completedAt на 6 мин позже receivedAt; WIN-005 в политике в режиме '
-     'assessed.', result('assessed', 'unknown', 'clock_inconsistent'), 'AT-04'),
-    ('Organization.timezone — идентификатор часового пояса IANA; неизвестная зона отклоняется.', PORTAL,
-     'portal_api', 'createOrganization с timezone=Europe/Oslow.', http(422, 'validation_failed'), 'AT-07'),
-    ('createReport принимает только границы ISO-недели в timezone организации (понедельник 00:00 — следующий '
-     'понедельник 00:00); иные границы отклоняются.', REPORT, 'portal_api',
-     'createReport с periodStart во вторник 00:00 и periodEnd через 7 суток в timezone организации.',
-     http(422, 'validation_failed'), 'AT-07'),
-    # Restore sequence floor.
-    ('Карантин устанавливает lifecycle_decision_seq выше максимума из её текущего значения, наибольшей '
-     'targetVersion журнала и наибольших decisionVersion и journalPendingVersion в базе: последовательность не '
-     'уменьшается, и переход после restore получает версию выше любой версии, уже назначенной объекту.', RESTORE,
-     'infra', 'enable организации: commit выполнен, запись в журнал не создана; restore на точку после commit; после '
-     'открытия доступа задание дописывает запись enable, затем disable той же организации; повторный restore; агент '
-     'вызывает submitScan.', http(403, 'organization_inactive'), 'AT-12'),
-    # Pending-update history per source.
-    ('WIN-006: история ожидания ведётся по (deviceId, configuredSource, updateId); наблюдение источника обновляет '
-     'и закрывает эпизоды только этого источника и задаёт previousCompleteAt только для него. Оценка для '
-     'expectedSource использует только историю этого источника; наблюдение другого источника даёт '
-     'unknown/update_source_mismatch и историю ожидаемого источника не меняет. Поздний пакет переоценивает WIN-006 '
-     'текущей проекции по истории пары (configuredSource наблюдения проекции, updateId).', WIN006, 'worker',
-     'expectedSource=windows_update, referenceTimeBasis=first_seen, свежие успешные полные поиски. Пакет 100: '
-     'windows_update с Important-обновлением U, серверный firstSeenAt U — 15 суток назад; пакет 102: '
-     'windows_update с U после сброса локальной SQLite (firstSeenPendingAt = observedAt пакета 102); пакет 101: '
-     'wsus без U, принят после пакета 102 как поздний.', result('assessed', 'fail'), 'AT-05'),
-    ('WIN-006: наблюдение с agentSearch.resultCode=succeeded того же configuredSource без updateId закрывает эпизод '
-     'ожидания этого обновления у этого источника; агент после такого поиска удаляет firstSeenPendingAt по '
-     '(configuredSource, updateId), и следующее появление обновления начинает новый эпизод.', WIN006, 'worker',
-     'expectedSource=configuredSource=windows_update, referenceTimeBasis=first_seen. Пакет 100: Important-'
-     'обновление U с серверным firstSeenAt 15 суток назад; пакет 101 через 1 ч: online/succeeded без U; пакет 102 '
-     'ещё через 1 ч: U снова, firstSeenPendingAt = observedAt пакета 102, previousCompleteAt — поиск пакета 101; '
-     'total=1, truncated=false.', result('assessed', 'pass'), 'AT-05'),
-    ('WIN-006: после смены expectedSource политикой оценка использует только историю нового источника; при пустой '
-     'истории (previousCompleteAt = null) обновление с точкой отсчёта firstSeenRef даёт '
-     'unknown/update_age_unconfirmed.', WIN006, 'worker',
-     'История ожидания есть только у wsus: U с firstSeenAt 30 суток назад; новая ревизия политики меняет '
-     'expectedSource на windows_update; первый пакет windows_update со свежим успешным поиском и Important-'
-     'обновлением U, firstSeenPendingAt = observedAt, referenceTimeBasis=first_seen.',
-     result('assessed', 'unknown', 'update_age_unconfirmed'), 'AT-05'),
-    # Certificates after restore.
-    ('В карантине до открытия доступа команда восстановления в контексте purpose=restore каждой организации '
-     'переводит все неактивированные pending в superseded с overlapEndsAt = время restore (аудит '
-     'device.restore_pending_ended, actorType platform_admin, actorId оператора) и устанавливает overlapEndsAt = '
-     'время restore у каждого прежнего superseded с overlapEndsAt позже этого времени; правило не зависит от '
-     'событий после точки restore. Запрос бывшим pending получает 401 certificate_expired, и сервер записывает '
-     'reenrollAllowedUntil = now + 7 суток. Сертификат, бывший active в точке restore, остаётся действительным.',
-     RESTORE, 'infra',
-     'В точке restore у устройства active A и неактивированный pending B; после открытия доступа агент вызывает '
-     'submitHeartbeat сертификатом B.', http(401, 'certificate_expired'), 'AT-12'),
-    ('В карантине для устройства, у которого журнал подписей Issuer показывает выпуск после точки restore, '
-     'выставляется reenrollAllowedUntil = now + 7 суток с аудитом device.reenroll_allowed (actorType '
-     'platform_admin, actorId оператора), чтобы повторная регистрация сохранила deviceId.', RESTORE, 'infra',
-     'Журнал подписей Issuer содержит выпуск сертификата C устройству после точки restore; в восстановленной базе '
-     'C нет; карантин до открытия доступа.', {'audit': 'device.reenroll_allowed'}, 'AT-12'),
-    ('401 на запрос сертификатом X: certificate_expired и certificate_revoked окончательны — агент удаляет X и '
-     'ключ; certificate_unknown помечает X отвергнутым в пределах цепочки повторов одного запроса. Агент '
-     'повторяет запрос следующим локальным сертификатом с неистёкшим validTo от новых к старым (pending, '
-     'active, superseded) и выполняет действие из таблицы Problem по ответу на последний кандидат; следующий '
-     'запрос, в том числе GET configuration в TrustFailed, снова перебирает все оставшиеся неистёкшие '
-     'сертификаты. Прежний сертификат и ключ агент хранит после активации нового до validTo прежнего; пока '
-     'есть active, ротацию superseded-сертификатом не запрашивает.', AGENT_FSM, 'agent',
-     'Restore на точку до продления: агент хранит pending C, базе неизвестный, и active B; heartbeat сертификатом '
-     'C получает 401 certificate_unknown, повтор сертификатом B — 200.', {'agentState': 'Active'}, 'AT-12'),
-    ('Идемпотентный повтор renewDeviceCertificate (тот же renewalRequestId и CSR), сертификат которого отозван, '
-     'получает 409 renewal_request_conflict (действие restart_renewal), а не отозванный сертификат.', CERT,
-     'agent_api', 'renew выдал pending C, ответ до агента не дошёл; новый выпуск для устройства отозвал C; агент повторяет '
-     'renew с тем же renewalRequestId и CSR сертификатом B.', http(409, 'renewal_request_conflict'), 'AT-17'),
-    ('Из TrustFailed агент выходит повторной регистрацией с новым токеном из канала установки: enrollAgent, при '
-     'успехе Active; при неизвестном installationId создаётся устройство. Если installationId известен и у '
-     'устройства есть действующий active, ответ 409 ведёт в ReinstallRequired, если агент не восстановил доступ '
-     'прежним сертификатом.', AGENT_FSM, 'agent',
-     'Устройство зарегистрировано после точки restore; после открытия доступа агент получает 401 '
-     'certificate_unknown и переходит в TrustFailed; канал установки доставляет новый токен.',
-     {'agentState': 'Active'}, 'AT-12'),
+    # Registration and session.
+    ('createAgentChallenge с телом больше 1024 байт отклоняется до разбора JSON.', REGISTRATION, 'agent_api',
+     'Тело 2 КиБ.', http(413, 'payload_too_large'), 'AT-12'),
+    ('Nonce одноразовый, действует 5 минут и только для своего purpose и deviceId.', REGISTRATION, 'agent_api',
+     'Второй createAgentSession с тем же nonce.', http(401, 'challenge_invalid'), 'AT-12'),
+    ('Подпись enrollAgent проверяется ключом publicKey по канонической строке; неверная подпись не создаёт '
+     'устройство.', SESSION, 'agent_api', 'Подпись другим ключом.', http(401, 'challenge_invalid'), 'AT-12'),
+    ('Неизвестный или отозванный ключ регистрации отклоняется без создания устройства.', ENROLL_KEY, 'agent_api',
+     'Ключ после revokeEnrollmentKey.', http(401, 'enrollment_key_invalid'), 'AT-12'),
+    ('Регистрация в организации не в статусе active отклоняется.', LIFECYCLE, 'agent_api',
+     'enrollAgent ключом отключённой организации.', http(403, 'organization_inactive'), 'AT-09'),
+    ('Идентичный повтор enrollAgent с тем же registrationRequestId в течение 24 ч возвращает прежний ответ и не '
+     'создаёт второе устройство.', REGISTRATION, 'agent_api', 'Повтор после потери ответа.',
+     {'replay': {'http': 201, 'duplicate': True}}, 'AT-12'),
+    ('Повтор enrollAgent с тем же телом проверяется до статуса ключа регистрации: ротация ключа после потерянного '
+     'ответа не блокирует агент.', REGISTRATION, 'agent_api', 'Ответ потерян, ключ отозван при ротации, повтор.',
+     {'replay': {'http': 201, 'duplicate': True}}, 'AT-12'),
+    ('Повторная регистрация с тем же ключом устройства (тот же отпечаток JWK) отвечает 201 без аудита '
+     'device.key_replaced.', REGISTRATION, 'agent_api', 'Регистрация заново после двух challenge_invalid из-за '
+     'истёкшего nonce.', effect('none'), 'AT-12'),
+    ('createAgentChallenge не пишет в базу: nonce проверяется по HMAC и сроку, в базу попадает только погашенный '
+     'nonce.', REGISTRATION, 'agent_api', 'Повтор погашенного nonce после перезапуска сервиса.',
+     http(401, 'challenge_invalid'), 'AT-12'),
+    ('Тот же registrationRequestId с другим installationId или публичным ключом отклоняется.', REGISTRATION,
+     'agent_api', 'Повтор с новым ключом.', http(409, 'idempotency_conflict'), 'AT-12'),
+    ('Регистрация с installationId отозванного устройства не возвращает доступ.', REGISTRATION, 'agent_api',
+     'Агент отозванного ПК регистрируется сохранённым ключом.', http(401, 'device_revoked'), 'AT-12'),
+    ('Регистрация с installationId существующего устройства и другим признаком машины не меняет ключ '
+     'устройства и выставляет identity_conflict.', REGISTRATION, 'agent_api', 'Клон VM с тем же installationId.',
+     http(409, 'identity_conflict'), 'AT-12'),
+    ('Повторная регистрация с тем же installationId и признаком машины заменяет публичный ключ с сохранением '
+     'deviceId и истории.', REGISTRATION, 'agent_api', 'TPM очищен, агент регистрируется заново.',
+     audit('device.key_replaced'), 'AT-12'),
+    ('createAgentSession для неизвестного deviceId отвечает device_unknown.', REGISTRATION, 'agent_api',
+     'Устройство отсутствует в восстановленной базе.', http(401, 'device_unknown'), 'AT-11'),
+    ('Подпись createAgentSession проверяется сохранённым публичным ключом устройства.', SESSION, 'agent_api',
+     'Подпись ключом другого устройства.', http(401, 'challenge_invalid'), 'AT-12'),
+    ('Токен сессии принимается до expiresAt и только для своего устройства.', SESSION, 'agent_api',
+     'Запрос через 61 минуту после выдачи.', http(401, 'session_invalid'), 'AT-12'),
+    ('Статус устройства проверяется по БД на каждом запросе с токеном: отзыв действует со следующего запроса.',
+     SESSION, 'agent_api', 'submitScan после revokeDevice с действующим токеном.', http(401, 'device_revoked'),
+     'AT-12'),
+    ('Отзыв устройства, которого нет в восстановленной базе, создаёт запись revoked_installation, и регистрация с '
+     'этим installationId отклоняется.', RESTORE, 'infra', 'Устройство зарегистрировано и отозвано после точки '
+     'restore, агент был офлайн.', http(401, 'device_revoked'), 'AT-11'),
+    ('После restore отозванное позже точки restore устройство остаётся отозванным благодаря replay журнала '
+     'безопасности.', RESTORE, 'infra', 'revokeDevice после точки restore.', http(401, 'device_revoked'),
+     'AT-11'),
+    # Agent state machine.
+    ('device_unknown переводит агент к повторной регистрации сохранённым ключом организации без участия техника.',
+     AGENT_FSM, 'agent', 'Сервер не знает устройство после restore.', state('Unenrolled'), 'AT-11'),
+    ('Повторный challenge_invalid при доступном локальном ключе ведёт к регистрации заново с тем же installationId '
+     'не чаще раза в сутки; при совпадающем признаке машины сервер заменяет публичный ключ.', AGENT_FSM, 'agent',
+     'Восстановление базы на точку до прежней замены ключа.', state('Unenrolled'), 'AT-11'),
+    ('enrollment_key_invalid переводит агент в EnrollmentBlocked: попытка регистрации не чаще раза в сутки до '
+     'нового ключа через RMM.', AGENT_FSM, 'agent', 'Ключ организации отозван.', state('EnrollmentBlocked'),
+     'AT-12'),
+    ('После удаления организации агент получает device_unknown, а регистрация — enrollment_key_invalid.',
+     LIFECYCLE, 'agent', 'Организация удалена заданием.', state('EnrollmentBlocked'), 'AT-09'),
+    ('device_revoked окончателен для установки: агент удаляет ключ устройства и прекращает обращения до '
+     'переустановки.', AGENT_FSM, 'agent', 'Устройство отозвано.', state('Revoked'), 'AT-12'),
+    ('organization_inactive приостанавливает отправку пакетов; check-in выполняется раз в сутки.', AGENT_FSM,
+     'agent', 'Организация отключена.', state('Suspended'), 'AT-09'),
+    ('agent_version_unsupported останавливает отправку пакетов; check-in продолжается.', AGENT_FSM, 'agent',
+     'Версия ниже minimumAgentVersion.', state('VersionBlocked'), 'AT-16'),
+    ('resolveDeviceIdentity с accept_new_fingerprint принимает новый признак машины, сохраняя deviceId и историю; '
+     'identityState без несовпадений 7 суток сам возвращается в ok.', REGISTRATION, 'portal_api',
+     'Замена материнской платы.', audit('device.identity_resolved'), 'AT-12'),
+    ('identity_conflict останавливает отправку пакетов до разбора по RB-11.', AGENT_FSM, 'agent',
+     'Признак машины не совпал.', state('IdentityConflict'), 'AT-12'),
+    ('Агент проверяет каждое наблюдение своей схемой до отправки: недопустимое значение даёт '
+     'unavailable/unsupported только этому наблюдению, остальные проверки пакета принимаются.', LOCAL, 'agent',
+     'ConversionStatus BitLocker вне перечня.', result(A, 'unknown', 'unsupported'), 'AT-13'),
+    ('Сервер отвечает конфигурацией той версии схемы, которую агент указал в check-in; новые поля появляются только '
+     'с новой версией схемы.', AGENT_FSM, 'agent_api', 'Агент предыдущей версии после расширения конфигурации.',
+     state('Active'), 'AT-16'),
+    ('Конфигурация с полем вне схемы отклоняется агентом целиком; агент продолжает с прежней конфигурацией и '
+     'не выполняет команд.', LOCAL, 'agent', 'Ответ check-in с полем command.', state('Active'), 'AT-15'),
+    # Intake.
+    ('Тело submitScan с Content-Encoding или Content-Type не application/json отклоняется до разбора.', INTAKE,
+     'agent_api', 'Content-Encoding: gzip.', http(415, 'unsupported_media_type'), 'AT-13'),
+    ('Тело submitScan больше maxBatchBytes (262144 байт) отклоняется до разбора.', INTAKE, 'agent_api',
+     'Пакет 300 КиБ.', http(413, 'payload_too_large'), 'AT-13'),
+    ('Невалидный JSON отклоняется до проверки схемы.', INTAKE, 'agent_api', 'Обрезанное тело.',
+     http(400, 'invalid_json'), 'AT-13'),
+    ('Неизвестная schemaVersion пакета отклоняется после проверки версии агента и переводит агент в '
+     'VersionBlocked.', INTAKE, 'agent_api', 'schemaVersion 1.0.',
+     http(422, 'unsupported_schema_version'), 'AT-13'),
+    ('Поле вне схемы, organizationId в теле или evidence чужой проверки отклоняют пакет целиком.', INTAKE,
+     'schema', 'Пакет с organizationId.', http(422, 'schema_violation'), 'AT-01'),
+    ('freeBytes больше totalBytes отклоняет пакет.', INTAKE, 'agent_api', 'WIN-001 freeBytes > totalBytes.',
+     http(422, 'schema_violation'), 'AT-13'),
+    ('Версия агента ниже minimumAgentVersion не отправляет пакеты.', INTAKE, 'agent_api', 'agentVersion 0.0.9.',
+     http(422, 'agent_version_unsupported'), 'AT-16'),
+    ('Повторы одного scanId, пришедшие одновременно, дают один эффект: под блокировкой устройства scanId '
+     'проверяется до sequence.', INTAKE, 'agent_api', 'Повтор после таймаута ответа, пока первый запрос ещё '
+     'обрабатывается.', {'replay': {'http': 200, 'duplicate': True}}, 'AT-13'),
+    ('Пакет с completedAt раньше completedAt пакета текущей проекции идёт только в историю: проекция и проблемы не '
+     'меняются, событий нет.', CURRENT, 'evaluator', 'Перенумерованный старый пакет после восстановления ПК из '
+     'checkpoint.', effect('none'), 'AT-13'),
+    ('Повтор после паузы отправляет те же байты с новым заголовком времени: признак часов считается по текущей '
+     'попытке, а повтор принятого пакета получает прежний receipt.', CLOCK, 'agent_api', 'Пакет принят с третьей '
+     'попытки через 20 минут после 503.', {'replay': {'http': 200, 'duplicate': True}}, 'AT-13'),
+    ('Повтор тех же байтов с тем же scanId возвращает исходный receipt с duplicate=true без второго эффекта.',
+     INTAKE, 'agent_api', 'Повтор после потери ответа.', {'replay': {'http': 200, 'duplicate': True}}, 'AT-13'),
+    ('Тот же scanId с другим содержимым отклоняется.', INTAKE, 'agent_api', 'Изменён evidence при том же scanId.',
+     http(409, 'idempotency_conflict'), 'AT-13'),
+    ('Признак машины в пакете или check-in, не совпадающий с устройством сессии, отклоняется и выставляет '
+     'identityState=identity_conflict.', INTAKE, 'agent_api', 'Восстановленный на другом ПК образ.',
+     http(409, 'identity_conflict'), 'AT-13'),
+    ('completedAt раньше startedAt или observedAt вне [startedAt, completedAt] отклоняют пакет.', INTAKE,
+     'agent_api', 'observedAt после completedAt.', http(422, 'batch_time_inconsistent'), 'AT-13'),
+    ('Пакет старше maxBatchAgeDays по часам ПК (заголовок Sikkerheit-Sent-At минус completedAt) отклоняется.',
+     INTAKE, 'agent_api',
+     'Пакет десятидневной давности.', http(422, 'batch_too_old'), 'AT-13'),
+    ('policyVersion пакета больше текущей или без ревизии у организации отклоняется.', INTAKE, 'agent_api',
+     'policyVersion 9 при текущей 3; номер ревизии, потерянной при восстановлении базы.',
+     http(422, 'unknown_policy_version'), 'AT-13'),
+    ('Повтор ключа (checkId, subject.type, localKey) отклоняет пакет.', INTAKE, 'agent_api',
+     'Два наблюдения WIN-005.', http(422, 'duplicate_observation'), 'AT-13'),
+    ('Наблюдение проверки, не активной в policyVersion пакета, или объект не того типа отклоняют пакет.',
+     INTAKE, 'agent_api', 'WIN-003 с объектом volume.', http(422, 'unexpected_subject'), 'AT-13'),
+    ('sequence не больше lastAcceptedSequence при новом scanId отклоняется; агент перенумеровывает очередь от '
+     'lastAcceptedSequence + 1.', INTAKE, 'agent_api', 'VM восстановлена из checkpoint.',
+     http(409, 'sequence_conflict'), 'AT-13'),
+    ('Том выводится из учёта только по положительному доказательству — полный пакет с томом ОС другого volumeId; '
+     'сбой сборщика тома даёт unknown.', SUBJECTS, 'evaluator', 'Win32_Volume не ответил за 30 секунд.',
+     result(A, 'unknown', 'collector_timeout'), 'AT-13'),
+    ('Задания, меняющие проблемы субъектов устройства, берут блокировку строки устройства, как приём пакета.',
+     SCHEDULER, 'worker', 'recalculate_policy во время приёма пакета того же устройства.', effect('single'), 'AT-10'),
+    ('Активная проверка без наблюдения ожидаемого объекта в пакете даёт unknown/missing_observation.', INTAKE,
+     'evaluator', 'Пакет без WIN-005.', result(A, 'unknown', 'missing_observation'), 'AT-13'),
+    ('Расхождение времени отправки (Sikkerheit-Sent-At) и receivedAt больше 5 минут в любую сторону даёт признак '
+     'часов; SYS-002 и SYS-003 считаются на receivedAt.', CLOCK, 'evaluator', 'Часы ПК отстают на трое суток.',
+     result(A, 'unknown', 'clock_inconsistent'), 'AT-13'),
+    ('Метки пакета позже receivedAt + 5 мин: пакет принимается, оценки assessed получают '
+     'unknown/clock_inconsistent и не меняют текущую проекцию.', CLOCK, 'evaluator',
+     'Часы ПК на сутки вперёд.', result(A, 'unknown', 'clock_inconsistent'), 'AT-13'),
+    ('В режиме informational признак часов даёт result=null с clock_inconsistent.', CLOCK, 'evaluator',
+     'WIN-011 при часах на сутки вперёд.', result(I, None, 'clock_inconsistent'), 'AT-13'),
+    # Windows rules.
+    ('WIN-002: fully_encrypted, protectionStatus=off, encryptionPercentage=100 при encryptionRequired=true — '
+     'fail.', BITLOCKER, 'evaluator', 'Пример examples/scan-batch.json.', result(A, 'fail'), 'AT-14'),
+    ('WIN-002: идущее шифрование — unknown/unmapped_state, пауза шифрования или расшифровки — fail.', WINDOWS,
+     'evaluator', 'volumeStatus=encrypting при первичном шифровании нового ПК.', result(A, 'unknown', 'unmapped_state'),
+     'AT-14'),
+    ('WIN-008: встроенный администратор (RID 500) при allowBuiltinAdministrator=true и доменная группа с RID из '
+     'allowedDomainRids — разрешены; лишняя локальная учётная запись сверх maxOtherLocalAccounts — fail.', WINDOWS,
+     'evaluator', 'Пользователь ПК добавлен в локальные администраторы.', result(A, 'fail'), 'AT-14'),
+    ('WIN-010 при заданном expectedTenantId: присоединение к другому tenant, только к домену или его отсутствие — '
+     'fail.', WINDOWS, 'evaluator', 'joinType=domain_joined.', result(A, 'fail'), 'AT-14'),
+    ('WIN-005: выключенные профили Windows Firewall при активном одобренном стороннем firewall — pass.', WINDOWS,
+     'evaluator', 'Firewall антивирусного пакета из approvedFirewallProviders включён.', result(A, 'pass'), 'AT-14'),
+    ('WIN-002 для редакции из notApplicableEditionIds по editionId WIN-011 того же пакета — not_applicable.',
+     WINDOWS, 'evaluator', 'editionId Core.', result(A, 'not_applicable', 'policy_not_applicable'), 'AT-14'),
+    ('WIN-002 и WIN-004 без пригодного входного наблюдения того же пакета — unknown/applicability_input_missing.',
+     WINDOWS, 'evaluator', 'WIN-011 unavailable.', result(A, 'unknown', 'applicability_input_missing'), 'AT-14'),
+    ('WIN-003: нет активного одобренного продукта, а у одобренного productState=unknown — unknown/unmapped_state.',
+     WINDOWS, 'evaluator', 'Сторонний AV с неизвестным rawState.', result(A, 'unknown', 'unmapped_state'),
+     'AT-14'),
+    ('WIN-004: signatureLastUpdatedAt позже observedAt — unknown/evidence_time_invalid.', WINDOWS, 'evaluator',
+     'Сигнатуры «из будущего».', result(A, 'unknown', 'evidence_time_invalid'), 'AT-14'),
+    ('Наблюдение unavailable в режиме informational даёт result=null с причиной сборщика.', SEMANTICS,
+     'evaluator', 'WIN-008 unavailable/permission_denied.', result(I, None, 'permission_denied'), 'AT-14'),
+    ('Больше 10 антивирусных продуктов передаются как unavailable/unsupported.', WINDOWS, 'agent',
+     '11 продуктов в WSC.', result(A, 'unknown', 'unsupported'), 'AT-14'),
+    ('Сборщик ограничен 30 с, сессия сбора — 120 с; оставшиеся проверки получают collector_timeout.', LOCAL,
+     'agent', 'WMI не отвечает.', result(A, 'unknown', 'collector_timeout'), 'AT-15'),
+    ('Временная ошибка API Windows даёт unavailable/temporary_error.', WINDOWS, 'agent',
+     'RPC_E_SERVERCALL_RETRYLATER.', result(A, 'unknown', 'temporary_error'), 'AT-14'),
+    ('WIN-006 assessed: lastSearchSuccessAt null или старше maxSearchAgeDays — fail.', WIN006, 'evaluator',
+     'Последний успешный поиск 20 суток назад.', result(A, 'fail'), 'AT-14'),
+    ('WIN-007: эпизод начинается первым сбором с rebootRequired=true в сеансе загрузки и прерывается значением '
+     'false или сменой lastBootAt; fail только при observedAt − начало эпизода ≥ warnDays.', WIN007, 'evaluator',
+     'true в день 0, false в день 1, true в день 3.', result(A, 'pass'), 'AT-14'),
+    ('WIN-007: lastBootAt, отличающийся от начала сеанса не больше чем на 2 минуты, — тот же сеанс загрузки.',
+     WIN007, 'evaluator', 'Сдвиг LastBootUpTime на 40 секунд после синхронизации времени при эпизоде дольше '
+     'warnDays.', result(A, 'fail'), 'AT-14'),
+    ('WIN-009: при secureBootRequired=true выключенный Secure Boot или platform=legacy_bios — fail critical.',
+     WINDOWS, 'evaluator', 'enabled=false на UEFI.', result(A, 'fail'), 'AT-14'),
+    ('SYS-002: версия вне срока обслуживания — fail; Windows 10 22H2 после окончания обслуживания — fail.',
+     LIFECYCLE_OS, 'evaluator', 'Windows 10 Pro 22H2.', result(A, 'fail'), 'AT-14'),
+    ('SYS-002: архитектура или редакция вне матрицы агента не даёт fail: unknown/os_version_unknown.',
+     LIFECYCLE_OS, 'evaluator', 'Windows 11 25H2 на ARM64.', result(A, 'unknown', 'os_version_unknown'), 'AT-14'),
+    ('SYS-002: сборка home_pro или enterprise_education ниже 19045 без строки таблицы — fail.', LIFECYCLE_OS,
+     'evaluator', 'Windows 10 Enterprise 21H2 (19044).', result(A, 'fail'), 'AT-14'),
+    ('SYS-002: IoTEnterpriseS относится к семейству iot_ltsc со своими сроками обслуживания.', LIFECYCLE_OS,
+     'evaluator', 'Windows 10 IoT Enterprise LTSC 2021 в феврале 2027 года.', result(A, 'pass'), 'AT-14'),
+    ('SYS-002: сборка без DisplayVersion определяется по build; LTSC 2019 (17763) до 2029-01-09 — pass.',
+     LIFECYCLE_OS, 'evaluator', 'Windows 10 Enterprise LTSC 2019 с ReleaseId 1809.', result(A, 'pass'), 'AT-14'),
+    ('SYS-002: версия из матрицы без строки в таблице жизненного цикла — unknown/os_version_unknown.',
+     LIFECYCLE_OS, 'evaluator', 'Новая displayVersion до обновления таблицы.',
+     result(A, 'unknown', 'os_version_unknown'), 'AT-14'),
+    ('SYS-002 и SYS-003 без свежего WIN-011 — unknown/os_inventory_missing.', LIFECYCLE_OS, 'evaluator',
+     'WIN-011 старше окна свежести.', result(A, 'unknown', 'os_inventory_missing'), 'AT-14'),
+    ('SYS-003: ветки build нет в каталоге выпусков — unknown/build_not_in_catalog.', PATCH, 'evaluator',
+     'Insider build.', result(A, 'unknown', 'build_not_in_catalog'), 'AT-14'),
+    ('SYS-003: месяц безопасности, срок grace которого наступил, не сверен — unknown/release_catalog_stale, а не '
+     'pass.', PATCH, 'evaluator', 'Сверка октябрьского выпуска не выполнена через 14 суток после второго вторника.',
+     result(A, 'unknown', 'release_catalog_stale'), 'AT-14'),
+    ('SYS-003: UBR hotpatch ниже UBR месячного выпуска того же месяца даёт уровень этого месяца — pass.', PATCH,
+     'evaluator', '26100.8390 (hotpatch мая 2026) при месячном выпуске .8457.', result(A, 'pass'), 'AT-14'),
+    ('SYS-003: отставание на один месяц безопасности с истёкшим graceDays — fail warning, на criticalBehindMonths и '
+     'больше — fail critical; внеочередные выпуски месяца отставание не увеличивают.', PATCH, 'evaluator',
+     'UBR двухмесячной давности.', result(A, 'fail'), 'AT-14'),
+    ('Записи каталога в состоянии draft в оценку SYS-003 не попадают: месяц вводит в действие только '
+     'verifyWindowsReleaseMonth.', PATCH, 'evaluator', 'Импорт CVRF за месяц без сверки при наступившем сроке.',
+     result(A, 'unknown', 'release_catalog_stale'), 'AT-14'),
+    ('Ввод месяца каталога в действие не меняет ruleVersion SYS-003 и ставит пересчёт; отставшие устройства '
+     'получают opened с source_change.', PATCH, 'worker', 'Сверка ноябрьского месяца при graceDays, уже истёкшем.',
+     event('opened', 'source_change'), 'AT-14'),
+    ('importWindowsReleases и verifyWindowsReleaseMonth выполняет только Admin.', PATCH, 'portal_api',
+     'Technician вызывает verifyWindowsReleaseMonth.', http(403, 'forbidden'), 'AT-14'),
+    ('Устройство без check-in дольше 14 суток (dormant) не входит в знаменатель coverageAt, а устройство без дня '
+     'в device_presence за период — в знаменатель coveragePeriod; оба показываются отдельно.', REPORT, 'evaluator',
+     'Ноутбук три недели в отпуске.', effect('none'), 'AT-07'),
+    ('Устройство без check-in дольше 90 суток выводится из учёта вместе с томами; следующий check-in его '
+     'возвращает.', SUBJECTS, 'worker', 'ПК списан без отзыва.', event('subject_retired', 'source_change'),
+     'AT-06'),
+    ('SYS-002 и SYS-003 берут WIN-011 только из пакетов, которые могли менять проекцию.', CURRENT, 'evaluator',
+     'WIN-011 из перенумерованного старого пакета после восстановления ПК из checkpoint.', effect('none'), 'AT-13'),
+    ('SYS-001 всегда informational и finding не создаёт.', WINDOWS, 'evaluator',
+     'Политика с SYS-001 assessed.', result(I, None), 'AT-14'),
 ]
 
 
 def build_invariants():
     records = []
-    for phase, rows in (('P1', P1), ('P2', P2), ('P1', P1_ADDED)):
+    for phase, rows in (('P1', P1), ('P2', P2)):
         for rule, (doc, section), enforcement, negative, expected, acceptance in rows:
             records.append({'id': f'INV-{len(records) + 1:03}', 'rule': rule,
                             'sourceDoc': {'file': DOCS[doc], 'section': section}, 'phase': phase,

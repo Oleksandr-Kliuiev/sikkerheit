@@ -1,12 +1,12 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "2.0",
   "scanId": "11111111-1111-4111-8111-111111111111",
   "sequence": 1,
   "agentVersion": "0.1.0",
   "policyVersion": 1,
   "machineFingerprint": "9f2c4e6a8b0d1f3e5a7c9b1d3f5e7a9c0b2d4f6e8a1c3e5b7d9f0a2c4e6b8d0f",
-  "startedAt": "2026-10-12T10:00:00Z",
-  "completedAt": "2026-10-12T10:01:30Z",
+  "startedAt": "2026-10-14T10:00:00Z",
+  "completedAt": "2026-10-14T10:01:30Z",
   "observations": [
     {
       "checkId": "WIN-001",
@@ -17,7 +17,7 @@
         "mountPoint": "C:",
         "role": "os"
       },
-      "observedAt": "2026-10-12T10:01:00Z",
+      "observedAt": "2026-10-14T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
         "totalBytes": 256000000000,
@@ -33,7 +33,7 @@
         "mountPoint": "C:",
         "role": "os"
       },
-      "observedAt": "2026-10-12T10:01:00Z",
+      "observedAt": "2026-10-14T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
         "volumeStatus": "fully_encrypted",
@@ -47,7 +47,7 @@
       "subject": {
         "type": "device"
       },
-      "observedAt": "2026-10-12T10:01:00Z",
+      "observedAt": "2026-10-14T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
         "products": [
@@ -70,10 +70,10 @@
       "subject": {
         "type": "device"
       },
-      "observedAt": "2026-10-12T10:01:00Z",
+      "observedAt": "2026-10-14T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
-        "signatureLastUpdatedAt": "2026-10-12T08:00:00Z"
+        "signatureLastUpdatedAt": "2026-10-14T08:00:00Z"
       }
     },
     {
@@ -82,12 +82,13 @@
       "subject": {
         "type": "device"
       },
-      "observedAt": "2026-10-12T10:01:00Z",
+      "observedAt": "2026-10-14T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
         "domainEnabled": true,
         "privateEnabled": true,
-        "publicEnabled": true
+        "publicEnabled": true,
+        "firewallProducts": []
       }
     },
     {
@@ -96,34 +97,12 @@
       "subject": {
         "type": "device"
       },
-      "observedAt": "2026-10-12T10:01:00Z",
+      "observedAt": "2026-10-14T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
-        "configuredSource": "windows_update",
-        "auLastSearchSuccessAt": "2026-10-12T06:15:00Z",
-        "agentSearch": {
-          "mode": "offline_cache",
-          "completedAt": "2026-10-12T10:00:40Z",
-          "resultCode": "succeeded"
-        },
-        "pendingSecurityUpdates": [
-          {
-            "updateId": "6b8e2f4a-1c3d-4e5f-8a9b-0c1d2e3f4a5b",
-            "revisionNumber": 200,
-            "kbArticleIds": [
-              "5066835"
-            ],
-            "categoryIds": [
-              "0FA1201D-4330-4FA8-8AE9-B877473B6441"
-            ],
-            "msrcSeverity": "Important",
-            "lastDeploymentChangeAt": "2026-10-08T17:00:00Z",
-            "deadlineAt": null,
-            "firstSeenPendingAt": "2026-10-09T10:01:00Z"
-          }
-        ],
-        "pendingSecurityUpdatesTotal": 1,
-        "truncated": false
+        "lastSearchSuccessAt": "2026-10-14T06:15:00Z",
+        "lastInstallSuccessAt": "2026-10-14T03:40:00Z",
+        "wsusConfigured": false
       }
     },
     {
@@ -132,12 +111,11 @@
       "subject": {
         "type": "device"
       },
-      "observedAt": "2026-10-12T10:01:00Z",
+      "observedAt": "2026-10-14T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
         "rebootRequired": false,
-        "lastBootAt": "2026-10-11T07:30:00Z",
-        "statusSource": "windows_update_api"
+        "lastBootAt": "2026-10-14T07:30:00Z"
       }
     },
     {
@@ -146,11 +124,20 @@
       "subject": {
         "type": "device"
       },
-      "observedAt": "2026-10-12T10:01:00Z",
+      "observedAt": "2026-10-14T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
-        "memberSids": [
-          "S-1-5-21-1000-2000-3000-500"
+        "members": [
+          {
+            "sid": "S-1-5-21-1000-2000-3000-500",
+            "kind": "builtin_administrator",
+            "relativeId": 500
+          },
+          {
+            "sid": "S-1-12-1-1111111111-2222222222-3333333333-4444444444",
+            "kind": "entra",
+            "relativeId": null
+          }
         ],
         "membershipScope": "direct_members"
       }
@@ -161,7 +148,7 @@
       "subject": {
         "type": "device"
       },
-      "observedAt": "2026-10-12T10:01:00Z",
+      "observedAt": "2026-10-14T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
         "enabled": true,
@@ -174,7 +161,7 @@
       "subject": {
         "type": "device"
       },
-      "observedAt": "2026-10-12T10:01:00Z",
+      "observedAt": "2026-10-14T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
         "joinType": "entra_joined",
@@ -188,13 +175,13 @@
       "subject": {
         "type": "device"
       },
-      "observedAt": "2026-10-12T10:01:00Z",
+      "observedAt": "2026-10-14T10:01:00Z",
       "collectionStatus": "collected",
       "evidence": {
         "editionId": "Professional",
         "displayVersion": "25H2",
         "build": 26200,
-        "ubr": 6899,
+        "ubr": 9711,
         "architecture": "x64"
       }
     }

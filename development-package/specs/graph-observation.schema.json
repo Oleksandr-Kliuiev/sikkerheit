@@ -1,0 +1,1048 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.sikkerheit.example.invalid/m365/graph-observation.schema.json",
+  "title": "Sikkerheit M365 Observation",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "checkId": {
+      "type": "string",
+      "enum": [
+        "M365-001",
+        "M365-002",
+        "M365-003",
+        "M365-004",
+        "M365-005",
+        "M365-006",
+        "M365-007"
+      ]
+    },
+    "collectorVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$"
+    },
+    "subject": {
+      "type": "object",
+      "description": "Форма объекта задаётся по checkId (allOf)."
+    },
+    "observedAt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+    },
+    "collectionStatus": {
+      "type": "string",
+      "enum": [
+        "collected",
+        "unavailable"
+      ]
+    },
+    "evidence": {
+      "type": "object"
+    },
+    "reasonCode": {
+      "type": "string",
+      "enum": [
+        "permission_denied",
+        "temporary_error",
+        "license_missing",
+        "partial_data"
+      ]
+    }
+  },
+  "required": [
+    "checkId",
+    "collectorVersion",
+    "subject",
+    "observedAt",
+    "collectionStatus"
+  ],
+  "oneOf": [
+    {
+      "properties": {
+        "collectionStatus": {
+          "const": "collected"
+        }
+      },
+      "required": [
+        "evidence"
+      ],
+      "not": {
+        "required": [
+          "reasonCode"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "collectionStatus": {
+          "const": "unavailable"
+        }
+      },
+      "required": [
+        "reasonCode"
+      ],
+      "not": {
+        "required": [
+          "evidence"
+        ]
+      }
+    }
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-001"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "user"
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 36,
+                "format": "uuid",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              },
+              "userPrincipalName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+              }
+            },
+            "required": [
+              "type",
+              "key",
+              "userPrincipalName"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-002"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "user"
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 36,
+                "format": "uuid",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              },
+              "userPrincipalName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+              }
+            },
+            "required": [
+              "type",
+              "key",
+              "userPrincipalName"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-003"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "tenant"
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 36,
+                "format": "uuid",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            },
+            "required": [
+              "type",
+              "key"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-004"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "tenant"
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 36,
+                "format": "uuid",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            },
+            "required": [
+              "type",
+              "key"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-005"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "tenant"
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 36,
+                "format": "uuid",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            },
+            "required": [
+              "type",
+              "key"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-006"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "tenant"
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 36,
+                "format": "uuid",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            },
+            "required": [
+              "type",
+              "key"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-007"
+          }
+        },
+        "required": [
+          "checkId"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "user"
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 36,
+                "format": "uuid",
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              },
+              "userPrincipalName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+              }
+            },
+            "required": [
+              "type",
+              "key",
+              "userPrincipalName"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-001"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "accountEnabled": {
+                "type": "boolean"
+              },
+              "userType": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "Member",
+                  "Guest",
+                  null
+                ],
+                "description": "null у части старых учётных записей; правило считает такую учётную запись member."
+              },
+              "directorySyncAccount": {
+                "type": "boolean"
+              },
+              "methodKinds": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "password",
+                    "microsoft_authenticator",
+                    "fido2",
+                    "windows_hello_for_business",
+                    "platform_credential",
+                    "software_oath",
+                    "hardware_oath",
+                    "phone",
+                    "external",
+                    "email",
+                    "temporary_access_pass",
+                    "qr_code_pin",
+                    "other"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 13,
+                "uniqueItems": true,
+                "description": "Нормализованные виды зарегистрированных методов; номера телефонов, адреса и названия устройств не сохраняются. null — методы не запрашивались (03, «Правило M365-001 и M365-002»)."
+              }
+            },
+            "required": [
+              "accountEnabled",
+              "userType",
+              "directorySyncAccount",
+              "methodKinds"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-002"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "accountEnabled": {
+                "type": "boolean"
+              },
+              "userType": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "Member",
+                  "Guest",
+                  null
+                ],
+                "description": "null у части старых учётных записей; правило считает такую учётную запись member."
+              },
+              "roleTemplateIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 36,
+                  "format": "uuid",
+                  "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                },
+                "minItems": 0,
+                "maxItems": 50,
+                "description": "Активные привилегированные роли без временных активаций PIM; пустой список — роль снята.",
+                "uniqueItems": true
+              },
+              "assignment": {
+                "type": "string",
+                "enum": [
+                  "direct",
+                  "group",
+                  "direct_and_group",
+                  "none"
+                ]
+              },
+              "methodKinds": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "password",
+                    "microsoft_authenticator",
+                    "fido2",
+                    "windows_hello_for_business",
+                    "platform_credential",
+                    "software_oath",
+                    "hardware_oath",
+                    "phone",
+                    "external",
+                    "email",
+                    "temporary_access_pass",
+                    "qr_code_pin",
+                    "other"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 13,
+                "uniqueItems": true,
+                "description": "Нормализованные виды зарегистрированных методов; номера телефонов, адреса и названия устройств не сохраняются. null — методы не запрашивались (03, «Правило M365-001 и M365-002»)."
+              }
+            },
+            "required": [
+              "accountEnabled",
+              "userType",
+              "roleTemplateIds",
+              "assignment",
+              "methodKinds"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-003"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "securityDefaults": {
+                "type": "string",
+                "enum": [
+                  "enabled",
+                  "disabled"
+                ]
+              },
+              "conditionalAccess": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "license_missing"
+                ]
+              },
+              "mfaPolicies": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "policyId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 36,
+                      "format": "uuid",
+                      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "enabled",
+                        "enabledForReportingButNotEnforced",
+                        "disabled"
+                      ]
+                    },
+                    "allUsers": {
+                      "type": "boolean"
+                    },
+                    "allApplications": {
+                      "type": "boolean"
+                    },
+                    "excludedApplications": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "conditions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "user_risk",
+                          "sign_in_risk",
+                          "insider_risk",
+                          "locations_trusted_excluded",
+                          "locations_other",
+                          "platforms",
+                          "devices",
+                          "authentication_flows",
+                          "client_applications"
+                        ]
+                      },
+                      "minItems": 0,
+                      "maxItems": 9,
+                      "description": "Заданные условия, которые сужают действие политики; пустой список — без условий.",
+                      "uniqueItems": true
+                    },
+                    "excludedUsersOutsidePolicy": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Пользователи, исключённые прямо, через группы или роли, которых нет в excludedUserIds политики."
+                    },
+                    "unresolvedExclusions": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Исключённые группы и роли, членов которых прочитать не удалось."
+                    },
+                    "allClientAppTypes": {
+                      "type": "boolean"
+                    },
+                    "grantOperator": {
+                      "type": "string",
+                      "enum": [
+                        "AND",
+                        "OR"
+                      ]
+                    },
+                    "grantControls": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "mfa",
+                          "authentication_strength",
+                          "compliant_device",
+                          "domain_joined_device",
+                          "approved_application",
+                          "compliant_application",
+                          "password_change",
+                          "terms_of_use",
+                          "other"
+                        ]
+                      },
+                      "minItems": 1,
+                      "maxItems": 9,
+                      "uniqueItems": true
+                    },
+                    "authStrengthRequiresMfa": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "requirementsSatisfied = mfa у authentication strength политики; null — strength не задана."
+                    }
+                  },
+                  "required": [
+                    "policyId",
+                    "state",
+                    "allUsers",
+                    "allApplications",
+                    "excludedApplications",
+                    "conditions",
+                    "excludedUsersOutsidePolicy",
+                    "unresolvedExclusions",
+                    "allClientAppTypes",
+                    "grantOperator",
+                    "grantControls",
+                    "authStrengthRequiresMfa"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 200,
+                "description": "Политики CA с grant control mfa или authentication strength в любом state."
+              },
+              "perUserMfa": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "required": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "notRequired": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "unknown": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "required",
+                  "notRequired",
+                  "unknown"
+                ],
+                "description": "Счётчики per-user MFA включённых member-пользователей вне excludedUserIds: required — enabled или enforced, notRequired — disabled. null — модуль per_user_mfa не выполнялся."
+              }
+            },
+            "required": [
+              "securityDefaults",
+              "conditionalAccess",
+              "mfaPolicies",
+              "perUserMfa"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-004"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "securityDefaults": {
+                "type": "string",
+                "enum": [
+                  "enabled",
+                  "disabled"
+                ]
+              },
+              "conditionalAccess": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "license_missing"
+                ]
+              },
+              "legacyBlockPolicies": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "policyId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 36,
+                      "format": "uuid",
+                      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "enabled",
+                        "enabledForReportingButNotEnforced",
+                        "disabled"
+                      ]
+                    },
+                    "allUsers": {
+                      "type": "boolean"
+                    },
+                    "allApplications": {
+                      "type": "boolean"
+                    },
+                    "excludedApplications": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "conditions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "user_risk",
+                          "sign_in_risk",
+                          "insider_risk",
+                          "locations_trusted_excluded",
+                          "locations_other",
+                          "platforms",
+                          "devices",
+                          "authentication_flows",
+                          "client_applications"
+                        ]
+                      },
+                      "minItems": 0,
+                      "maxItems": 9,
+                      "description": "Заданные условия, которые сужают действие политики; пустой список — без условий.",
+                      "uniqueItems": true
+                    },
+                    "excludedUsersOutsidePolicy": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Пользователи, исключённые прямо, через группы или роли, которых нет в excludedUserIds политики."
+                    },
+                    "unresolvedExclusions": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Исключённые группы и роли, членов которых прочитать не удалось."
+                    },
+                    "coversExchangeActiveSync": {
+                      "type": "boolean"
+                    },
+                    "coversOtherClients": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "policyId",
+                    "state",
+                    "allUsers",
+                    "allApplications",
+                    "excludedApplications",
+                    "conditions",
+                    "excludedUsersOutsidePolicy",
+                    "unresolvedExclusions",
+                    "coversExchangeActiveSync",
+                    "coversOtherClients"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 200,
+                "description": "Политики CA с grant control block и типами клиентов устаревшей аутентификации."
+              }
+            },
+            "required": [
+              "securityDefaults",
+              "conditionalAccess",
+              "legacyBlockPolicies"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-005"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "globalAdminUserIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 36,
+                  "format": "uuid",
+                  "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                },
+                "minItems": 0,
+                "maxItems": 100,
+                "description": "Включённые учётные записи.",
+                "uniqueItems": true
+              },
+              "disabledGlobalAdminUserIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 36,
+                  "format": "uuid",
+                  "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                },
+                "minItems": 0,
+                "maxItems": 100,
+                "uniqueItems": true
+              },
+              "unresolvedGroupAssignments": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "globalAdminUserIds",
+              "disabledGlobalAdminUserIds",
+              "unresolvedGroupAssignments"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-006"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "permissionGrantPolicies": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "pattern": "^ManagePermissionGrantsForSelf\\.[A-Za-z0-9._-]+$"
+                },
+                "minItems": 0,
+                "maxItems": 20,
+                "description": "Только записи ManagePermissionGrantsForSelf.* из defaultUserRolePermissions.permissionGrantPoliciesAssigned, префикс приведён к этому написанию; пустой список — согласие пользователей выключено.",
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "permissionGrantPolicies"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checkId": {
+            "const": "M365-007"
+          },
+          "collectionStatus": {
+            "const": "collected"
+          }
+        },
+        "required": [
+          "checkId",
+          "collectionStatus"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "accountEnabled": {
+                "type": "boolean"
+              },
+              "userType": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "Member",
+                  "Guest",
+                  null
+                ],
+                "description": "null у части старых учётных записей; правило считает такую учётную запись member."
+              },
+              "directorySyncAccount": {
+                "type": "boolean"
+              },
+              "lastSuccessfulSignInAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 40,
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+              },
+              "createdAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 40,
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
+                "description": "null у части учётных записей, созданных до июня 2018 года."
+              }
+            },
+            "required": [
+              "accountEnabled",
+              "userType",
+              "directorySyncAccount",
+              "lastSuccessfulSignInAt",
+              "createdAt"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "description": "Allowlist данных, которые сборщик M365 сохраняет по каждой проверке. Сервер проверяет наблюдение этой схемой до записи; лишние поля ответа Graph не сохраняются (04, «Минимизация данных»)."
+}
