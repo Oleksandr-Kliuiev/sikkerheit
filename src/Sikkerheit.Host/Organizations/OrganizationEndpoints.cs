@@ -1,0 +1,365 @@
+using System.Globalization;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using Sikkerheit.Contracts;
+using Sikkerheit.Host.Data;
+using Sikkerheit.Host.Operations;
+using Sikkerheit.Host.Platform;
+using Sikkerheit.Host.Reports;
+
+namespace Sikkerheit.Host.Organizations;
+
+/// <summary>Organizations, lifecycle, policy revisions and the audit journal (FR-01, FR-02, FR-03; 05).</summary>
+public static class OrganizationEndpoints
+{
+    public static readonly TimeSpan DeletionDelay = TimeSpan.FromDays(30);
+
+    public static void Map(IEndpointRouteBuilder app)
+    {
+        var api = app.MapGroup("/api/v1");
+        api.MapGet("/organizations", List).RequireStaff(StaffRoles.All);
+        api.MapPost("/organizations", Create).RequireStaff(StaffRoles.AdminOnly);
+        var org = api.MapGroup("/organizations/{organizationId:guid}");
+        org.MapGet("", Get).RequireStaff(StaffRoles.All);
+        org.MapPatch("", Update).RequireStaff(StaffRoles.AdminOnly);
+        org.MapPost("/lifecycle", ChangeLifecycle).RequireStaff(StaffRoles.AdminOnly);
+        org.MapGet("/policy-revisions", ListPolicies).RequireStaff(StaffRoles.All);
+        org.MapPost("/policy-revisions", CreatePolicy).RequireStaff(StaffRoles.AdminOnly);
+        org.MapGet("/audit-events", ListAudit).RequireStaff(StaffRoles.AdminOnly);
+    }
+
+    public static int Limit(string? value)
+    {
+        if (value is null)
+        {
+            return 50;
+        }
+        if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var limit) || limit is < 1 or > 100)
+        {
+            throw new ApiProblemException(ProblemCodes.SchemaViolation, "limit must be an integer 1..100");
+        }
+        return limit;
+    }
+
+    /// <summary>Loads the organization of the path in its scope; deleted or foreign organizations are 404.</summary>
+    public static async Task<Organization> RequireOrganizationAsync(DbScope scope, bool forUpdate, CancellationToken ct)
+    {
+        var id = scope.OrganizationId!.Value;
+        var query = forUpdate
+            ? scope.Db.Organizations.FromSqlInterpolated($"select * from organization where id = {id} for update")
+            : scope.Db.Organizations.Where(o => o.Id == id);
+        return await query.SingleOrDefaultAsync(ct) ?? throw new ApiProblemException(ProblemCodes.NotFound);
+    }
+
+    /// <summary>Changes other than lifecycle, export and disconnect are refused while the organization is inactive.</summary>
+    public static void RequireActive(Organization organization)
+    {
+        if (organization.Status != "active")
+        {
+            throw new ApiProblemException(ProblemCodes.LifecycleTransitionForbidden, "organization is " + organization.Status);
+        }
+    }
+
+    private static async Task<IResult> List(HttpContext http, DbScopes scopes, Cursors cursors, TimeProvider clock,
+        string? cursor, string? limit, CancellationToken ct)
+    {
+        var size = Limit(limit);
+        var position = cursors.Read(cursor, "listOrganizations", null, "");
+        await using var scope = await scopes.ReadAllAsync(ct);
+        await using var command = new NpgsqlCommand("""
+            select o.id, o.name, o.timezone, o.report_language, o.status, o.deletion_due_at, o.created_at,
+                   coalesce(t.status, 'not_connected'), t.last_collected_at,
+                   (select count(*) from finding f where f.organization_id = o.id and f.technical_state = 'open'
+                       and f.severity = 'critical')::int,
+                   (select count(*) from finding f where f.organization_id = o.id and f.technical_state = 'open'
+                       and f.severity = 'warning')::int
+            from organization o
+            left join tenant_connection t on t.organization_id = o.id
+            where @after_name::text is null or (o.name, o.id) > (@after_name::text, @after_id::uuid)
+            order by o.name, o.id
+            limit @take
+            """, scope.Connection, scope.Transaction);
+        command.Parameters.AddWithValue("after_name", (object?)position?[0] ?? DBNull.Value);
+        command.Parameters.AddWithValue("after_id", position is null ? DBNull.Value : Guid.Parse(position[1]));
+        command.Parameters.AddWithValue("take", size + 1);
+        var items = new List<OrganizationOverviewDto>();
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                var organization = new OrganizationDto(
+                    reader.GetGuid(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4),
+                    reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5), reader.GetFieldValue<DateTimeOffset>(6));
+                items.Add(new OrganizationOverviewDto(organization, reader.GetString(7),
+                    reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8), reader.GetInt32(9),
+                    reader.GetInt32(10), 0, null));
+            }
+        }
+        string? next = null;
+        var hasMore = items.Count > size;
+        if (hasMore)
+        {
+            items.RemoveAt(size);
+        }
+        // coverageAt now — the same calculation as the report (05 «Отчёт и покрытие»).
+        var now = clock.GetUtcNow();
+        for (var i = 0; i < items.Count; i++)
+        {
+            var coverage = await Coverage.AtAsync(scope, items[i].Organization.Id, now, ct);
+            items[i] = items[i] with { CoverageAt = coverage.CoverageAt };
+        }
+        if (hasMore)
+        {
+            var last = items[^1].Organization;
+            next = cursors.Create("listOrganizations", null, "", [last.Name, last.Id.ToString()]);
+        }
+        return Results.Json(new Page<OrganizationOverviewDto>(items, next), ApiJson.Options);
+    }
+
+    private static async Task<IResult> Create(HttpContext http, RequestBodies bodies, DbScopes scopes,
+        PolicyRules policy, TimeProvider clock, CancellationToken ct)
+    {
+        var actor = Actor.From(http.User);
+        var body = (await bodies.ReadAsync<OrganizationCreateBody>(http, "OrganizationCreate")).Value;
+        RequireTimezone(body.Timezone);
+        var now = clock.GetUtcNow();
+        var organization = new Organization
+        {
+            Id = Guid.CreateVersion7(), Name = body.Name, Timezone = body.Timezone, ReportLanguage = body.ReportLanguage,
+            Status = "active", CreatedAt = now, NextPolicyVersion = 2,
+        };
+        await using var scope = await scopes.OrganizationAsync(organization.Id, ct);
+        scope.Db.Organizations.Add(organization);
+        scope.Db.PolicyRevisions.Add(new PolicyRevision
+        {
+            OrganizationId = organization.Id, Version = 1, EffectiveFrom = now, CreatedAt = now,
+            CreatedBy = actor.EntraUserId, Configuration = policy.DefaultConfiguration,
+        });
+        scope.Db.TenantConnections.Add(new TenantConnection { OrganizationId = organization.Id, Status = "not_connected" });
+        AuditLog.Staff(scope, actor, "organization.create", "organization", organization.Id.ToString(), http.TraceIdentifier);
+        await scope.CommitAsync(ct);
+        return Results.Json(OrganizationDto.From(organization), ApiJson.Options, statusCode: StatusCodes.Status201Created);
+    }
+
+    private static async Task<IResult> Get(Guid organizationId, DbScopes scopes, CancellationToken ct)
+    {
+        await using var scope = await scopes.OrganizationAsync(organizationId, ct);
+        var organization = await RequireOrganizationAsync(scope, forUpdate: false, ct);
+        return Results.Json(OrganizationDto.From(organization), ApiJson.Options);
+    }
+
+    private static async Task<IResult> Update(Guid organizationId, HttpContext http, RequestBodies bodies,
+        DbScopes scopes, CancellationToken ct)
+    {
+        var actor = Actor.From(http.User);
+        var body = (await bodies.ReadAsync<OrganizationUpdateBody>(http, "OrganizationUpdate")).Value;
+        if (body.Timezone is not null)
+        {
+            RequireTimezone(body.Timezone);
+        }
+        await using var scope = await scopes.OrganizationAsync(organizationId, ct);
+        var organization = await RequireOrganizationAsync(scope, forUpdate: true, ct);
+        RequireActive(organization);
+        organization.Name = body.Name ?? organization.Name;
+        organization.Timezone = body.Timezone ?? organization.Timezone;
+        organization.ReportLanguage = body.ReportLanguage ?? organization.ReportLanguage;
+        AuditLog.Staff(scope, actor, "organization.update", "organization", organizationId.ToString(), http.TraceIdentifier);
+        await scope.CommitAsync(ct);
+        return Results.Json(OrganizationDto.From(organization), ApiJson.Options);
+    }
+
+    private static async Task<IResult> ChangeLifecycle(Guid organizationId, HttpContext http, RequestBodies bodies,
+        DbScopes scopes, ISecurityLog securityLog, TimeProvider clock, CancellationToken ct)
+    {
+        const string operation = "changeOrganizationLifecycle";
+        var actor = Actor.From(http.User);
+        var request = await bodies.ReadAsync<LifecycleChangeBody>(http, "OrganizationLifecycleChange");
+        var body = request.Value;
+        var now = clock.GetUtcNow();
+        await using var scope = await scopes.OrganizationAsync(organizationId, ct);
+        var organization = await RequireOrganizationAsync(scope, forUpdate: true, ct);
+        var replay = await Idempotency.FindReplayAsync(scope, operation, body.IdempotencyKey, request.RawHash, now, ct);
+        if (replay is not null)
+        {
+            return Results.Text(replay.ResponseBody!, "application/json", statusCode: replay.ResponseStatus);
+        }
+
+        string? logAction = null;
+        switch (body.Action, organization.Status)
+        {
+            case ("disable", "active"):
+                logAction = "organization.disable";
+                break;
+            case ("enable", "disabled"):
+                break;
+            case ("schedule_deletion", "disabled"):
+                if (body.ExportWaived != true && !await HasExportSinceDisableAsync(scope, organization, ct))
+                {
+                    throw new ApiProblemException(ProblemCodes.LifecycleTransitionForbidden,
+                        "an export after disabling or exportWaived=true is required");
+                }
+                logAction = "organization.schedule_deletion";
+                break;
+            case ("cancel_deletion", "deletion_scheduled") when organization.DeletionDueAt > now:
+                logAction = "organization.cancel_deletion";
+                break;
+            default:
+                throw new ApiProblemException(ProblemCodes.LifecycleTransitionForbidden,
+                    $"{body.Action} is not allowed from {organization.Status}");
+        }
+
+        var dueAt = body.Action == "schedule_deletion" ? now + DeletionDelay : (DateTimeOffset?)null;
+        if (logAction is not null)
+        {
+            // The record is created before the state changes; without it the restrictive action does not happen.
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromSeconds(5));
+                await securityLog.AppendAsync(new SecurityLogRecord(
+                    Guid.CreateVersion7(), logAction, organizationId, "organization", organizationId.ToString(), now,
+                    http.TraceIdentifier, actor.EntraUserId, DeletionDueAt: dueAt), timeout.Token);
+            }
+            catch (Exception error) when (error is SecurityLogUnavailableException or OperationCanceledException
+                                          && !ct.IsCancellationRequested)
+            {
+                throw new ApiProblemException(ProblemCodes.TemporarilyUnavailable, "security log is unavailable");
+            }
+        }
+
+        switch (body.Action)
+        {
+            case "disable":
+                organization.Status = "disabled";
+                organization.DisabledAt = now;
+                break;
+            case "enable":
+                organization.Status = "active";
+                break;
+            case "schedule_deletion":
+                organization.Status = "deletion_scheduled";
+                organization.DeletionDueAt = dueAt;
+                break;
+            case "cancel_deletion":
+                organization.Status = "disabled";
+                organization.DeletionDueAt = null;
+                break;
+        }
+        var response = ApiJson.Serialize(OrganizationDto.From(organization));
+        await Idempotency.RecordAsync(scope, operation, body.IdempotencyKey, request.RawHash, 200,
+            organizationId.ToString(), response, now, ct);
+        AuditLog.Staff(scope, actor, "organization.lifecycle_change", "organization", organizationId.ToString(),
+            http.TraceIdentifier, new LifecycleAuditDetails(body.Action, body.Reason, body.ExportWaived == true));
+        await scope.CommitAsync(ct);
+        return Results.Text(response, "application/json", statusCode: StatusCodes.Status200OK);
+    }
+
+    private static async Task<bool> HasExportSinceDisableAsync(DbScope scope, Organization organization, CancellationToken ct)
+    {
+        var since = organization.DisabledAt ?? DateTimeOffset.MaxValue;
+        return await scope.Db.OrganizationExports.AnyAsync(
+            e => e.OrganizationId == organization.Id && e.CreatedAt >= since && (e.State == "ready" || e.State == "expired"), ct);
+    }
+
+    private static async Task<IResult> ListPolicies(Guid organizationId, DbScopes scopes, Cursors cursors,
+        string? cursor, string? limit, CancellationToken ct)
+    {
+        var size = Limit(limit);
+        var position = cursors.Read(cursor, "listPolicyRevisions", organizationId, "");
+        await using var scope = await scopes.OrganizationAsync(organizationId, ct);
+        await RequireOrganizationAsync(scope, forUpdate: false, ct);
+        var query = scope.Db.PolicyRevisions.AsNoTracking().Where(p => p.OrganizationId == organizationId);
+        if (position is not null)
+        {
+            var before = int.Parse(position[0], CultureInfo.InvariantCulture);
+            query = query.Where(p => p.Version < before);
+        }
+        var rows = await query.OrderByDescending(p => p.Version).Take(size + 1).ToListAsync(ct);
+        string? next = null;
+        if (rows.Count > size)
+        {
+            rows.RemoveAt(size);
+            next = cursors.Create("listPolicyRevisions", organizationId, "",
+                [rows[^1].Version.ToString(CultureInfo.InvariantCulture)]);
+        }
+        return Results.Json(new Page<PolicyRevisionDto>(rows.Select(PolicyRevisionDto.From).ToList(), next), ApiJson.Options);
+    }
+
+    private static async Task<IResult> CreatePolicy(Guid organizationId, HttpContext http, RequestBodies bodies,
+        DbScopes scopes, TimeProvider clock, CancellationToken ct)
+    {
+        var actor = Actor.From(http.User);
+        var ifMatch = http.Request.Headers.IfMatch.ToString();
+        if (ifMatch.Length == 0)
+        {
+            throw new ApiProblemException(ProblemCodes.IfMatchRequired);
+        }
+        var body = (await bodies.ReadAsync<PolicyRevisionCreateBody>(http, "PolicyRevisionCreate")).Value;
+        PolicyRules.Validate(body.Configuration);
+        var now = clock.GetUtcNow();
+        await using var scope = await scopes.OrganizationAsync(organizationId, ct);
+        var organization = await RequireOrganizationAsync(scope, forUpdate: true, ct);
+        RequireActive(organization);
+        var current = await scope.Db.PolicyRevisions.Where(p => p.OrganizationId == organizationId)
+            .MaxAsync(p => p.Version, ct);
+        if (ifMatch != $"\"{current}\"")
+        {
+            throw new ApiProblemException(ProblemCodes.RevisionMismatch, $"current revision is {current}");
+        }
+        var revision = new PolicyRevision
+        {
+            OrganizationId = organizationId, Version = organization.NextPolicyVersion, EffectiveFrom = now,
+            CreatedAt = now, CreatedBy = actor.EntraUserId, Configuration = body.Configuration.GetRawText(),
+        };
+        organization.NextPolicyVersion++;
+        scope.Db.PolicyRevisions.Add(revision);
+        await JobQueue.EnqueueAsync(scope, "recalculate_policy", organizationId,
+            "policy:" + revision.Version.ToString(CultureInfo.InvariantCulture), null, now, ct);
+        AuditLog.Staff(scope, actor, "policy.revision_create", "policy_revision",
+            revision.Version.ToString(CultureInfo.InvariantCulture), http.TraceIdentifier);
+        await scope.CommitAsync(ct);
+        http.Response.Headers.ETag = $"\"{revision.Version}\"";
+        return Results.Json(PolicyRevisionDto.From(revision), ApiJson.Options, statusCode: StatusCodes.Status201Created);
+    }
+
+    private static async Task<IResult> ListAudit(Guid organizationId, HttpContext http, DbScopes scopes,
+        Cursors cursors, string? cursor, string? limit, CancellationToken ct)
+    {
+        var actor = Actor.From(http.User);
+        var size = Limit(limit);
+        var position = cursors.Read(cursor, "listAuditEvents", organizationId, "");
+        await using var scope = await scopes.OrganizationAsync(organizationId, ct);
+        await RequireOrganizationAsync(scope, forUpdate: false, ct);
+        var query = scope.Db.AuditEvents.AsNoTracking().Where(e => e.OrganizationId == organizationId);
+        if (position is not null)
+        {
+            var before = DateTimeOffset.Parse(position[0], CultureInfo.InvariantCulture);
+            var beforeId = Guid.Parse(position[1]);
+            query = query.Where(e => e.OccurredAt < before || (e.OccurredAt == before && e.Id.CompareTo(beforeId) < 0));
+        }
+        var rows = await query.OrderByDescending(e => e.OccurredAt).ThenByDescending(e => e.Id).Take(size + 1).ToListAsync(ct);
+        string? next = null;
+        if (rows.Count > size)
+        {
+            rows.RemoveAt(size);
+            next = cursors.Create("listAuditEvents", organizationId, "",
+                [rows[^1].OccurredAt.ToString("O", CultureInfo.InvariantCulture), rows[^1].Id.ToString()]);
+        }
+        // Every read of the journal is itself audited (x-audit-read).
+        AuditLog.Staff(scope, actor, "audit_events.read", "organization", organizationId.ToString(), http.TraceIdentifier);
+        await scope.CommitAsync(ct);
+        return Results.Json(new Page<AuditEventDto>(rows.Select(AuditEventDto.From).ToList(), next), ApiJson.Options);
+    }
+
+    private static void RequireTimezone(string timezone)
+    {
+        var known = timezone is "UTC" or "Etc/UTC"
+                    || (timezone.Contains('/', StringComparison.Ordinal)
+                        && TimeZoneInfo.TryConvertIanaIdToWindowsId(timezone, out _)
+                        && TimeZoneInfo.TryFindSystemTimeZoneById(timezone, out _));
+        if (!known)
+        {
+            throw new ApiProblemException(ProblemCodes.ValidationFailed, "timezone must be an IANA time zone");
+        }
+    }
+}

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Sikkerheit.Contracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\development-package\specs\openapi.json" LogicalName="Sikkerheit.Contracts.openapi.json" />
+    <EmbeddedResource Include="..\..\development-package\specs\graph-observation.schema.json" LogicalName="Sikkerheit.Contracts.graph-observation.schema.json" />
+    <EmbeddedResource Include="..\..\development-package\specs\graph-collection.schema.json" LogicalName="Sikkerheit.Contracts.graph-collection.schema.json" />
+    <EmbeddedResource Include="..\..\development-package\specs\observation.schema.json" LogicalName="Sikkerheit.Contracts.observation.schema.json" />
+    <EmbeddedResource Include="..\..\development-package\specs\scan-batch.schema.json" LogicalName="Sikkerheit.Contracts.scan-batch.schema.json" />
+    <EmbeddedResource Include="..\..\development-package\specs\check-catalog.json" LogicalName="Sikkerheit.Contracts.check-catalog.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" />
+  </ItemGroup>
+</Project>

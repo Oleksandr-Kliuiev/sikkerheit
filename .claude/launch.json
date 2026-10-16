@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "export PATH=\"$HOME/.dotnet:$PATH\" DOTNET_ROOT=\"$HOME/.dotnet\" DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 ASPNETCORE_ENVIRONMENT=Development && cd src/Sikkerheit.Host && dotnet run --no-launch-profile --urls http://localhost:5080"],
+      "port": 5080
+    },
+    {
+      "name": "portal",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "export PATH=\"$HOME/.local/opt/node24/bin:$PATH\" && cd src/Portal && npm run dev"],
+      "port": 5173
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Standard validators
+        run: python -m pip install --disable-pip-version-check "jsonschema[format-nongpl]" openapi-spec-validator
+      - name: Validate the Development Package
+        run: python -I development-package/scripts/validate_package.py
+      - name: Generated C# catalog is current
+        run: python -I tools/contracts/gen_csharp_catalog.py --check
+      - name: No invisible or bidirectional characters in sources
+        run: python -I tools/lint/check_source_text.py
+
+  service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore with lock files
+        run: dotnet restore Sikkerheit.slnx --locked-mode
+      - name: Build
+        run: dotnet build Sikkerheit.slnx --no-restore -c Release
+      - name: Unit tests
+        run: dotnet test --project tests/Sikkerheit.UnitTests --no-build -c Release
+      - name: Integration tests (PostgreSQL in a container)
+        run: dotnet test --project tests/Sikkerheit.IntegrationTests --no-build -c Release
+
+  portal:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/Portal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/Portal/package-lock.json
+      - name: Install with the lock file
+        run: npm ci --ignore-scripts
+      - name: API types are generated from the current OpenAPI
+        run: npm run gen:api && git diff --exit-code src/api/schema.d.ts
+      - name: Lint (no dangerouslySetInnerHTML, no inline styles)
+        run: npm run lint
+      - name: Type check
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npx vite build

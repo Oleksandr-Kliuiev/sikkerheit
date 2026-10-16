@@ -96,9 +96,28 @@
 - Журнал принятых и отклонённых замечаний — вне пакета, `docs/reviews/`.
 - Нейтральность: перед выпуском поиск по пакету имён рецензентов и моделей, ID замечаний и ссылок на `docs/`.
 
-### Начало реализации P1
+### Код сервиса, портала и инфраструктуры
 
-`02` → «Компоненты», «Структура репозитория»; `07` → «Правила этапов и гейты», «P0: подготовка», «Backlog и зависимости»; `08` → «Архитектурные решения». Кода пока нет; когда появится, добавить сюда разделы по коду.
+Обзор и команды — `dev/README.md` (путь от `docs/`); развёртывание — `../infra/README.md`. Модули сервиса — папки проекта `src/Sikkerheit.Host`:
+
+| Задача | Код | Тесты |
+| --- | --- | --- |
+| Контракт, схемы, каталог | `src/Sikkerheit.Contracts` (`ContractSchemas`, `Catalog.g.cs` из `tools/contracts/gen_csharp_catalog.py`) | `tests/Sikkerheit.UnitTests/Contracts` |
+| Схема БД, RLS, области | `Data/Migrations/0001_p1_core.sql`, `Data/DbScopes.cs`, `Data/SchemaMigrator.cs`, `Data/DatabaseConnections.cs` (вход Entra) | `RowLevelSecurityTests` |
+| Организации, политика, жизненный цикл | `Organizations/` | `OrganizationApiTests` |
+| Вход сотрудников, сессии, CSRF | `Access/` (`LoginEndpoints`, `StaffIdentity`, `StaffSessions`) | `StaffSignInTests` |
+| Сбор Microsoft 365 | `M365/` (`GraphClient`, `M365Collector`, `M365CollectionJob`, `ConnectionEndpoints`) | `M365CollectionTests`, `Infrastructure/FakeGraph.cs` |
+| Правила, оценки, проблемы, пересчёт политики | `Assessment/` (`Rules`, `FindingMachine`, `M365Evaluator`, `RecalculatePolicyJob`, `FindingEndpoints`, `Texts`) | `M365RulesTests`, `FindingApiTests` |
+| Отчёт, покрытие, сводка Teams | `Reports/` (`Coverage`, `ReportBuilder`, `ReportHtml`, `ReportService`, `TeamsDigest`) | `Reports/*Tests`, `ReportApiTests`, `LifecycleJobTests` |
+| Экспорт, удаление, сроки хранения | `Exports/`, `Jobs/DataLifecycleJobs.cs` | `LifecycleJobTests` |
+| Задания и планировщик | `Jobs/` (`JobRunner`, `Scheduler`, `SweepJobs`) | `ReportPeriodTests`, интеграционные тесты заданий |
+| Журнал безопасности, аудит, файлы, идемпотентность | `Operations/` | через API-тесты |
+| Problem, курсоры, заголовки, телеметрия | `Platform/` | `PortalHostingTests` |
+| Портал | `src/Portal/src` (`pages/`, `components/`, `api/schema.d.ts` из OpenAPI, строки `i18n/*.json`) | `src/Portal/src/**/*.test.ts` |
+| Azure | `infra/bicep/main.bicep` и `modules/`, `infra/scripts/setup.sh`, `deploy-app.sh` | `az bicep build` |
+| Локальная разработка | `tools/dev/` (база в Docker, демо-данные), `.claude/launch.json` | — |
+
+Отступления реализации от пакета и вопросы к 0.3.1 — `reviews/0.3.0-decisions.md`, раздел «Реализация P1».
 
 ### Журналы и отчёты (вне пакета)
 

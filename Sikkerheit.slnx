@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sikkerheit.Contracts/Sikkerheit.Contracts.csproj" />
+    <Project Path="src/Sikkerheit.Host/Sikkerheit.Host.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sikkerheit.IntegrationTests/Sikkerheit.IntegrationTests.csproj" />
+    <Project Path="tests/Sikkerheit.UnitTests/Sikkerheit.UnitTests.csproj" />
+  </Folder>
+</Solution>

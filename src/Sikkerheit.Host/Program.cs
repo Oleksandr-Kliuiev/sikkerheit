@@ -1,0 +1,196 @@
+using System.Security.Cryptography;
+using Azure.Identity;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
+using Npgsql;
+using Sikkerheit.Contracts;
+using Sikkerheit.Host.Access;
+using Sikkerheit.Host.Data;
+using Sikkerheit.Host.Jobs;
+using Sikkerheit.Host.M365;
+using Sikkerheit.Host.Operations;
+using Sikkerheit.Host.Organizations;
+using Sikkerheit.Host.Platform;
+using Sikkerheit.Host.Reports;
+
+var builder = WebApplication.CreateBuilder(args);
+var configuration = builder.Configuration;
+var environment = builder.Environment;
+
+var developmentLogin = configuration.GetValue("Auth:DevelopmentLogin", false);
+if (developmentLogin && !(environment.IsDevelopment() || environment.IsEnvironment("Testing")))
+{
+    throw new InvalidOperationException("Auth:DevelopmentLogin is allowed only in Development or Testing");
+}
+var appConnection = configuration.GetConnectionString("Sikkerheit")
+    ?? throw new InvalidOperationException("ConnectionStrings:Sikkerheit is required");
+var entraDatabase = configuration.GetValue("Database:EntraAuth", false);
+
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 1024 * 1024);
+builder.Services.ConfigureHttpJsonOptions(options => ApiJson.Configure(options.SerializerOptions));
+builder.Services.AddSingleton(TimeProvider.System);
+Telemetry.Add(builder.Services, configuration);
+builder.Services.AddSingleton(_ =>
+    DatabaseConnections.Create(appConnection, entraDatabase, configuration["Database:ManagedIdentityClientId"]));
+builder.Services.AddSingleton<DbScopes>();
+builder.Services.AddSingleton<SchemaMigrator>();
+builder.Services.AddSingleton<ContractSchemas>();
+builder.Services.AddSingleton<RequestBodies>();
+builder.Services.AddSingleton<PolicyRules>();
+builder.Services.AddSingleton<StaffSessions>();
+var entra = configuration.GetSection("Auth:Entra").Get<EntraOptions>() ?? new EntraOptions();
+builder.Services.AddSingleton(entra);
+builder.Services.AddSingleton<IStaffIdentityProvider>(sp => entra.Configured
+    ? new EntraStaffIdentityProvider(entra, sp.GetRequiredService<TimeProvider>(), sp.GetRequiredService<ILogger<EntraStaffIdentityProvider>>())
+    : new UnconfiguredStaffIdentityProvider());
+ConfigureDataProtection(builder.Services, configuration, environment);
+builder.Services.AddSingleton(_ => new Cursors(CursorKey(configuration, environment)));
+builder.Services.AddSingleton(SecurityLog(configuration, environment));
+builder.Services.AddSingleton(FileStore(configuration, environment));
+var m365 = configuration.GetSection("M365").Get<M365Options>() ?? new M365Options();
+builder.Services.AddSingleton(m365);
+builder.Services.AddSingleton(new GraphRetryPolicy());
+builder.Services.AddSingleton<GraphLimiter>();
+builder.Services.AddSingleton(new CollectorOptions { PerUserMfa = m365.PerUserMfa });
+builder.Services.AddHttpClient<GraphClient>();
+builder.Services.AddHttpClient<ITenantResolver, OpenIdTenantResolver>();
+builder.Services.AddSingleton<IGraphTokenProvider>(sp => string.IsNullOrEmpty(m365.ClientId) || string.IsNullOrEmpty(m365.KeyVaultUri)
+    ? new UnconfiguredGraphTokenProvider()
+    : new KeyVaultGraphTokenProvider(m365, sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddTransient<M365Collector>();
+builder.Services.AddTransient<IJobHandler, M365CollectionJob>();
+builder.Services.AddTransient<IJobHandler, FreshnessSweepJob>();
+builder.Services.AddTransient<IJobHandler, ReviewExpiryJob>();
+builder.Services.AddTransient<IJobHandler, Sikkerheit.Host.Assessment.RecalculatePolicyJob>();
+builder.Services.AddTransient<ReportService>();
+builder.Services.AddTransient<IJobHandler>(sp => sp.GetRequiredService<ReportService>());
+builder.Services.AddTransient<IJobHandler, WeeklyReportJob>();
+builder.Services.AddTransient<IJobHandler, Sikkerheit.Host.Exports.OrganizationExportJob>();
+builder.Services.AddTransient<IJobHandler, OrganizationDeleteJob>();
+builder.Services.AddTransient<IJobHandler, RetentionPurgeJob>();
+builder.Services.AddTransient<IJobHandler, TeamsDigestJob>();
+builder.Services.AddSingleton(configuration.GetSection("Teams").Get<TeamsOptions>() ?? new TeamsOptions());
+builder.Services.AddHttpClient(TeamsDigestJob.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddSingleton<JobRunner>();
+builder.Services.AddSingleton<Scheduler>();
+if (configuration.GetValue("Jobs:Enabled", false))
+{
+    // Only the production slot runs jobs (02 «Развёртывание и окружения»). Development may run queued jobs
+    // (reports, exports) without the scheduler.
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<JobRunner>());
+    if (configuration.GetValue("Jobs:SchedulerEnabled", true))
+    {
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<Scheduler>());
+    }
+}
+builder.Services.AddAuthentication(SessionAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(SessionAuthenticationHandler.SchemeName, null);
+builder.Services.AddAuthorization();
+
+var app = builder.Build();
+
+if (configuration.GetValue("Database:MigrateOnStart", false))
+{
+    var owner = configuration.GetConnectionString("SikkerheitOwner")
+        ?? throw new InvalidOperationException("ConnectionStrings:SikkerheitOwner is required to migrate");
+    await using var ownerSource = DatabaseConnections.Create(owner, entraDatabase, configuration["Database:OwnerIdentityClientId"]);
+    var principals = configuration.GetSection("Database:AppPrincipals").Get<DatabasePrincipal[]>() ?? [];
+    await app.Services.GetRequiredService<SchemaMigrator>()
+        .MigrateAsync(ownerSource, configuration["Database:AppRole"] ?? "sikkerheit_app", principals, CancellationToken.None);
+}
+
+app.UseMiddleware<SecurityHeadersMiddleware>();
+app.UseMiddleware<ProblemMiddleware>();
+app.UseMiddleware<HostRoutingMiddleware>();
+if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
+{
+    app.UseHsts();
+}
+PortalFiles.Use(app);
+app.UseAuthentication();
+app.UseMiddleware<CsrfMiddleware>();
+app.UseAuthorization();
+
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+AccessEndpoints.Map(app, developmentLogin);
+if (entra.Configured)
+{
+    LoginEndpoints.Map(app);
+}
+else if (environment.IsProduction())
+{
+    throw new InvalidOperationException("Auth:Entra (TenantId, ClientId, RedirectUri) is required in Production");
+}
+OrganizationEndpoints.Map(app);
+ConnectionEndpoints.Map(app);
+Sikkerheit.Host.Assessment.FindingEndpoints.Map(app);
+ReportEndpoints.Map(app);
+Sikkerheit.Host.Exports.OrganizationExports.Map(app);
+app.MapFallback("/api/{**path}", (HttpContext http) => Problems.Result(http, ProblemCodes.NotFound));
+app.MapFallback("/auth/{**path}", (HttpContext http) => Problems.Result(http, ProblemCodes.NotFound));
+PortalFiles.MapFallback(app);
+
+app.Run();
+
+// The security log: an immutable Blob container in Azure (06), files in development and tests.
+static ISecurityLog SecurityLog(IConfiguration configuration, IHostEnvironment environment)
+{
+    var container = configuration["SecurityLog:ContainerUri"];
+    if (!string.IsNullOrEmpty(container))
+    {
+        return new BlobSecurityLog(new Uri(container), new DefaultAzureCredential());
+    }
+    if (environment.IsProduction())
+    {
+        throw new InvalidOperationException("SecurityLog:ContainerUri is required in Production");
+    }
+    return new FileSecurityLog(configuration["SecurityLog:Directory"] ?? Path.Combine(Path.GetTempPath(), "sikkerheit-security-log"));
+}
+
+// Keys protecting the staff token caches: a private Blob with keys wrapped by Key Vault in Azure (06).
+static void ConfigureDataProtection(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+{
+    var dataProtection = services.AddDataProtection().SetApplicationName("Sikkerheit");
+    var blob = configuration["DataProtection:BlobUri"];
+    var key = configuration["DataProtection:KeyVaultKeyId"];
+    if (!string.IsNullOrEmpty(blob) && !string.IsNullOrEmpty(key))
+    {
+        var credential = new DefaultAzureCredential();
+        dataProtection.PersistKeysToAzureBlobStorage(new Uri(blob), credential).ProtectKeysWithAzureKeyVault(new Uri(key), credential);
+    }
+    else if (environment.IsProduction())
+    {
+        throw new InvalidOperationException("DataProtection:BlobUri and DataProtection:KeyVaultKeyId are required in Production");
+    }
+}
+
+// Reports and exports: private Blob containers by managed identity in Azure, a local directory in development.
+static IFileStore FileStore(IConfiguration configuration, IHostEnvironment environment)
+{
+    var account = configuration["Storage:BlobServiceUri"];
+    if (!string.IsNullOrEmpty(account))
+    {
+        return new BlobFileStore(new Uri(account));
+    }
+    if (environment.IsProduction())
+    {
+        throw new InvalidOperationException("Storage:BlobServiceUri is required in Production");
+    }
+    return new LocalFileStore(configuration["Storage:LocalDirectory"] ?? Path.Combine(Path.GetTempPath(), "sikkerheit-files"));
+}
+
+static byte[] CursorKey(IConfiguration configuration, IHostEnvironment environment)
+{
+    var configured = configuration["Cursors:Key"];
+    if (!string.IsNullOrEmpty(configured))
+    {
+        return Convert.FromBase64String(configured);
+    }
+    if (environment.IsProduction())
+    {
+        throw new InvalidOperationException("Cursors:Key is required in Production");
+    }
+    return RandomNumberGenerator.GetBytes(32);
+}
+
+public partial class Program;

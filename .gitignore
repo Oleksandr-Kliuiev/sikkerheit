@@ -2,3 +2,18 @@
 __pycache__/
 # Архив пакета пересобирается build_package.py; sha256 записан в docs/WORKFLOW.md
 /sikkerheit-development-package-*.zip
+# .NET и портал
+bin/
+obj/
+TestResults/
+*.user
+.vs/
+node_modules/
+src/Portal/dist/
+# The built portal is copied into the service at build time (npm run build).
+src/Sikkerheit.Host/wwwroot/
+/.dev/
+# Temporary agent worktrees are removed after merging.
+.claude/worktrees/
+# Deployment outputs of infra/scripts (application ids, host names); no secrets.
+infra/.state/
