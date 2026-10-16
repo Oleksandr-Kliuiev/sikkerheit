@@ -124,6 +124,14 @@ public static class Texts
         ["m365-007.not_applicable.sync_account"] = ("Synkroniseringskontoen til Entra Connect vurderes ikke.", "Synkroniseringskontoen til Entra Connect blir ikkje vurdert.", "The Entra Connect synchronization account is not assessed."),
     };
 
+    static Texts()
+    {
+        // The texts of the Windows and server rules (P2) sit beside the Microsoft 365 ones.
+        foreach (var (key, value) in WindowsTexts.Titles) { Titles[key] = value; }
+        foreach (var (key, value) in WindowsTexts.Recommendations) { Recommendations[key] = value; }
+        foreach (var (key, value) in WindowsTexts.Explanations) { Explanations[key] = value; }
+    }
+
     public static string Title(string checkId, string language) => Pick(Titles, checkId, language) ?? checkId;
 
     public static string Recommendation(string checkId, string language) => Pick(Recommendations, checkId, language) ?? "";

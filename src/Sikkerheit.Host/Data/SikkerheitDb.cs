@@ -24,6 +24,17 @@ public sealed class SikkerheitDb(DbContextOptions<SikkerheitDb> options) : DbCon
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<OrganizationExport> OrganizationExports => Set<OrganizationExport>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+    public DbSet<EnrollmentKey> EnrollmentKeys => Set<EnrollmentKey>();
+    public DbSet<Device> Devices => Set<Device>();
+    public DbSet<DevicePresence> DevicePresences => Set<DevicePresence>();
+    public DbSet<RevokedInstallation> RevokedInstallations => Set<RevokedInstallation>();
+    public DbSet<Enrollment> Enrollments => Set<Enrollment>();
+    public DbSet<ScanBatch> ScanBatches => Set<ScanBatch>();
+    public DbSet<ScanRequest> ScanRequests => Set<ScanRequest>();
+    public DbSet<AgentChallenge> AgentChallenges => Set<AgentChallenge>();
+    public DbSet<AgentSession> AgentSessions => Set<AgentSession>();
+    public DbSet<WindowsRelease> WindowsReleases => Set<WindowsRelease>();
+    public DbSet<WindowsReleaseMonth> WindowsReleaseMonths => Set<WindowsReleaseMonth>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -88,6 +99,29 @@ public sealed class SikkerheitDb(DbContextOptions<SikkerheitDb> options) : DbCon
             e.HasKey(x => new { x.OrganizationId, x.Id });
             e.Property(x => x.Details).HasColumnType("jsonb");
         });
+        model.Entity<EnrollmentKey>(e => { e.ToTable("enrollment_key"); e.HasKey(x => new { x.OrganizationId, x.Id }); });
+        model.Entity<Device>(e =>
+        {
+            e.ToTable("device");
+            e.HasKey(x => new { x.OrganizationId, x.Id });
+            e.Property(x => x.PublicKeyJwk).HasColumnType("jsonb");
+            e.Property(x => x.ConflictPublicKeyJwk).HasColumnType("jsonb");
+            e.Property(x => x.Telemetry).HasColumnType("jsonb");
+        });
+        model.Entity<DevicePresence>(e => { e.ToTable("device_presence"); e.HasKey(x => new { x.OrganizationId, x.DeviceId, x.Day }); });
+        model.Entity<RevokedInstallation>(e => { e.ToTable("revoked_installation"); e.HasKey(x => new { x.OrganizationId, x.InstallationId }); });
+        model.Entity<Enrollment>(e =>
+        {
+            e.ToTable("enrollment");
+            e.HasKey(x => new { x.OrganizationId, x.Id });
+            e.Property(x => x.Response).HasColumnType("jsonb");
+        });
+        model.Entity<ScanBatch>(e => { e.ToTable("scan_batch"); e.HasKey(x => new { x.OrganizationId, x.Id }); });
+        model.Entity<ScanRequest>(e => { e.ToTable("scan_request"); e.HasKey(x => new { x.OrganizationId, x.Id }); });
+        model.Entity<AgentChallenge>(e => { e.ToTable("agent_challenge"); e.HasKey(x => x.NonceHash); });
+        model.Entity<AgentSession>(e => { e.ToTable("agent_session"); e.HasKey(x => x.TokenHash); });
+        model.Entity<WindowsRelease>(e => { e.ToTable("windows_release"); e.HasKey(x => new { x.Product, x.BranchBuild, x.Ubr }); });
+        model.Entity<WindowsReleaseMonth>(e => { e.ToTable("windows_release_month"); e.HasKey(x => x.SecurityMonth); });
 
         // Relationships mirror the foreign keys of the schema so that EF orders inserts correctly.
         model.Entity<StaffSession>().HasOne<StaffUser>().WithMany().HasForeignKey(x => x.EntraUserId);
@@ -107,6 +141,13 @@ public sealed class SikkerheitDb(DbContextOptions<SikkerheitDb> options) : DbCon
         model.Entity<Report>().HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId);
         model.Entity<OrganizationExport>().HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId);
         model.Entity<AuditEvent>().HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId);
+        model.Entity<EnrollmentKey>().HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId);
+        model.Entity<Device>().HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId);
+        model.Entity<DevicePresence>().HasOne<Device>().WithMany().HasForeignKey(x => new { x.OrganizationId, x.DeviceId });
+        model.Entity<RevokedInstallation>().HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId);
+        model.Entity<ScanBatch>().HasOne<Device>().WithMany().HasForeignKey(x => new { x.OrganizationId, x.DeviceId });
+        model.Entity<ScanRequest>().HasOne<Device>().WithMany().HasForeignKey(x => new { x.OrganizationId, x.DeviceId });
+        model.Entity<Enrollment>().HasOne<Device>().WithMany().HasForeignKey(x => new { x.OrganizationId, x.DeviceId });
 
         foreach (var entity in model.Model.GetEntityTypes())
         {

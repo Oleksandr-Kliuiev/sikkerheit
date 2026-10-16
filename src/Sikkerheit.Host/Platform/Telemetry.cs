@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using OpenTelemetry;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
 namespace Sikkerheit.Host.Platform;
@@ -19,6 +20,7 @@ public static class Telemetry
         }
         // The scrubber is registered first, so it runs before the exporter's processor sees a span.
         services.ConfigureOpenTelemetryTracerProvider(tracing => tracing.AddProcessor(new QueryScrubber()));
+        services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddMeter(Agents.AgentMetrics.MeterName));
         services.AddOpenTelemetry().UseAzureMonitor();
     }
 

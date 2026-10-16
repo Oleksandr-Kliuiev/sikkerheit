@@ -25,7 +25,8 @@
 | `Access` | `staff_user`, `staff_session`, `staff_login` |
 | `Organizations` | `organization`, `policy_revision` |
 | `M365` | `tenant_connection`, `collection_run` |
-| `Assessment` | `subject`, `observation`, `assessment`, `finding`, `finding_event`, `risk_decision` |
+| `Assessment` | `subject`, `observation`, `assessment`, `finding`, `finding_event`, `risk_decision`, `windows_release`, `windows_release_month` |
+| `Agents` | `enrollment_key`, `enrollment`, `device`, `device_presence`, `revoked_installation`, `scan_batch`, `scan_request`, `agent_challenge`, `agent_session` |
 | `Reports` | `report`, `teams_digest` |
 | `Exports` | `organization_export` |
 | `Jobs` | `job`, `organization_tombstone` |
@@ -45,6 +46,9 @@
 | | `CollectionRuns.ProjectionRunsAsync`, `LastCollectedBeforeAsync`, `LastFinishedBeforeAsync`, `CountsAsync`, `FailedAsync` | пересчёт политики, отчёт, сводка Teams |
 | `Assessment` | `FindingHistory.StateEventsAsync`, `OpenAtAsync`, `NewCriticalAsync`, `OpenCountsAsync`; `RiskDecisions.LatestBeforeAsync`; `Assessments.LatestAsync`, `DeterminedAsync`; `Subjects.InPeriodAsync` | отчёт, покрытие, сводка Teams, список организаций |
 | | `SubjectRetirement.RetireTenantAsync` | смена tenant в `ConnectionEndpoints` |
+| | `DeviceSubjects.EnsureAsync`, `RenameAsync`, `SeenAsync`, `RetireAsync` — субъекты устройства и его томов; `WindowsEvaluator.IngestAsync`, `RecalculateAsync` — оценка пакета и пересчёт; `ReleaseCatalogStore.ViewAsync`, `RecentlyVerifiedAsync`; `AssessmentData.ObservedBatchesAsync` — пакеты, на которые ссылаются наблюдения | `Agents` (регистрация, check-in, отзыв, приём пакета), `RecalculatePolicyJob`, планировщик |
+| `Agents` | `Devices.FindAsync`, `LockAsync` (блокировка строки устройства — точка сериализации пакетов и заданий), `ActiveAsync`, `UnseenSinceAsync`, `ProjectionBatchAsync`, `ProjectionBatchesAsync`, `BatchPolicyVersionAsync`, `PresenceDaysAsync`, `RecoverIdentitiesAsync` | `Assessment` (пакет, пересчёт, `patch_level_sweep`, `freshness_sweep`), покрытие, задание истечения запросов |
+| | `AgentData.DeleteOrganizationDataAsync`, `ExportAsync`, `PurgeBatchesAsync`, `PurgeRequestsAsync`, `PurgePresenceAsync`, `PurgeDevicesAsync`, `PurgeInstallationsAsync`, `PurgeCredentialsAsync`, `PurgePlatformAsync`; `AgentReplay.RevokeDeviceAsync`, `RevokeKeyAsync` | удаление организации, `RetentionPurgeJob`, экспорт, планировщик, `RestoreReplay` |
 | `Access` | `StaffDirectory.CanBeAssignedAsync`, `NamesAsync` | назначение проблемы, решения в отчёте |
 | `Operations` | `AuditLog.ListAsync` | журнал аудита организации |
 | `Exports` | `OrganizationExports.HasExportSinceAsync` | планирование удаления организации |
@@ -56,9 +60,9 @@
 
 Удаление организации, сроки хранения и экспорт затрагивают все данные организации. Каждая выполняется через методы модулей-владельцев; оркестратор не знает чужих таблиц.
 
-- **Удаление** (`OrganizationDeletion.DeleteAsync`, `Jobs`). Сначала файлы под префиксом организации, затем `DeleteOrganizationDataAsync` владельцев в порядке внешних ключей: `AuditLog`, `ReportService`, `OrganizationExports`, `AssessmentData`, `TenantConnections`, `Idempotency`, `OrganizationLifecycle`. В конце `Jobs` удаляет задания и пишет надгробие.
-- **Сроки хранения** (`RetentionPurgeJob`, `Jobs`). Сначала `AssessmentData.ExpireEvidenceAsync` заменяет старые доказательства базовым снимком. Затем удаление идёт по таблице за шаг в порядке `Catalog.RetentionPurgeOrder`: `AssessmentData.Purge…Async` и `CollectionRuns.PurgeAsync`. Запуски, на которые ещё ссылаются наблюдения, `Assessment` сообщает через `ObservedRunsAsync`. В конце `Idempotency.PurgeAsync`, `AuditLog.PurgeAsync`, `ReportService.PurgeAsync` (файлы и строки) и `OrganizationExports.ExpireAsync`. Шаги в задании записаны словарём таблица → шаг, и контрактный тест INV-071 проверяет, что ключи идут в порядке реестра.
-- **Экспорт** (`OrganizationExports.BuildAsync`, `Exports`). `OrganizationLifecycle`, `TenantConnections`, `AssessmentData`, `ReportService` и `AuditLog` пишут свои таблицы через `TableRowsWriter`; порядок файлов архива прежний. HTML готовых отчётов даёт `ReportService.ReadyAsync`.
+- **Удаление** (`OrganizationDeletion.DeleteAsync`, `Jobs`). Сначала файлы под префиксом организации, затем `DeleteOrganizationDataAsync` владельцев в порядке внешних ключей: `AuditLog`, `ReportService`, `OrganizationExports`, `AssessmentData`, `AgentData` (наблюдения ссылаются на пакеты, поэтому после `AssessmentData`), `TenantConnections`, `Idempotency`, `OrganizationLifecycle`. В конце `Jobs` удаляет задания и пишет надгробие.
+- **Сроки хранения** (`RetentionPurgeJob`, `Jobs`). Сначала `AssessmentData.ExpireEvidenceAsync` заменяет старые доказательства базовым снимком. Затем удаление идёт по таблице за шаг в порядке `Catalog.RetentionPurgeOrder`: `AssessmentData.Purge…Async`, `CollectionRuns.PurgeAsync` и `AgentData.Purge…Async` (пакеты, запросы, присутствие, устройства, отозванные установки; ключи, сессии и регистрации — после реестра). Запуски и пакеты, на которые ещё ссылаются наблюдения, `Assessment` сообщает через `ObservedRunsAsync` и `ObservedBatchesAsync`. В конце `Idempotency.PurgeAsync`, `AuditLog.PurgeAsync`, `ReportService.PurgeAsync` (файлы и строки) и `OrganizationExports.ExpireAsync`. Шаги в задании записаны словарём таблица → шаг, и контрактный тест INV-071 проверяет, что ключи идут в порядке реестра.
+- **Экспорт** (`OrganizationExports.BuildAsync`, `Exports`). `OrganizationLifecycle`, `TenantConnections`, `AssessmentData`, `AgentData`, `ReportService` и `AuditLog` пишут свои таблицы через `TableRowsWriter`; порядок файлов архива прежний. HTML готовых отчётов даёт `ReportService.ReadyAsync`.
 
 ## Как устранены 67 обращений (2026-10-16)
 

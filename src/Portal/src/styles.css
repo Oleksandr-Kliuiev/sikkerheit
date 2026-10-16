@@ -520,6 +520,24 @@ textarea:focus-visible,
   text-align: right;
 }
 
+.actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 0.5rem;
+}
+
+.secret {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
 .table tr.clickable {
   cursor: pointer;
 }

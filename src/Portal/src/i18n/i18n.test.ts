@@ -67,8 +67,17 @@ describe('portal strings', () => {
       ...values('Report', 'state').map((v) => `reportState.${v}`),
       ...values('Report', 'failureCode').map((v) => `reportFailure.${v}`),
       ...values('OrganizationExport', 'state').map((v) => `exportState.${v}`),
-      ...values('Assessment', 'checkId').filter((v) => v.startsWith('M365')).map((v) => `check.${v}`),
+      ...values('Assessment', 'checkId').map((v) => `check.${v}`),
+      ...values('Device', 'status').map((v) => `deviceStatus.${v}`),
+      ...values('Device', 'identityState').map((v) => `identity.${v}`),
+      ...values('Device', 'clockStatus').map((v) => `clock.${v}`),
+      ...values('Device', 'keyProtection').map((v) => `keyProtection.${v}`),
+      ...values('WindowsRelease', 'kind').map((v) => `releaseKind.${v}`),
+      ...values('WindowsRelease', 'state').map((v) => `releaseState.${v}`),
+      ...values('DeviceIdentityResolution', 'decision').map((v) => `devices.decision.${v}`),
     ];
+    const conflict = (schemas.Device!.properties.identityConflict as unknown as { properties: Record<string, { enum: string[] }> }).properties;
+    expected.push(...conflict.kind!.enum.map((v) => `conflictKind.${v}`));
     expect(expected.filter((key) => !(key in dictionaries.nb))).toEqual([]);
   });
 

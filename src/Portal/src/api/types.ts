@@ -18,6 +18,14 @@ export type OrganizationExport = Schemas['OrganizationExport'];
 export type PolicyRevision = Schemas['PolicyRevision'];
 export type PolicyConfiguration = Schemas['PolicyConfiguration'];
 export type Problem = Schemas['Problem'];
+export type Device = Schemas['Device'];
+export type EnrollmentKey = Schemas['EnrollmentKey'];
+export type EnrollmentKeySummary = Schemas['EnrollmentKeySummary'];
+export type ScanRequest = Schemas['ScanRequest'];
+export type WindowsRelease = Schemas['WindowsRelease'];
+export type WindowsReleaseMonth = Schemas['WindowsReleaseMonth'];
+export type WindowsReleaseImport = Schemas['WindowsReleaseImport'];
+export type DeviceDecision = Schemas['DeviceIdentityResolution']['decision'];
 export type Capability = Schemas['Capability'];
 export type Role = CurrentStaff['roles'][number];
 

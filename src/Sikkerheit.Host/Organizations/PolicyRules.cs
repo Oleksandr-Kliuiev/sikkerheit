@@ -105,6 +105,11 @@ public sealed class PolicyRules
         {
             result[name] = Defaults(properties.GetProperty(name));
         }
+        // Optional members that carry a default (notApplicableEditionIds: Home editions for WIN-002) are part of the policy too.
+        foreach (var member in properties.EnumerateObject().Where(m => !result.ContainsKey(m.Name) && m.Value.TryGetProperty("default", out _)))
+        {
+            result[member.Name] = Defaults(member.Value);
+        }
         return result;
     }
 }

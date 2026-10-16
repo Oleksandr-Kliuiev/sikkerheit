@@ -244,7 +244,7 @@ public static class M365Evaluator
         }
     }
 
-    private static string Snapshot(string checkId, string mode, int policyVersion, RuleOutcome outcome, DateTimeOffset observedAt)
+    internal static string Snapshot(string checkId, string mode, int policyVersion, RuleOutcome outcome, DateTimeOffset observedAt)
     {
         var node = new JsonObject
         {

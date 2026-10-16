@@ -103,25 +103,29 @@
 | Задача | Код | Тесты |
 | --- | --- | --- |
 | Контракт, схемы, каталог | `src/Sikkerheit.Contracts` (`ContractSchemas`, `Catalog.g.cs` из `tools/contracts/gen_csharp_catalog.py`) | `tests/Sikkerheit.UnitTests/Contracts` |
-| Схема БД, RLS, области | `Data/Migrations/0001_p1_core.sql`, `Data/DbScopes.cs`, `Data/SchemaMigrator.cs`, `Data/DatabaseConnections.cs` (вход Entra) | `RowLevelSecurityTests` |
+| Схема БД, RLS, области | `Data/Migrations/0001_p1_core.sql` (P1), `0002_p2_agents.sql` (P2: устройства, ключи, сессии, пакеты, каталог выпусков), `Data/DbScopes.cs`, `Data/SchemaMigrator.cs`, `Data/DatabaseConnections.cs` (вход Entra) | `RowLevelSecurityTests` |
 | Организации, политика, жизненный цикл | `Organizations/` (`OrganizationEndpoints`, `OrganizationLifecycle` — переходы и эпоха версий политики, `Policies` — ревизии для других модулей, `OrganizationDirectory`) | `OrganizationApiTests` |
 | Вход сотрудников, сессии, CSRF | `Access/` (`LoginEndpoints`, `StaffIdentity`, `StaffSessions`, `StaffDirectory`) | `StaffSignInTests` |
 | Сбор Microsoft 365 | `M365/` (`GraphClient`, `M365Collector` — в том числе активации PIM, `M365CollectionJob`, `ConnectionEndpoints`, `TenantConnections`, `CollectionRuns`) | `M365CollectionTests`, `Infrastructure/FakeGraph.cs` |
 | Правила, оценки, проблемы, пересчёт политики и `ruleVersion` | `Assessment/` (`Rules`, `FindingMachine`, `M365Evaluator`, `RecalculatePolicyJob`, `SweepJobs`, `FindingEndpoints`, `Texts`, `RoleNames`; чтения для отчётов — `AssessmentReads`) | `M365RulesTests`, `FindingApiTests` |
+| Регистрация и сессия агента, check-in, приём пакета (P2) | `Agents/` (`AgentEnrollment` — challenge, регистрация, сессия; `AgentRequests` — токен, check-in, конфигурация; `ScanIntake` — `submitScan` по порядку из `05`; `AgentCrypto` — подписи, nonce; `AgentLimits` — частота; `AgentMetrics` — метрики) | `AgentApiTests`, `AgentApiInvariantTests`, `Infrastructure/FakeAgent.cs`, `AgentHost.cs` |
+| Устройства, ключи регистрации, разбор идентичности (P2) | `Agents/` (`Devices`, `DeviceEndpoints`, `EnrollmentKeys`, `AgentData` — удаление, экспорт, сроки хранения, `AgentReplay` — повтор журнала безопасности после восстановления, `AgentHealthJob` — оповещения по парку) | `AgentLifecycleTests`, `AgentPortalInvariantTests`, `AgentInfraInvariantTests` |
+| Правила Windows и серверные проверки (P2) | `Assessment/` (`WindowsRules` — WIN-001…011; `WindowsEvaluator` — пакет в наблюдения, оценки и проблемы, эпизод WIN-007; `ServerRules` — таблица жизненного цикла ОС, SYS-002, SYS-003; `ServerChecks` — SYS-001…003 и задание `patch_level_sweep`; `DeviceSubjects`; тексты — `WindowsTexts`) | `WindowsRuleInvariantTests`, `WindowsPipelineInvariantTests`, `WindowsTextsTests` |
+| Каталог выпусков Windows, RB-13 (P2) | `Assessment/` (`ReleaseCatalog` — API, `release_import`, `release_catalog_check`; `ReleaseCatalogStore` — чтение сверенных месяцев и `verifiedThroughMonth`); платформенные таблицы `windows_release`, `windows_release_month` | `AgentLifecycleTests`, `AgentWorkerInvariantTests` |
 | Отчёт, покрытие, сводка Teams | `Reports/` (`Coverage`, `ReportBuilder`, `ReportHtml`, `ReportService`, `TeamsDigest`) | `Reports/*Tests`, `ReportApiTests`, `LifecycleJobTests` |
 | Экспорт, удаление, сроки хранения | `Exports/`, `Jobs/DataLifecycleJobs.cs`; строки модулей — их методы `DeleteOrganizationDataAsync`, `Purge…Async`, `ExportAsync` (`Assessment/AssessmentData.cs` и др.), общий `Data/OrganizationRows.cs` | `LifecycleJobTests`, `WorkerInvariantTests` (INV-071) |
 | Задания и планировщик | `Jobs/` (`JobQueue`, `JobRunner`, `Scheduler`) | `ReportPeriodTests`, интеграционные тесты заданий |
 | Журнал безопасности, аудит, файлы, идемпотентность | `Operations/` | через API-тесты, `InfraInvariantTests` |
 | Восстановление после PITR (RB-05) | `Operations/RestoreReplay.cs`, `RestoreReplayCommand.cs` (`dotnet Sikkerheit.Host.dll restore-replay --since <T>`) | `RestoreReplayTests`, `InfraInvariantTests`, `Operations/RestoreReplayCommandTests` |
-| Негативные тесты реестра инвариантов (WP-01) | `tests/Sikkerheit.ContractTests`: классы по `enforcement`, `Invariants/` (атрибуты, реестр, проверка покрытия), `Support/ContractHost.cs` | `RegistryCoverageTests` |
+| Негативные тесты реестра инвариантов (WP-01, WP-10) | `tests/Sikkerheit.ContractTests`: классы по `enforcement` (для P2 — `AgentApiInvariantTests`, `Windows*InvariantTests`, `AgentWorkerInvariantTests`, `AgentPortalInvariantTests`, `AgentSchemaInvariantTests`, `AgentInfraInvariantTests`), `Invariants/` (атрибуты, реестр, проверка покрытия), `Support/ContractHost.cs` | `RegistryCoverageTests` |
 | Границы модулей | Владельцы таблиц и принятые владельцем исключения (сейчас нет) — `tests/Sikkerheit.UnitTests/Architecture/ModuleBoundaryTests.cs`; интерфейсы модулей и сквозные операции — `dev/module-boundaries.md` | `ModuleBoundaryTests` |
 | Problem, курсоры, заголовки, телеметрия | `Platform/` | `PortalHostingTests` |
-| Портал | `src/Portal/src` (`pages/`, `components/`, `api/schema.d.ts` из OpenAPI, строки `i18n/*.json`) | `src/Portal/src/**/*.test.ts` |
+| Портал | `src/Portal/src` (`pages/`, `components/`, `api/schema.d.ts` из OpenAPI, строки `i18n/*.json`); P2 — `pages/organization/DevicesTab.tsx` (устройства и ключи регистрации), `pages/WindowsReleases.tsx` (каталог выпусков), `lib/devices.ts`, `lib/releases.ts` | `src/Portal/src/**/*.test.ts(x)` |
 | Azure | `infra/bicep/main.bicep` и `modules/`, `infra/scripts/setup.sh`, `deploy-app.sh`, учебное восстановление — `drill.sh`; развёртывание из GitHub по OIDC — `.github/workflows/deploy.yml` | `tools/iac/check_arm.py` (и `--self-test`; проверки восстановления — `restore_checks.py`, помощники — `iac_common.py`, выражения ARM — `arm_eval.py`; тесты скриптов на заглушке `az` — `tools/iac/tests`) |
 | Runbooks P1 (RB-01…RB-07, RB-14) | `runbooks/` (путь от `docs/`): указатель и шаблон протокола — `README.md` | — |
 | Локальная разработка | `tools/dev/` (база в Docker, демо-данные), `.claude/launch.json` | — |
 
-Отступления реализации от пакета и вопросы к 0.3.1 — `reviews/0.3.0-decisions.md`, раздел «Реализация P1».
+Отступления реализации от пакета и вопросы к 0.3.1 — `reviews/0.3.0-decisions.md`, разделы «Реализация P1» и «Реализация P2».
 
 ### Журналы и отчёты (вне пакета)
 

@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Sikkerheit.Contracts;
+using Sikkerheit.Host.Agents;
 using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Jobs;
@@ -184,6 +185,7 @@ public static class OrganizationExports
             await OrganizationLifecycle.ExportAsync(scope, TableAsync, ct);
             await TenantConnections.ExportAsync(scope, TableAsync, ct);
             await AssessmentData.ExportAsync(scope, TableAsync, ct);
+            await AgentData.ExportAsync(scope, TableAsync, ct);
             await ReportService.ExportAsync(scope, TableAsync, ct);
             await AuditLog.ExportAsync(scope, TableAsync, ct);
             var ready = await ReportService.ReadyAsync(scope, ct);

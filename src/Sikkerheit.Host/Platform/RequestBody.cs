@@ -17,6 +17,21 @@ public sealed class RequestBodies(ContractSchemas schemas)
 
     public async Task<ValidatedBody<T>> ReadAsync<T>(HttpContext context, string component, int limit = PortalLimit)
     {
+        var (bytes, json) = await ReadJsonAsync(context, limit);
+        var violations = schemas.ValidateComponent(component, json);
+        if (violations.Count > 0)
+        {
+            var first = violations[0];
+            throw new ApiProblemException(ProblemCodes.SchemaViolation, $"{first.InstanceLocation} {first.Message}".Trim());
+        }
+        var value = json.Deserialize<T>(ApiJson.Options)
+            ?? throw new ApiProblemException(ProblemCodes.SchemaViolation, "empty body");
+        return new ValidatedBody<T>(value, json, Convert.ToHexStringLower(SHA256.HashData(bytes)));
+    }
+
+    /// <summary>Media type, size and JSON syntax only (415, 413, 400): the caller validates the content itself.</summary>
+    public static async Task<(byte[] Bytes, JsonElement Json)> ReadJsonAsync(HttpContext context, int limit)
+    {
         var request = context.Request;
         if (request.Headers.ContentEncoding.Count > 0 || !IsJson(request.ContentType))
         {
@@ -48,15 +63,7 @@ public sealed class RequestBodies(ContractSchemas schemas)
         {
             throw new ApiProblemException(ProblemCodes.InvalidJson);
         }
-        var violations = schemas.ValidateComponent(component, json);
-        if (violations.Count > 0)
-        {
-            var first = violations[0];
-            throw new ApiProblemException(ProblemCodes.SchemaViolation, $"{first.InstanceLocation} {first.Message}".Trim());
-        }
-        var value = json.Deserialize<T>(ApiJson.Options)
-            ?? throw new ApiProblemException(ProblemCodes.SchemaViolation, "empty body");
-        return new ValidatedBody<T>(value, json, Convert.ToHexStringLower(SHA256.HashData(bytes)));
+        return (bytes, json);
     }
 
     private static bool IsJson(string? contentType) =>

@@ -13,7 +13,7 @@ export function OrganizationLayout() {
   const { t, locale } = useI18n();
   const id = useOrganizationId();
   const organization = useOrganization(id);
-  const tabs = ['overview', 'findings', 'assessments', 'reports', 'policy', 'settings'] as const;
+  const tabs = ['overview', 'findings', 'assessments', 'devices', 'reports', 'policy', 'settings'] as const;
   return (
     <>
       <ErrorMessage error={organization.error} onRetry={() => void organization.refetch()} />

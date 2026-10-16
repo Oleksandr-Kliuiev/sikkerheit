@@ -25,7 +25,7 @@ public sealed record CriticalCount(Guid OrganizationId, string CheckId, int Coun
 public sealed record OpenCounts(int Critical, int Warning);
 
 /// <summary>A subject seen in a period; ActiveAtEnd is false for subjects active only earlier in it.</summary>
-public sealed record SubjectInPeriod(Guid Id, string Type, string Key, string? Name, bool ActiveAtEnd);
+public sealed record SubjectInPeriod(Guid Id, string Type, string Key, string? Name, bool ActiveAtEnd, Guid? DeviceId = null);
 
 /// <summary>The latest current assessment of a pair at a moment.</summary>
 public sealed record CurrentAssessment(Guid SubjectId, string CheckId, string Mode, string? Result, string? Severity,
@@ -254,7 +254,7 @@ public static class Subjects
         IReadOnlyList<string> types, DateTimeOffset from, DateTimeOffset at, CancellationToken ct)
     {
         await using var command = new NpgsqlCommand("""
-            select id, type, key, display_name, (retired_at is null or retired_at > @at) and first_seen_at <= @at
+            select id, type, key, display_name, (retired_at is null or retired_at > @at) and first_seen_at <= @at, device_id
             from subject
             where organization_id = @org and type = any(@types)
               and first_seen_at <= @at and (retired_at is null or retired_at > @from)
@@ -268,7 +268,7 @@ public static class Subjects
         while (await reader.ReadAsync(ct))
         {
             subjects.Add(new SubjectInPeriod(reader.GetGuid(0), reader.GetString(1), reader.GetString(2),
-                reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetBoolean(4)));
+                reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetBoolean(4), reader.IsDBNull(5) ? null : reader.GetGuid(5)));
         }
         return subjects;
     }

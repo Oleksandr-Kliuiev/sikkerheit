@@ -5,6 +5,8 @@ import type {
   AuditEvent,
   CollectionRun,
   CurrentStaff,
+  Device,
+  EnrollmentKeySummary,
   Finding,
   FindingEvent,
   Organization,
@@ -15,6 +17,7 @@ import type {
   Report,
   StaffUser,
   TenantConnection,
+  WindowsRelease,
 } from './types';
 
 export const org = (id: string) => `/api/v1/organizations/${encodeURIComponent(id)}`;
@@ -146,4 +149,31 @@ export function useExport(organizationId: string, exportId: string | null) {
     queryFn: () => get<OrganizationExport>(`${org(organizationId)}/exports/${encodeURIComponent(exportId ?? '')}`),
     refetchInterval: (q) => (q.state.data?.state === 'queued' ? 3000 : false),
   });
+}
+
+export interface DeviceFilters {
+  status?: string;
+  enrollmentKeyId?: string;
+}
+
+export function useDevices(organizationId: string, filters: DeviceFilters) {
+  return usePaged<Device>(['devices', organizationId, filters], `${org(organizationId)}/devices${query({ ...filters })}`);
+}
+
+export function useEnrollmentKeys(organizationId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['enrollment-keys', organizationId],
+    enabled,
+    queryFn: () => all<EnrollmentKeySummary>(`${org(organizationId)}/enrollment-keys`, 5),
+  });
+}
+
+export interface ReleaseFilters {
+  securityMonth?: string;
+  state?: string;
+}
+
+/** The Windows release catalog is shared by all customers (03 «Правило SYS-003 и каталог выпусков»). */
+export function useWindowsReleases(filters: ReleaseFilters) {
+  return usePaged<WindowsRelease>(['windows-releases', filters], `/api/v1/windows-releases${query({ ...filters })}`);
 }

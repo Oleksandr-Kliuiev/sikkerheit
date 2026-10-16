@@ -4,13 +4,14 @@ using Sikkerheit.IntegrationTests.Infrastructure;
 namespace Sikkerheit.ContractTests.Invariants;
 
 /// <summary>
-/// WP-01: every record of the registry has an automatic negative test on its enforcement, and a record without a test
-/// fails the build. Records of stage P2 (the Windows agent) are reported as skipped with the reason, not left out.
+/// WP-01, WP-10: every record of the registry has an automatic negative test on its enforcement, and a record without a
+/// test fails the build. The server side of P2 (agent API, evaluator, jobs, portal, schema, operations) is tested too;
+/// the records that only the Windows agent or its distribution can enforce are reported as skipped with the reason.
 /// </summary>
 public sealed class RegistryCoverageTests
 {
     /// <summary>Layers that need the service or its database: their test classes run against PostgreSQL.</summary>
-    private static readonly string[] ServerLevels = ["portal_api", "db_rls", "collector", "worker", "infra"];
+    private static readonly string[] ServerLevels = ["portal_api", "db_rls", "collector", "worker", "infra", "agent_api"];
 
     private sealed record Covered(string Id, string Level, MethodInfo Test);
 
@@ -21,6 +22,11 @@ public sealed class RegistryCoverageTests
                 .SelectMany(m => m.GetCustomAttributes<InvariantAttribute>().Select(a => new Covered(a.Id,
                     type.GetCustomAttribute<EnforcementAttribute>()?.Level ?? "(no [Enforcement] on " + type.Name + ")", m))))
             .ToList();
+
+    /// <summary>Enforcement that only code on the Windows PC has (WP-09); the script of the RMM (INV-201) belongs to WP-11.</summary>
+    private static readonly string[] AgentOnly = ["agent"];
+
+    private static bool WaitsForAgent(InvariantRecord record) => record.Enforcement == "agent" || record.Id == "INV-201";
 
     [Fact]
     public void Registry_is_the_one_of_the_package_and_has_records_of_both_stages()
@@ -44,7 +50,18 @@ public sealed class RegistryCoverageTests
     }
 
     [Fact]
-    public void Every_invariant_test_names_a_P1_record_of_its_class_enforcement()
+    public void Every_P2_record_of_the_server_has_a_negative_test_on_its_enforcement()
+    {
+        var tests = Tests();
+        var missing = InvariantRegistry.P2
+            .Where(r => !WaitsForAgent(r) && !tests.Any(t => t.Id == r.Id && t.Level == r.Enforcement))
+            .Select(r => $"{r.Id} [{r.Enforcement}] {r.NegativeExample} → {r.ExpectedError}")
+            .ToList();
+        Assert.True(missing.Count == 0, "Records of the server without a negative test on their enforcement:\n" + string.Join("\n", missing));
+    }
+
+    [Fact]
+    public void Every_invariant_test_names_a_record_of_its_class_enforcement()
     {
         var wrong = new List<string>();
         foreach (var test in Tests())
@@ -54,9 +71,9 @@ public sealed class RegistryCoverageTests
             {
                 wrong.Add($"{test.Test.DeclaringType!.Name}.{test.Test.Name}: {test.Id} is not in the registry");
             }
-            else if (record.Phase != "P1")
+            else if (record.Phase == "P2" && AgentOnly.Contains(record.Enforcement) || record.Id is "INV-201")
             {
-                wrong.Add($"{test.Test.DeclaringType!.Name}.{test.Test.Name}: {test.Id} is a {record.Phase} record");
+                wrong.Add($"{test.Test.DeclaringType!.Name}.{test.Test.Name}: {test.Id} is enforced by the agent or its distribution");
             }
             else if (record.Enforcement != test.Level)
             {
@@ -83,14 +100,14 @@ public sealed class RegistryCoverageTests
             p => p.ParameterType == typeof(PostgresFixture)));
     }
 
-    public static TheoryData<string> P2Records => new(InvariantRegistry.P2.Select(r => r.Id));
+    public static TheoryData<string> WaitingRecords => new(InvariantRegistry.P2.Where(WaitsForAgent).Select(r => r.Id));
 
     [Theory]
-    [MemberData(nameof(P2Records))]
+    [MemberData(nameof(WaitingRecords))]
     public void P2_record_waits_for_the_Windows_agent(string id)
     {
         var record = InvariantRegistry.Find(id)!;
-        Assert.Skip($"{id} [{record.Enforcement}], {record.Acceptance}: stage P2 — the Windows agent, the agent API and the device "
-                    + "rules (WP-09…WP-12) are not built yet; the negative test comes with them");
+        Assert.Skip($"{id} [{record.Enforcement}], {record.Acceptance}: enforced on the Windows PC by the agent (WP-09) or by the RMM "
+                    + "script that installs it (WP-11); the server side of the record is not what it checks");
     }
 }

@@ -47,6 +47,29 @@ public static class JobQueue
     }
 
     /// <summary>
+    /// Queues a job identified by its period key, or queues it again when its earlier run has finished — the sweep after a
+    /// month of the release catalog was verified runs again when the month is verified again with more entries.
+    /// </summary>
+    public static async Task RequeuePeriodAsync(DbScope scope, string type, Guid? organizationId, string periodKey, DateTimeOffset now,
+        CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand("""
+            insert into job (id, type, organization_id, input_id, period_key, state, next_attempt_at, created_at)
+            values (@id, @type, @org, null, @period, 'queued', @now, @now)
+            on conflict (type, organization_id, (coalesce(input_id, period_key))) do update
+                set state = 'queued', attempts = 0, next_attempt_at = excluded.next_attempt_at, completed_at = null,
+                    lease_until = null, last_error = null
+                where job.state in ('succeeded', 'failed')
+            """, scope.Connection, scope.Transaction);
+        command.Parameters.AddWithValue("id", Guid.CreateVersion7());
+        command.Parameters.AddWithValue("type", type);
+        command.Parameters.AddWithValue("org", NpgsqlTypes.NpgsqlDbType.Uuid, (object?)organizationId ?? DBNull.Value);
+        command.Parameters.AddWithValue("period", periodKey);
+        command.Parameters.AddWithValue("now", now);
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>
     /// Marks a periodic job done without running it, so the scheduler does not create it again (restore, 06 step 5:
     /// a week whose report already reached the client). A running job is left alone. True when a row changed.
     /// </summary>

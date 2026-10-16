@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Sikkerheit.Host.Agents;
 using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Exports;
@@ -66,6 +67,7 @@ public static class OrganizationDeletion
         await ReportService.DeleteOrganizationDataAsync(scope, ct);
         await OrganizationExports.DeleteOrganizationDataAsync(scope, ct);
         await AssessmentData.DeleteOrganizationDataAsync(scope, ct);
+        await AgentData.DeleteOrganizationDataAsync(scope, ct);
         await TenantConnections.DeleteOrganizationDataAsync(scope, ct);
         await Idempotency.DeleteOrganizationDataAsync(scope, ct);
         await OrganizationLifecycle.DeleteOrganizationDataAsync(scope, ct);
@@ -125,10 +127,15 @@ public sealed class RetentionPurgeJob(DbScopes scopes, IFileStore files, TimePro
             ["finding"] = await AssessmentData.PurgeFindingsAsync(scope, cuts, ct),
             ["observation"] = await AssessmentData.PurgeObservationsAsync(scope, cuts, ct),
             ["collection_run"] = await CollectionRuns.PurgeAsync(scope, cuts, await AssessmentData.ObservedRunsAsync(scope, ct), ct),
-            ["scan_batch"] = 0, ["scan_request"] = 0,
+            ["scan_batch"] = await AgentData.PurgeBatchesAsync(scope, cuts, await AssessmentData.ObservedBatchesAsync(scope, ct), ct),
+            ["scan_request"] = await AgentData.PurgeRequestsAsync(scope, cuts, ct),
             ["subject"] = await AssessmentData.PurgeSubjectsAsync(scope, cuts, ct),
-            ["device_presence"] = 0, ["device"] = 0, ["revoked_installation"] = 0,
+            ["device_presence"] = await AgentData.PurgePresenceAsync(scope, cuts, ct),
+            ["device"] = await AgentData.PurgeDevicesAsync(scope, cuts, ct),
+            ["revoked_installation"] = await AgentData.PurgeInstallationsAsync(scope, cuts, ct),
         };
+        // Enrollments, sessions and old keys are not in the registry order: nothing refers to them but the devices above.
+        await AgentData.PurgeCredentialsAsync(scope, cuts, ct);
         await Idempotency.PurgeAsync(scope, cuts, ct);
         await AuditLog.PurgeAsync(scope, cuts, ct);
 

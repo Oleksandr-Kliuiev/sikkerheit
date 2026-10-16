@@ -100,6 +100,22 @@ public static class AssessmentData
         return runs;
     }
 
+    /// <summary>Scan batches that observations of the scope's organization still refer to (the batch stays while they do).</summary>
+    public static async Task<IReadOnlyList<Guid>> ObservedBatchesAsync(DbScope scope, CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand(
+            "select distinct scan_batch_id from observation where organization_id = @org and scan_batch_id is not null",
+            scope.Connection, scope.Transaction);
+        command.Parameters.AddWithValue("org", scope.OrganizationId!.Value);
+        var batches = new List<Guid>();
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            batches.Add(reader.GetGuid(0));
+        }
+        return batches;
+    }
+
     private static async Task<int> RunAsync(DbScope scope, RetentionCuts cuts, string sql, CancellationToken ct)
     {
         await using var command = new NpgsqlCommand(sql, scope.Connection, scope.Transaction);
