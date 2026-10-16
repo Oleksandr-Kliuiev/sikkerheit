@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+printf 'npm %s\n' "$*" >> "$AZ_LOG"

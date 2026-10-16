@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Stub of «az» for the offline tests of infra/scripts. Every call is appended to $AZ_LOG; the answer is the first rule
+# of the JSON file $AZ_RULES whose regex "match" fits the arguments joined by spaces. A rule has "out" (stdout) or
+# "outs" (a list: the n-th call to the rule gets the n-th item, the last one repeats), optional "rc" (exit code),
+# "err" (stderr), and "file" + "fileArg" (copies the file to the value of that flag, as «webapp log download»).
+# No rule fits: no output, exit 0.
+set -u
+printf '%s\n' "$*" >> "$AZ_LOG"
+index="$(jq -r --arg call "$*" 'map(.match) | to_entries | map(select(.value as $m | $call | test($m))) | .[0].key // -1' "$AZ_RULES")"
+(( index >= 0 )) || exit 0
+rule="$(jq -c ".[$index]" "$AZ_RULES")"
+counter="$AZ_RULES.count.$index"
+seen=0
+[[ -f "$counter" ]] && seen="$(cat "$counter")"
+echo $(( seen + 1 )) > "$counter"
+out="$(jq -r --argjson seen "$seen" '
+  if .outs then .outs[ ([$seen, (.outs | length) - 1] | min) ] else (.out // "") end' <<<"$rule")"
+file="$(jq -r '.file // ""' <<<"$rule")"
+if [[ -n "$file" ]]; then
+  flag="$(jq -r .fileArg <<<"$rule")"
+  while (( $# )); do
+    if [[ "$1" == "$flag" ]]; then cp "$file" "$2"; break; fi
+    shift
+  done
+fi
+[[ -z "$out" ]] || printf '%s\n' "$out"
+err="$(jq -r '.err // ""' <<<"$rule")"
+[[ -z "$err" ]] || printf '%s\n' "$err" >&2
+exit "$(jq -r '.rc // 0' <<<"$rule")"
