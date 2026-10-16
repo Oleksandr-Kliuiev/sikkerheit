@@ -29,6 +29,12 @@ dotnet test --project tests/Sikkerheit.ContractTests
 ```
 
 ```bash
+dotnet test --project tests/Sikkerheit.Agent.Tests
+```
+
+Агент (`src/Agent`) собирается и тестируется на macOS и Linux; тесты Windows-слоя (`WindowsSmokeTests`) там пропускаются и работают в CI на `windows-latest`. Что проверяется только на Windows — [agent-windows-verification.md](agent-windows-verification.md).
+
+```bash
 cd src/Portal && npm ci && npm run lint && npm run typecheck && npm test
 ```
 
@@ -97,6 +103,15 @@ Identity: в Azure (задан `SecurityLog:ContainerUri`) журнал безо
   - `Jobs` — очередь заданий (`JobQueue`, единственный владелец таблицы `job`), исполнитель с lease, планировщик; удаление организации и сроки хранения вызывают методы модулей-владельцев;
   - `Agents` (P2) — ключи регистрации, устройства и их идентичность, challenge, регистрация и сессия агента, check-in с конфигурацией, синхронный приём пакета `submitScan`, запросы повторной проверки, повтор журнала безопасности для устройств, метрики и оповещения по парку. Агент Windows (`src/Agent`) — отдельный проект, с сервером его связывают только OpenAPI и схемы пакета. `Assessment` дополнен правилами WIN и SYS, оценкой пакета, каталогом выпусков Windows и заданиями `patch_level_sweep`, `release_import`, `release_catalog_check`.
 - Каждый ответ API в интеграционных тестах сверяется со схемой OpenAPI, заголовки выдачи файлов — со схемами заголовков операции.
+
+## Устройство агента (P2, WP-09)
+
+Агент — отдельные проекты `src/Agent/Sikkerheit.Agent` (служба) и `src/Agent/Sikkerheit.Agent.Collectors` (сборщики); сервис их не использует, а они — только `Sikkerheit.Contracts` (схемы и каталог). Всё, что не зависит от Windows, проверяется тестами `tests/Sikkerheit.Agent.Tests`; Windows-слой лежит в папках `Windows/` и только компилируется на других ОС (`EnableWindowsTargeting`, защита `OperatingSystem.IsWindows()`).
+
+- `Sikkerheit.Agent.Collectors`: `ICollector` и `CollectorOutcome` (факт или причина недоступности), `Readers.cs` — интерфейсы читателей фактов Windows, `Collectors.cs` — сборщики WIN-001…011 и фиксированный набор `CollectorSet`, `Mapping/` — чистое отображение сырых значений в перечисления контракта (состояния WSC и Defender, классы членов группы администраторов), `Runtime/CollectorRunner` — один поток на сборщик (STA для COM), 30 с на сборщик и 120 с на сессию, счётчик оставленных потоков; `Windows/` — реализации читателей (реестр, WMI, COM, Win32, LSA) и `WindowsReaderFactory`.
+- `Sikkerheit.Agent`: `Protocol/` — base64url, отпечаток JWK по RFC 7638, подписываемые строки, признак машины; `Keys/` — интерфейсы ключа устройства и защиты секрета; `Windows/WindowsKeys.cs` — CNG (TPM, затем MSKSP), DPAPI, права каталога данных; `Storage/` — SQLite (`AgentDatabase`, `AgentStateStore`, `BatchBuffer`: лимиты по размеру и дням, перенумерация очереди); `Api/` — клиент HTTP и таблица действий по ответам (`ProblemPolicy` из каталога); `Config/` — строгий разбор конфигурации по схеме; `Scan/ScanBatchBuilder` — пакет и проверка каждого наблюдения схемой; `Runtime/AgentStateMachine` — таблица автомата как чистая функция, `AgentEngine` — шаги по состоянию (регистрация, сессия, check-in, отправка, сбор), `AgentWorker` — цикл службы; `Program.cs` — сборка службы.
+- Тесты: `Support/FakeServer` — сервер API агента в памяти (настоящие nonce с HMAC, проверка подписей, схемы OpenAPI, порядок отказов по `05`), программный ключ ECDSA P-256 вместо CNG, ручные часы, заглушки сборщиков с evidence из `examples/scan-batch.json`.
+- Настройки службы: раздел `Agent` (`appsettings.json` рядом с файлом службы или переменные `SIKKERHEIT_Agent__ServerUrl`, `…DataDirectory`, `…Proxy`); `ServerUrl` — только https. Ключ регистрации не настройка: его кладёт скрипт RMM файлом `enrollment.key` в каталог данных (`04`).
 
 ## Отличия от структуры `02`
 
