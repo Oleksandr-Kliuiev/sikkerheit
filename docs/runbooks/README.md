@@ -43,16 +43,16 @@
 | --- | --- | --- |
 | Группа ресурсов | `rg-sikkerheit-prod` | — |
 | Web App и слот | `app-sikkerheit-prod-<5>`, слот `staging` | `<site>`; hostname `<prod-host>` и `<staging-host>` |
-| PostgreSQL Flexible Server | `psql-sikkerheit-prod-<5>`, база `sikkerheit` | `<server>` |
+| PostgreSQL Flexible Server | `psql-sikkerheit-prod-<5>`, после RB-05 — восстановленный сервер (параметр `databaseServerName`); база `sikkerheit` | `<server>` |
 | VNet и Private DNS | `vnet-sikkerheit-prod` (подсети `app`, `database`), зона `sikkerheit-prod.private.postgres.database.azure.com` | — |
 | Storage | `stsikkerheitprod<5>`: контейнеры `reports`, `exports`, `agent-releases`, `dataprotection`, `security-log` | `<storage>` |
 | Key Vault | `kv-sikkerheit-prod-<5>`: сертификат `graph-reader`, ключ `dataprotection`, секреты `cursor-key`, `teams-webhook` | `<kv>` |
 | Log Analytics и Application Insights | `log-sikkerheit-prod`, `appi-sikkerheit-prod` | — |
 | Оповещения и бюджет | `alert-sikkerheit-prod-5xx`, `-health`, `-errors`; группа действий `ag-sikkerheit-prod`; бюджет `budget-sikkerheit-prod` | — |
-| Identity миграций и выпуска | `id-sikkerheit-prod-migrations` (назначена только слоту `staging`); `id-sikkerheit-prod-deploy` — вход GitHub Actions по OIDC, если при установке задан `SIKKERHEIT_GITHUB_REPO` | — |
+| Identity миграций, восстановления и выпуска | `id-sikkerheit-prod-migrations` (назначена только слоту `staging`); `id-sikkerheit-prod-restore` — только чтение `security-log`, `reports`, `exports` для команды восстановления (назначена production-слоту, RB-05); `id-sikkerheit-prod-deploy` — вход GitHub Actions по OIDC, если при установке задан `SIKKERHEIT_GITHUB_REPO` | — |
 | Приложения Entra | «Sikkerheit Portal (prod)»; «Sikkerheit Graph Reader» | `<graph-app-id>` — Application (client) ID |
 
-На рабочей станции, где запускался `setup.sh`, имена лежат в `infra/.state/prod.json` (`siteName`, `productionHost`, `stagingHost`, `vaultName`, `storageAccountName`, `databaseHost`) и `infra/.state/prod.graph`. Иначе:
+На рабочей станции, где запускался `setup.sh`, имена лежат в `infra/.state/prod.json` (`siteName`, `productionHost`, `stagingHost`, `vaultName`, `storageAccountName`, `databaseServerName`, `databaseHost`) и `infra/.state/prod.graph`. Иначе:
 
 ```bash
 az resource list --resource-group rg-sikkerheit-prod --query "[].{name:name, type:type}" -o table
@@ -143,8 +143,7 @@ Runbooks учитывают расхождения текущей реализа
 - сервис не записывает `correlationId` подписи Key Vault вместе с запуском сбора (`04`, «Ключ приложения»): подписи сверяются запросами RB-02, раздел В;
 - оповещений о подписи вне сбора, tenant без сбора 26 часов, такте планировщика и дневном лимите журналов нет (таблица выше); о сроке сертификата пишет Key Vault контактам сертификатов;
 - журнал запросов не содержит `entraUserId` (`05`, «API портала»): перечень RB-05, шаг 7, — без исполнителя;
-- команда восстановления работает identity production-слота с правом записи в хранилище, а не identity только для чтения (`04`, «Журнал безопасности»);
-- после RB-05 Bicep указывает на старый сервер базы: до исправления не запускать `setup.sh` и развёртывание Bicep;
+- журнал безопасности команда восстановления читает identity только для чтения, но в реальном восстановлении переносит и удаляет файлы identity production-слота, у которой Storage Blob Data Contributor на всё хранилище, включая `security-log` (`04`, «Журнал безопасности», и `06`, шаг 5, этого не различают); код пишет только в `reports` и `exports`.
 
 ## Что подтвердить в реальном окружении
 
@@ -156,7 +155,17 @@ Runbooks учитывают расхождения текущей реализа
 - повторный выпуск версии с миграциями при закрытом доступе (RB-05, «Предусловия и доступы»);
 - `az webapp log download` содержит отчёт из `/home/LogFiles`;
 - столбцы `id_s` и `identity_claim_oid_g` в `AzureDiagnostics` Key Vault, формат `name` в `requests` («МЕТОД /маршрут»), ключи `customDimensions` в `traces`, вызовы Graph в `dependencies`, запись `OverQuota` в `_LogOperation`;
-- учебное окружение RB-05: роль `sikkerheit-drill` создаётся мигратором под identity миграций, процесс стартует с `ASPNETCORE_ENVIRONMENT=Drill`, `az webapp create` принимает `--runtime "DOTNETCORE:10.0"`;
+- учебное восстановление (`infra/scripts/drill.sh`):
+  - identity миграций и восстановления production назначаются экземпляру в другой группе;
+  - роль `sikkerheit-drill` создаётся мигратором под identity миграций;
+  - процесс стартует с `ASPNETCORE_ENVIRONMENT=Drill`;
+  - `az webapp create` принимает `--runtime "DOTNETCORE:10.0"`;
+  - `az webapp deploy` дожидается запуска с миграциями;
+  - экземпляр из VNet учения доходит до хранилища production;
+  - `microsoft-entra-admin list` отдаёт `objectId`;
+  - в архиве `az webapp log download` есть отчёт;
+- identity восстановления: команда в production-контейнере получает её токен по `Restore__ManagedIdentityClientId` и читает журнал, а запись этой identity в Blob отклоняется (403);
+- `setup.sh` после восстановления: Bicep принимает восстановленный сервер (повторный PUT с теми же `network`, `version` и `storageSizeGB`, база `sikkerheit` уже есть). Если автоувеличение подняло диск исходного сервера выше 32 GiB, шаблон с 32 GiB будет отклонён — тогда, как и при любом повторном запуске `setup.sh`, поднять `storageSizeGB` в `postgres.bicep`;
 - отключение старой версии сертификата отключает и её ключ (RB-02);
 - аварийный отзыв ключа Graph (находка F05) — на тестовой регистрации.
 

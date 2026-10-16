@@ -7,7 +7,9 @@
 #
 # Optional: SIKKERHEIT_LOCATION (norwayeast), SIKKERHEIT_TEAMS_WEBHOOK (Workflows webhook URL),
 #           SIKKERHEIT_LOCK_SECURITY_LOG=yes (locks the 30-day immutability policy; cannot be undone),
-#           SIKKERHEIT_GITHUB_REPO=owner/repo (identity for .github/workflows/deploy.yml, OIDC without secrets).
+#           SIKKERHEIT_GITHUB_REPO=owner/repo (identity for .github/workflows/deploy.yml, OIDC without secrets),
+#           SIKKERHEIT_DATABASE_SERVER=<server> (the restored server after RB-05; by default the server that the
+#           connection string of the app names, on the first install psql-sikkerheit-<env>-<5>).
 set -euo pipefail
 
 env="${1:-prod}"
@@ -40,19 +42,50 @@ security_log_locked() {
     echo false
   fi
 }
+# The database server the service runs on. A restore (RB-05) moves the service to a new server, so a repeated run keeps
+# the server of the app's connection string; SIKKERHEIT_DATABASE_SERVER must name the same server and is needed only
+# without an app or without a host in its connection string. Empty on the first install: main.bicep then creates
+# psql-<name>. Anything else stops the run, a failed az call too (set -e does not hold in «$(...)»): Bicep would point
+# the service at the old server or create a new, empty one.
+resolve_database_server() {
+  local wanted="${SIKKERHEIT_DATABASE_SERVER:-}" site current="" server
+  site="$(az webapp list --resource-group "$group" --query "[?starts_with(name, 'app-sikkerheit-${env}-')].name | [0]" -o tsv)" \
+    || return 1
+  if [[ -n "$site" ]]; then
+    current="$(az webapp config appsettings list --resource-group "$group" --name "$site" \
+      --query "[?name=='ConnectionStrings__Sikkerheit'].value | [0]" -o tsv | sed -n 's/^Host=\([^.;]*\)\..*/\1/p')" || return 1
+  fi
+  if [[ -n "$wanted" && -n "$current" && "$wanted" != "$current" ]]; then
+    echo "$site runs on $current, SIKKERHEIT_DATABASE_SERVER is $wanted: switch the connection strings first (RB-05, step 2)" >&2
+    return 1
+  fi
+  server="${wanted:-$current}"
+  if [[ -z "$server" ]]; then
+    [[ -z "$site" ]] && return 0
+    echo "No database host in the connection string of $site: set SIKKERHEIT_DATABASE_SERVER (RB-05)" >&2
+    return 1
+  fi
+  az postgres flexible-server show --resource-group "$group" --name "$server" -o none 2>/dev/null || {
+    echo "No PostgreSQL server $server in $group: set SIKKERHEIT_DATABASE_SERVER to the server of the service (RB-05)" >&2
+    return 1
+  }
+  echo "$server"
+}
 deploy() {
   local locked
   locked="$(security_log_locked)"
   az deployment group create --resource-group "$group" --name "sikkerheit-$(date +%Y%m%d%H%M%S)" \
     --template-file "$root/infra/bicep/main.bicep" \
     --parameters environmentName="$env" location="$location" alertEmail="$SIKKERHEIT_ALERT_EMAIL" \
-                 portalClientId="${1:-}" graphClientId="${2:-}" securityLogLocked="$locked" \
+                 portalClientId="${1:-}" graphClientId="${2:-}" securityLogLocked="$locked" databaseServerName="$database_server" \
     --query properties.outputs -o json > "$state/$env.json"
 }
 output() { jq -r ".$1.value" "$state/$env.json"; }
 
 say "1/7 Resource group and resources (first pass)"
 az group create --name "$group" --location "$location" --tags app=sikkerheit environment="$env" -o none
+database_server="$(resolve_database_server)"
+echo "   database server: ${database_server:-psql-sikkerheit-$env-<5> (new)}"
 deploy "$(cat "$state/$env.portal" 2>/dev/null || true)" "$(cat "$state/$env.graph" 2>/dev/null || true)"
 site="$(output siteName)"; prod_host="$(output productionHost)"; staging_host="$(output stagingHost)"
 prod_principal="$(output productionPrincipalId)"; staging_principal="$(output stagingPrincipalId)"

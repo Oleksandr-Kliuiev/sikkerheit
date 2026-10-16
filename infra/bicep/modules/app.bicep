@@ -12,6 +12,9 @@ param databaseHost string
 param migrationsIdentityId string
 param migrationsIdentityClientId string
 param migrationsIdentityName string
+@description('The restore identity: the restore command reads the security log with it (RB-05); the service never uses it.')
+param restoreIdentityId string
+param restoreIdentityClientId string
 param blobEndpoint string
 param vaultName string
 param vaultUri string
@@ -46,7 +49,11 @@ resource site 'Microsoft.Web/sites@2024-04-01' = {
   name: 'app-${name}'
   location: location
   kind: 'app,linux'
-  identity: { type: 'SystemAssigned' }
+  // The service signs in with the system identity; the restore identity is only for restore-replay (RB-05, step 3).
+  identity: {
+    type: 'SystemAssigned, UserAssigned'
+    userAssignedIdentities: { '${restoreIdentityId}': {} }
+  }
   properties: {
     serverFarmId: plan.id
     httpsOnly: true
@@ -112,6 +119,7 @@ resource productionSettings 'Microsoft.Web/sites/config@2024-04-01' = {
     Teams__PortalUrl: 'https://${productionHost}'
     Jobs__Enabled: 'true'
     Database__MigrateOnStart: 'false'
+    Restore__ManagedIdentityClientId: restoreIdentityClientId
   })
 }
 
@@ -144,7 +152,7 @@ resource sticky 'Microsoft.Web/sites/config@2024-04-01' = if (stagingSlot) {
       'ConnectionStrings__Sikkerheit', 'ConnectionStrings__SikkerheitOwner', 'Database__OwnerIdentityClientId'
       'Database__AppPrincipals__0__Name', 'Database__AppPrincipals__0__ObjectId', 'Database__AppPrincipals__1__Name'
       'Database__AppPrincipals__1__ObjectId', 'Hosting__PortalHosts__0', 'Auth__Entra__RedirectUri', 'M365__ConsentRedirectUri'
-      'Teams__PortalUrl', 'Jobs__Enabled', 'Database__MigrateOnStart'
+      'Teams__PortalUrl', 'Jobs__Enabled', 'Database__MigrateOnStart', 'Restore__ManagedIdentityClientId'
     ]
   }
 }

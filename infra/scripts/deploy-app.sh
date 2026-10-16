@@ -166,13 +166,13 @@ deploy_without_slot() {
   resolve_migrations
   if [[ -f "$state" ]]; then
     app_principal="$(jq -r .productionPrincipalId.value "$state")"
-    db_host="$(jq -r .databaseHost.value "$state")"
   else
     app_principal="$(az webapp identity show --resource-group "$group" --name "$site" --query principalId -o tsv)"
-    # The deploy identity may read the app but not the server: the host comes from the app's own connection string.
-    db_host="$(az webapp config appsettings list --resource-group "$group" --name "$site" \
-      --query "[?name=='ConnectionStrings__Sikkerheit'].value | [0]" -o tsv | sed -n 's/^Host=\([^;]*\);.*/\1/p')"
   fi
+  # The host comes from the app's own connection string: after a restore (RB-05) the app runs on the restored server
+  # before setup.sh updates infra/.state, and the deploy identity may read the app but not the server.
+  db_host="$(az webapp config appsettings list --resource-group "$group" --name "$site" \
+    --query "[?name=='ConnectionStrings__Sikkerheit'].value | [0]" -o tsv | sed -n 's/^Host=\([^;]*\);.*/\1/p')"
   [[ -n "$app_principal" && -n "$db_host" ]] || { echo "Cannot resolve the app identity or the database host"; exit 1; }
 
   say "Attach the migrations identity and Database__MigrateOnStart to $site for this deployment"

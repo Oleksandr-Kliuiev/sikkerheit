@@ -117,7 +117,7 @@
 | Границы модулей | Владельцы таблиц и известные нарушения — `tests/Sikkerheit.UnitTests/Architecture/ModuleBoundaryTests.cs`; план устранения — `dev/module-boundaries.md` | `ModuleBoundaryTests` |
 | Problem, курсоры, заголовки, телеметрия | `Platform/` | `PortalHostingTests` |
 | Портал | `src/Portal/src` (`pages/`, `components/`, `api/schema.d.ts` из OpenAPI, строки `i18n/*.json`) | `src/Portal/src/**/*.test.ts` |
-| Azure | `infra/bicep/main.bicep` и `modules/`, `infra/scripts/setup.sh`, `deploy-app.sh`; развёртывание из GitHub по OIDC — `.github/workflows/deploy.yml` | `tools/iac/check_arm.py` (и `--self-test`; выражения ARM — `arm_eval.py`) |
+| Azure | `infra/bicep/main.bicep` и `modules/`, `infra/scripts/setup.sh`, `deploy-app.sh`, учебное восстановление — `drill.sh`; развёртывание из GitHub по OIDC — `.github/workflows/deploy.yml` | `tools/iac/check_arm.py` (и `--self-test`; проверки восстановления — `restore_checks.py`, помощники — `iac_common.py`, выражения ARM — `arm_eval.py`) |
 | Runbooks P1 (RB-01…RB-07, RB-14) | `runbooks/` (путь от `docs/`): указатель и шаблон протокола — `README.md` | — |
 | Локальная разработка | `tools/dev/` (база в Docker, демо-данные), `.claude/launch.json` | — |
 

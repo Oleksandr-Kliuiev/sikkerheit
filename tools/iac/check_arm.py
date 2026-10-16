@@ -7,7 +7,8 @@
 Conditions, copy counts, module parameters and settings go through the small ARM expression evaluator of arm_eval.py.
 Values that exist only at deployment time (reference(), uniqueString(), the subscription in a resource id) stay
 unknown: a check that needs such a value fails, and a function the evaluator does not know stops with «cannot evaluate»
-instead of a guess. Standard library only.
+instead of a guess. The checks of the restore path (RB-05) are in restore_checks.py, shared helpers in iac_common.py.
+Standard library only.
 """
 import argparse
 import copy
@@ -22,6 +23,9 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from arm_eval import (  # noqa: E402
     MISSING, CannotEvaluate, Context, concrete, is_deployment, is_int, known_end, known_start, literals, origins,
     raw_resources, resource_list, show)
+from iac_common import (  # noqa: E402
+    AZ, MUTATIONS, Failed, commands, identities_of, mutation, one_or_more, raw_of, replace_text, set_value, settings_of)
+import restore_checks  # noqa: E402
 
 # Records of development-package/specs/invariants.json (enforcement «infra») that these checks enforce.
 INVARIANTS = ("INV-081", "INV-083", "INV-085")
@@ -30,6 +34,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 MAIN = ROOT / 'infra' / 'bicep' / 'main.bicep'
 SETUP = ROOT / 'infra' / 'scripts' / 'setup.sh'
 DEPLOY = ROOT / 'infra' / 'scripts' / 'deploy-app.sh'
+DRILL = ROOT / 'infra' / 'scripts' / 'drill.sh'
 ENVIRONMENTS = ('prod', 'test')
 CONTAINERS = ('agent-releases', 'dataprotection', 'exports', 'reports', 'security-log')
 ORPHAN_PREFIXES = ('reports/restore-orphans/', 'exports/restore-orphans/')
@@ -37,18 +42,7 @@ SECRET_MARKERS = ('Password=', 'AccountKey=', 'SharedAccessSignature')
 KEY_VAULT_SETTINGS = ('Cursors__Key', 'Teams__WebhookUrl')
 
 
-class Failed(Exception):
-    """A check failed; the message is its one-line reason."""
-
-
 # --- Checks of the template --------------------------------------------------------------------------------------
-
-def one_or_more(ctx, kind, what):
-    found = ctx.of(kind)
-    if not found:
-        raise Failed(f'no {what}')
-    return found
-
 
 def check_storage_access(ctx):
     accounts = one_or_more(ctx, 'Microsoft.Storage/storageAccounts', 'storage account')
@@ -199,41 +193,22 @@ def check_migrations_identity(ctx):
              if (identity.segments(1) or ('',))[0].endswith('-migrations')]
     if len(found) != 1:
         raise Failed(f'{len(found)} migrations identities, expected 1')
-    suffix = f'/providers/microsoft.managedidentity/userassignedidentities/{found[0].segments(1)[0].lower()}'
-    carriers = []
-    for resource in ctx.resources:
-        assigned = resource.get('identity', 'userAssignedIdentities')
-        if assigned is MISSING or assigned is None:
-            continue
-        if not isinstance(assigned, dict):
-            raise Failed(f'cannot evaluate the identities of {resource.describe()}: {show(assigned)}')
-        for key in assigned:
-            end = known_end(key).lower()
-            if '/providers/' not in end:
-                raise Failed(f'cannot evaluate the identity {show(key)} of {resource.describe()}')
-            if end.endswith(suffix):
-                carriers.append(resource)
+    name = found[0].segments(1)[0].lower()
+    carriers = [resource for resource in ctx.resources if name in identities_of(resource)]
     for site in ctx.of('Microsoft.Web/sites'):
         kind = site.get('identity', 'type')
-        if kind != 'SystemAssigned':
-            raise Failed(f'the production site identity is {show(kind)}, expected SystemAssigned only')
+        if not isinstance(kind, str) or 'systemassigned' not in kind.lower().replace(' ', '').split(','):
+            raise Failed(f'the production site identity is {show(kind)}, expected SystemAssigned')
     names = [carrier.describe() for carrier in carriers] or ['nothing']
     if ctx.environment == 'prod':
         if len(carriers) != 1 or carriers[0].type.lower() != 'microsoft.web/sites/slots' \
                 or carriers[0].segments(1) != ('staging',):
             raise Failed(f'the migrations identity is on {", ".join(names)}, expected only the staging slot')
-        return 'the migrations identity is on the staging slot only; the site has SystemAssigned only'
+        return 'the migrations identity is on the staging slot only; the site signs in with its SystemAssigned identity'
     slots = ctx.of('Microsoft.Web/sites/slots')
     if slots or carriers:
         raise Failed(f'{len(slots)} slot(s) deployed, the migrations identity is on {", ".join(names)}: expected none')
     return 'no slot and no resource with the migrations identity (assigned only during a deployment)'
-
-
-def settings_of(resource):
-    value = resource.get('properties')
-    if not isinstance(value, dict):
-        raise Failed(f'cannot evaluate the settings of {resource.describe()}: {show(value)}')
-    return value
 
 
 def check_jobs(ctx):
@@ -308,23 +283,6 @@ def check_secrets(ctx):
 
 # --- Checks of the scripts (locking and slot stops cannot be expressed in ARM) -----------------------------------
 
-def commands(script):
-    """Shell commands without comment lines, continuation lines joined."""
-    result, current = [], ''
-    for line in script.splitlines():
-        stripped = line.strip()
-        if not current and stripped.startswith('#'):
-            continue
-        if stripped.endswith('\\'):
-            current += stripped[:-1] + ' '
-            continue
-        result.append(current + stripped)
-        current = ''
-    return result + ([current] if current else [])
-
-
-# An az command at the start of a command, not inside an echo text.
-AZ = r'(?:^|[;&|(]\s*)az\s+'
 LOCK = re.compile(AZ + r"storage\s+container\s+immutability-policy\s+lock\b.*(?:--container-name|-c)\s+[\"']?security-log\b")
 SWAP = re.compile(AZ + r'webapp\s+deployment\s+slot\s+swap\b')
 STOP = re.compile(AZ + r"webapp\s+stop\b.*--slot\s+[\"']?staging\b")
@@ -360,11 +318,11 @@ CHECKS = (
     ('migrations identity', None, check_migrations_identity),
     ('jobs only in the production slot', 'INV-085', check_jobs),
     ('no secrets in settings', None, check_secrets),
-)
+) + restore_checks.CHECKS
 SCRIPT_CHECKS = (
     ('setup.sh locks security-log', 'INV-083', check_setup_lock),
     ('deploy stops staging after swap', 'INV-085', check_deploy_stop),
-)
+) + restore_checks.SCRIPT_CHECKS
 
 
 def attempt(check, subject):
@@ -397,40 +355,7 @@ def line(result):
     return f'{"PASS" if ok else "FAIL"} [{label}] {title}{f" ({invariant})" if invariant else ""}: {reason}'
 
 
-# --- Self-test: deliberately broken copies must fail -------------------------------------------------------------
-
-MUTATIONS = []
-
-
-def mutation(label, title, description):
-    def register(function):
-        MUTATIONS.append((description, label, title, function))
-        return function
-    return register
-
-
-def raw_of(template, kind):
-    return [raw for full, raw in raw_resources(template) if full.lower() == kind.lower()]
-
-
-def set_value(template, kind, path, value):
-    for raw in raw_of(template, kind):
-        target = raw
-        for key in path[:-1]:
-            target = target[key]
-        target[path[-1]] = value
-    return len(raw_of(template, kind))
-
-
-def replace_text(template, old, new):
-    """Replaces text anywhere in the template, inside expressions too."""
-    source = json.dumps(template)
-    count = source.count(old)
-    replaced = json.loads(source.replace(old, new))
-    template.clear()
-    template.update(replaced)
-    return count
-
+# --- Self-test: deliberately broken copies must fail (helpers and registry in iac_common.py) --------------------
 
 def rules_of(template, prefix):
     return [rule for raw in raw_of(template, 'Microsoft.Storage/storageAccounts/managementPolicies')
@@ -583,7 +508,8 @@ def main(argv=None):
             template, warnings = build()
             results.append(('build', 'bicep build without warnings', None, not warnings,
                             warnings[0] if warnings else str(MAIN.relative_to(ROOT))))
-        scripts = {'setup': SETUP.read_text(encoding='utf-8'), 'deploy': DEPLOY.read_text(encoding='utf-8')}
+        scripts = {name: path.read_text(encoding='utf-8') for name, path in
+                   (('setup', SETUP), ('deploy', DEPLOY), ('drill', DRILL))}
     except (OSError, ValueError, RuntimeError) as error:
         print(f'FAIL [build] {error}')
         return 1
