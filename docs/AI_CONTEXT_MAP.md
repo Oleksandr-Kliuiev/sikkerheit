@@ -104,17 +104,17 @@
 | --- | --- | --- |
 | Контракт, схемы, каталог | `src/Sikkerheit.Contracts` (`ContractSchemas`, `Catalog.g.cs` из `tools/contracts/gen_csharp_catalog.py`) | `tests/Sikkerheit.UnitTests/Contracts` |
 | Схема БД, RLS, области | `Data/Migrations/0001_p1_core.sql`, `Data/DbScopes.cs`, `Data/SchemaMigrator.cs`, `Data/DatabaseConnections.cs` (вход Entra) | `RowLevelSecurityTests` |
-| Организации, политика, жизненный цикл | `Organizations/` (`OrganizationEndpoints`, `OrganizationLifecycle` — переходы и эпоха версий политики) | `OrganizationApiTests` |
-| Вход сотрудников, сессии, CSRF | `Access/` (`LoginEndpoints`, `StaffIdentity`, `StaffSessions`) | `StaffSignInTests` |
-| Сбор Microsoft 365 | `M365/` (`GraphClient`, `M365Collector` — в том числе активации PIM, `M365CollectionJob`, `ConnectionEndpoints`, `TenantConnections`) | `M365CollectionTests`, `Infrastructure/FakeGraph.cs` |
-| Правила, оценки, проблемы, пересчёт политики и `ruleVersion` | `Assessment/` (`Rules`, `FindingMachine`, `M365Evaluator`, `RecalculatePolicyJob`, `FindingEndpoints`, `Texts`, `RoleNames`) | `M365RulesTests`, `FindingApiTests` |
+| Организации, политика, жизненный цикл | `Organizations/` (`OrganizationEndpoints`, `OrganizationLifecycle` — переходы и эпоха версий политики, `Policies` — ревизии для других модулей, `OrganizationDirectory`) | `OrganizationApiTests` |
+| Вход сотрудников, сессии, CSRF | `Access/` (`LoginEndpoints`, `StaffIdentity`, `StaffSessions`, `StaffDirectory`) | `StaffSignInTests` |
+| Сбор Microsoft 365 | `M365/` (`GraphClient`, `M365Collector` — в том числе активации PIM, `M365CollectionJob`, `ConnectionEndpoints`, `TenantConnections`, `CollectionRuns`) | `M365CollectionTests`, `Infrastructure/FakeGraph.cs` |
+| Правила, оценки, проблемы, пересчёт политики и `ruleVersion` | `Assessment/` (`Rules`, `FindingMachine`, `M365Evaluator`, `RecalculatePolicyJob`, `SweepJobs`, `FindingEndpoints`, `Texts`, `RoleNames`; чтения для отчётов — `AssessmentReads`) | `M365RulesTests`, `FindingApiTests` |
 | Отчёт, покрытие, сводка Teams | `Reports/` (`Coverage`, `ReportBuilder`, `ReportHtml`, `ReportService`, `TeamsDigest`) | `Reports/*Tests`, `ReportApiTests`, `LifecycleJobTests` |
-| Экспорт, удаление, сроки хранения | `Exports/`, `Jobs/DataLifecycleJobs.cs` | `LifecycleJobTests` |
-| Задания и планировщик | `Jobs/` (`JobQueue`, `JobRunner`, `Scheduler`, `SweepJobs`) | `ReportPeriodTests`, интеграционные тесты заданий |
+| Экспорт, удаление, сроки хранения | `Exports/`, `Jobs/DataLifecycleJobs.cs`; строки модулей — их методы `DeleteOrganizationDataAsync`, `Purge…Async`, `ExportAsync` (`Assessment/AssessmentData.cs` и др.), общий `Data/OrganizationRows.cs` | `LifecycleJobTests`, `WorkerInvariantTests` (INV-071) |
+| Задания и планировщик | `Jobs/` (`JobQueue`, `JobRunner`, `Scheduler`) | `ReportPeriodTests`, интеграционные тесты заданий |
 | Журнал безопасности, аудит, файлы, идемпотентность | `Operations/` | через API-тесты, `InfraInvariantTests` |
 | Восстановление после PITR (RB-05) | `Operations/RestoreReplay.cs`, `RestoreReplayCommand.cs` (`dotnet Sikkerheit.Host.dll restore-replay --since <T>`) | `RestoreReplayTests`, `InfraInvariantTests`, `Operations/RestoreReplayCommandTests` |
 | Негативные тесты реестра инвариантов (WP-01) | `tests/Sikkerheit.ContractTests`: классы по `enforcement`, `Invariants/` (атрибуты, реестр, проверка покрытия), `Support/ContractHost.cs` | `RegistryCoverageTests` |
-| Границы модулей | Владельцы таблиц и известные нарушения — `tests/Sikkerheit.UnitTests/Architecture/ModuleBoundaryTests.cs`; план устранения — `dev/module-boundaries.md` | `ModuleBoundaryTests` |
+| Границы модулей | Владельцы таблиц и принятые владельцем исключения (сейчас нет) — `tests/Sikkerheit.UnitTests/Architecture/ModuleBoundaryTests.cs`; интерфейсы модулей и сквозные операции — `dev/module-boundaries.md` | `ModuleBoundaryTests` |
 | Problem, курсоры, заголовки, телеметрия | `Platform/` | `PortalHostingTests` |
 | Портал | `src/Portal/src` (`pages/`, `components/`, `api/schema.d.ts` из OpenAPI, строки `i18n/*.json`) | `src/Portal/src/**/*.test.ts` |
 | Azure | `infra/bicep/main.bicep` и `modules/`, `infra/scripts/setup.sh`, `deploy-app.sh`; развёртывание из GitHub по OIDC — `.github/workflows/deploy.yml` | `tools/iac/check_arm.py` (и `--self-test`; выражения ARM — `arm_eval.py`) |

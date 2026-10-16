@@ -10,9 +10,9 @@ namespace Sikkerheit.UnitTests.Architecture;
 /// <summary>
 /// 02 «Структура репозитория»: a module does not use the tables of another module directly, only its interface. Modules are
 /// the folders of src/Sikkerheit.Host. The test reads the sources (Roslyn syntax trees) and finds table use through the
-/// DbSets of SikkerheitDb, SQL text in string literals and literal lists of table names for dynamic SQL. Accesses that
-/// existed when the rule got its test are listed in Known with the fix proposed in docs/dev/module-boundaries.md; a new
-/// one fails, and a fixed one must leave the list.
+/// DbSets of SikkerheitDb, SQL text in string literals and literal lists of table names for dynamic SQL. An access to the
+/// table of another module fails unless the owner accepted it in Known (docs/dev/module-boundaries.md); an entry that no
+/// longer matches an access fails too.
 /// </summary>
 public sealed partial class ModuleBoundaryTests
 {
@@ -33,87 +33,18 @@ public sealed partial class ModuleBoundaryTests
     /// <summary>The schema and its access layer belong to no module; the composition root wires the modules.</summary>
     private static readonly string[] Exempt = ["Data", "Program.cs"];
 
-    /// <summary>Module → table : file, for accesses that existed before this test (docs/dev/module-boundaries.md).</summary>
-    private static readonly string[] Known =
-    [
-        // Assessment
-        "Assessment → policy_revision : Assessment/FindingEndpoints.cs",
-        "Assessment → staff_user : Assessment/FindingEndpoints.cs",
-        "Assessment → collection_run : Assessment/M365Evaluator.cs",
-        "Assessment → organization : Assessment/RecalculatePolicyJob.cs",
-        "Assessment → policy_revision : Assessment/RecalculatePolicyJob.cs",
-        "Assessment → tenant_connection : Assessment/RecalculatePolicyJob.cs",
-        // Exports
-        "Exports → assessment : Exports/OrganizationExports.cs",
-        "Exports → audit_event : Exports/OrganizationExports.cs",
-        "Exports → collection_run : Exports/OrganizationExports.cs",
-        "Exports → finding : Exports/OrganizationExports.cs",
-        "Exports → finding_event : Exports/OrganizationExports.cs",
-        "Exports → observation : Exports/OrganizationExports.cs",
-        "Exports → organization : Exports/OrganizationExports.cs",
-        "Exports → policy_revision : Exports/OrganizationExports.cs",
-        "Exports → report : Exports/OrganizationExports.cs",
-        "Exports → risk_decision : Exports/OrganizationExports.cs",
-        "Exports → subject : Exports/OrganizationExports.cs",
-        "Exports → tenant_connection : Exports/OrganizationExports.cs",
-        // Jobs
-        "Jobs → assessment : Jobs/DataLifecycleJobs.cs",
-        "Jobs → audit_event : Jobs/DataLifecycleJobs.cs",
-        "Jobs → collection_run : Jobs/DataLifecycleJobs.cs",
-        "Jobs → finding : Jobs/DataLifecycleJobs.cs",
-        "Jobs → finding_event : Jobs/DataLifecycleJobs.cs",
-        "Jobs → idempotency_record : Jobs/DataLifecycleJobs.cs",
-        "Jobs → observation : Jobs/DataLifecycleJobs.cs",
-        "Jobs → organization : Jobs/DataLifecycleJobs.cs",
-        "Jobs → organization_export : Jobs/DataLifecycleJobs.cs",
-        "Jobs → policy_revision : Jobs/DataLifecycleJobs.cs",
-        "Jobs → report : Jobs/DataLifecycleJobs.cs",
-        "Jobs → risk_decision : Jobs/DataLifecycleJobs.cs",
-        "Jobs → subject : Jobs/DataLifecycleJobs.cs",
-        "Jobs → tenant_connection : Jobs/DataLifecycleJobs.cs",
-        "Jobs → organization : Jobs/Scheduler.cs",
-        "Jobs → policy_revision : Jobs/Scheduler.cs",
-        "Jobs → staff_login : Jobs/Scheduler.cs",
-        "Jobs → staff_session : Jobs/Scheduler.cs",
-        "Jobs → teams_digest : Jobs/Scheduler.cs",
-        "Jobs → tenant_connection : Jobs/Scheduler.cs",
-        "Jobs → finding : Jobs/SweepJobs.cs",
-        "Jobs → finding_event : Jobs/SweepJobs.cs",
-        "Jobs → policy_revision : Jobs/SweepJobs.cs",
-        // M365
-        "M365 → finding : M365/ConnectionEndpoints.cs",
-        "M365 → subject : M365/ConnectionEndpoints.cs",
-        "M365 → organization : M365/M365CollectionJob.cs",
-        "M365 → policy_revision : M365/M365CollectionJob.cs",
-        // Organizations
-        "Organizations → audit_event : Organizations/OrganizationEndpoints.cs",
-        "Organizations → finding : Organizations/OrganizationEndpoints.cs",
-        "Organizations → organization_export : Organizations/OrganizationEndpoints.cs",
-        "Organizations → tenant_connection : Organizations/OrganizationEndpoints.cs",
-        // Reports
-        "Reports → assessment : Reports/Coverage.cs",
-        "Reports → policy_revision : Reports/Coverage.cs",
-        "Reports → subject : Reports/Coverage.cs",
-        "Reports → tenant_connection : Reports/Coverage.cs",
-        "Reports → assessment : Reports/ReportBuilder.cs",
-        "Reports → collection_run : Reports/ReportBuilder.cs",
-        "Reports → finding : Reports/ReportBuilder.cs",
-        "Reports → finding_event : Reports/ReportBuilder.cs",
-        "Reports → policy_revision : Reports/ReportBuilder.cs",
-        "Reports → risk_decision : Reports/ReportBuilder.cs",
-        "Reports → staff_user : Reports/ReportBuilder.cs",
-        "Reports → subject : Reports/ReportBuilder.cs",
-        "Reports → tenant_connection : Reports/ReportBuilder.cs",
-        "Reports → organization : Reports/ReportService.cs",
-        "Reports → collection_run : Reports/TeamsDigest.cs",
-        "Reports → finding : Reports/TeamsDigest.cs",
-        "Reports → finding_event : Reports/TeamsDigest.cs",
-        "Reports → organization : Reports/TeamsDigest.cs",
-    ];
+    /// <summary>
+    /// Module → table : file, for accesses to the tables of another module that the owner accepted, each with its reason
+    /// (docs/dev/module-boundaries.md). The 67 accesses that existed when the rule got its test are gone.
+    /// </summary>
+    private static readonly string[] Known = [];
 
     public sealed record Access(string Module, string Table, string File, int Line, string How)
     {
         public string Key => $"{Module} → {Table} : {File}";
+
+        /// <summary>The table belongs to another module.</summary>
+        public bool Foreign => Owners[Table] != Module;
     }
 
     private static string Source => Path.Combine(RepoPaths.Root, "src", "Sikkerheit.Host");
@@ -152,7 +83,7 @@ public sealed partial class ModuleBoundaryTests
             var tree = CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path);
             void Add(string table, SyntaxNode node, string how)
             {
-                if (Owners.TryGetValue(table, out var owner) && owner != module)
+                if (Owners.ContainsKey(table))
                 {
                     accesses.Add(new Access(module, table, file, tree.GetLineSpan(node.Span).StartLinePosition.Line + 1, how));
                 }
@@ -239,7 +170,8 @@ public sealed partial class ModuleBoundaryTests
     [Fact]
     public void The_scan_sees_the_kinds_of_access_it_looks_for()
     {
-        // A DbSet, SQL text and a table list: the scanner must find each kind, or the rule below proves nothing.
+        // A DbSet, SQL text and a table list: the scanner must find each kind, or the rule below proves nothing. The owners
+        // use their own tables in all three ways, so the kinds are seen even without a single foreign access.
         var hows = Scan().Select(a => a.How.Split(' ')[0]).ToHashSet(StringComparer.Ordinal);
         Assert.Contains("DbSet", hows);
         Assert.Contains("SQL", hows);
@@ -249,7 +181,7 @@ public sealed partial class ModuleBoundaryTests
     [Fact]
     public void No_module_uses_the_tables_of_another_module_beyond_the_known_list()
     {
-        var found = Scan();
+        var found = Scan().Where(a => a.Foreign).ToList();
         var keys = found.Select(a => a.Key).ToHashSet(StringComparer.Ordinal);
         var added = found.Where(a => !Known.Contains(a.Key)).GroupBy(a => a.Key)
             .Select(g => $"{g.Key} (line {g.First().Line}, {g.First().How}): use the interface of module {Owners[g.First().Table]}")

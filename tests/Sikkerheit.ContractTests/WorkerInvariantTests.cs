@@ -93,12 +93,13 @@ public sealed class WorkerInvariantTests(PostgresFixture postgres) : IAsyncLifet
         var deleted = JsonDocument.Parse(summary.Details!).RootElement.GetProperty("deleted");
         Assert.Equal(Catalog.RetentionPurgeOrder.Order(), deleted.EnumerateObject().Select(p => p.Name).Order());
         // The events, assessments and findings went in one run: the foreign keys allow that only in the registry order.
-        // The statements of the job follow the same order (jsonb does not keep the order of the summary keys).
+        // The job deletes table by table through the owner modules in the same order: every registry table is a step of
+        // the job, in order (jsonb does not keep the order of the summary keys).
         var source = File.ReadAllText(Path.Combine(InvariantRegistry.Root, "src", "Sikkerheit.Host", "Jobs", "DataLifecycleJobs.cs"));
         var purge = source[source.IndexOf("class RetentionPurgeJob", StringComparison.Ordinal)..];
-        var statements = System.Text.RegularExpressions.Regex.Matches(purge, @"delete from ([a-z_]+)").Select(m => m.Groups[1].Value)
-            .Where(Catalog.RetentionPurgeOrder.Contains).Distinct().ToList();
-        Assert.Equal(Catalog.RetentionPurgeOrder.Where(statements.Contains), statements);
+        var steps = System.Text.RegularExpressions.Regex.Matches(purge, @"\[""([a-z_]+)""\] = (?:await|0)")
+            .Select(m => m.Groups[1].Value).ToList();
+        Assert.Equal(Catalog.RetentionPurgeOrder, steps);
         Assert.True(deleted.GetProperty("finding_event").GetInt32() >= 2);
         Assert.True(deleted.GetProperty("finding").GetInt32() >= 1);
         Assert.True(deleted.GetProperty("observation").GetInt32() >= 1);

@@ -22,18 +22,37 @@ public static class OrganizationLifecycle
     /// <summary>The smallest multiple of the epoch greater than the highest stored version.</summary>
     public static int NextEpoch(int maxVersion) => (maxVersion / PolicyEpoch + 1) * PolicyEpoch;
 
+    /// <summary>Tables of this module in the organization export, with their stable order.</summary>
+    private static readonly (string Table, string Order)[] ExportTables = [("organization", "id"), ("policy_revision", "version")];
+
+    /// <summary>Removes the policy revisions and the organization itself, after the other modules removed their rows.</summary>
+    public static Task DeleteOrganizationDataAsync(DbScope scope, CancellationToken ct) =>
+        OrganizationRows.DeleteAsync(scope, ["policy_revision", "organization"], ct);
+
+    /// <summary>The organization and its policy revisions for the organization export.</summary>
+    public static Task ExportAsync(DbScope scope, TableRowsWriter write, CancellationToken ct) =>
+        OrganizationRows.ExportAsync(scope, ExportTables, write, ct);
+
     /// <summary>Every organization; only for components with the read-all scope (02 «Разделение клиентов»).</summary>
     public static async Task<IReadOnlyList<OrganizationState>> ListAsync(DbScope all, CancellationToken ct) =>
         await all.Db.Organizations.AsNoTracking().OrderBy(o => o.Id)
             .Select(o => new OrganizationState(o.Id, o.Status, o.DeletionDueAt)).ToListAsync(ct);
 
-    /// <summary>The organization of the scope locked for a transition, or null when it does not exist.</summary>
-    public static async Task<Organization?> LockAsync(DbScope scope, CancellationToken ct)
+    /// <summary>
+    /// The organization of the scope, or null when it does not exist. forUpdate locks the row: for a transition, or for
+    /// the final transaction of a job that must see the organization still active.
+    /// </summary>
+    public static async Task<Organization?> FindAsync(DbScope scope, bool forUpdate, CancellationToken ct)
     {
         var id = scope.OrganizationId!.Value;
-        return await scope.Db.Organizations.FromSqlInterpolated($"select * from organization where id = {id} for update")
-            .SingleOrDefaultAsync(ct);
+        var query = forUpdate
+            ? scope.Db.Organizations.FromSqlInterpolated($"select * from organization where id = {id} for update")
+            : scope.Db.Organizations.Where(o => o.Id == id);
+        return await query.SingleOrDefaultAsync(ct);
     }
+
+    /// <summary>The organization of the scope locked for a transition, or null when it does not exist.</summary>
+    public static Task<Organization?> LockAsync(DbScope scope, CancellationToken ct) => FindAsync(scope, forUpdate: true, ct);
 
     public static void Disable(Organization organization, DateTimeOffset at)
     {

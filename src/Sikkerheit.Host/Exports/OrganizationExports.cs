@@ -1,13 +1,14 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Sikkerheit.Contracts;
+using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Jobs;
+using Sikkerheit.Host.M365;
 using Sikkerheit.Host.Operations;
 using Sikkerheit.Host.Organizations;
 using Sikkerheit.Host.Platform;
@@ -34,16 +35,36 @@ public static class OrganizationExports
     public const int FormatVersion = 1;
     public static readonly TimeSpan Lifetime = TimeSpan.FromDays(7);
 
-    /// <summary>Tables in the export with their stable order; only fixed identifiers reach the SQL text.</summary>
-    private static readonly (string Table, string Order)[] Tables =
-    [
-        ("organization", "id"), ("policy_revision", "version"), ("tenant_connection", "organization_id"),
-        ("collection_run", "queued_at, id"), ("subject", "first_seen_at, id"), ("observation", "observed_at, id"),
-        ("assessment", "evaluated_at, id"), ("finding", "opened_at, id"), ("finding_event", "occurred_at, id"),
-        ("risk_decision", "decided_at, id"), ("report", "period_start, id"), ("audit_event", "occurred_at, id"),
-    ];
-
     public static string FileKey(Guid organizationId, Guid exportId) => $"{organizationId}/{exportId}.zip";
+
+    /// <summary>Removes the export rows of the scope's organization (its deletion; the files go with its prefix).</summary>
+    public static Task DeleteOrganizationDataAsync(DbScope scope, CancellationToken ct) =>
+        OrganizationRows.DeleteAsync(scope, ["organization_export"], ct);
+
+    /// <summary>
+    /// Ready exports past their 7 days (04 «Сроки хранения»): the file is deleted now, the export turns expired with the
+    /// caller's SaveChanges.
+    /// </summary>
+    public static async Task ExpireAsync(DbScope scope, IFileStore files, DateTimeOffset now, CancellationToken ct)
+    {
+        var organizationId = scope.OrganizationId!.Value;
+        var expired = await scope.Db.OrganizationExports
+            .Where(e => e.OrganizationId == organizationId && e.State == "ready" && e.ExpiresAt <= now).ToListAsync(ct);
+        foreach (var export in expired)
+        {
+            await files.DeleteAsync(FileContainers.Exports, export.BlobKey!, ct);
+            export.State = "expired";
+            export.BlobKey = null;
+        }
+    }
+
+    /// <summary>True when the scope's organization has an export created at the moment or later that became ready.</summary>
+    public static async Task<bool> HasExportSinceAsync(DbScope scope, DateTimeOffset since, CancellationToken ct)
+    {
+        var organizationId = scope.OrganizationId!.Value;
+        return await scope.Db.OrganizationExports.AnyAsync(
+            e => e.OrganizationId == organizationId && e.CreatedAt >= since && (e.State == "ready" || e.State == "expired"), ct);
+    }
 
     /// <summary>Keys of every export file the database knows; only for components with the read-all scope.</summary>
     public static async Task<IReadOnlySet<string>> KnownFileKeysAsync(DbScope all, CancellationToken ct) =>
@@ -149,33 +170,23 @@ public static class OrganizationExports
                 files.Add(new { path, sha256 = Convert.ToHexStringLower(SHA256.HashData(content)), bytes = content.Length, rows });
             }
 
+            async Task TableAsync(string table, byte[] lines, int rows)
+            {
+                counts[table] = rows;
+                await AddAsync($"data/{table}.jsonl", lines, rows);
+            }
+
             await using (var utc = new NpgsqlCommand("set local timezone = 'UTC'", scope.Connection, scope.Transaction))
             {
                 await utc.ExecuteNonQueryAsync(ct);
             }
-            foreach (var (table, order) in Tables)
-            {
-                var column = table == "organization" ? "id" : "organization_id";
-                await using var command = new NpgsqlCommand(
-                    $"select to_jsonb(t)::text from {table} t where t.{column} = @org order by {order}",
-                    scope.Connection, scope.Transaction);
-                command.Parameters.AddWithValue("org", organization.Id);
-                using var lines = new MemoryStream();
-                var count = 0;
-                await using (var reader = await command.ExecuteReaderAsync(ct))
-                {
-                    while (await reader.ReadAsync(ct))
-                    {
-                        lines.Write(Encoding.UTF8.GetBytes(reader.GetString(0)));
-                        lines.WriteByte((byte)'\n');
-                        count++;
-                    }
-                }
-                counts[table] = count;
-                await AddAsync($"data/{table}.jsonl", lines.ToArray(), count);
-            }
-            var ready = await scope.Db.Reports.AsNoTracking()
-                .Where(r => r.OrganizationId == organization.Id && r.State == "ready").OrderBy(r => r.PeriodStart).ToListAsync(ct);
+            // Every module writes its own tables; the order of the files stays stable for readers of the archive.
+            await OrganizationLifecycle.ExportAsync(scope, TableAsync, ct);
+            await TenantConnections.ExportAsync(scope, TableAsync, ct);
+            await AssessmentData.ExportAsync(scope, TableAsync, ct);
+            await ReportService.ExportAsync(scope, TableAsync, ct);
+            await AuditLog.ExportAsync(scope, TableAsync, ct);
+            var ready = await ReportService.ReadyAsync(scope, ct);
             foreach (var report in ready)
             {
                 await AddAsync($"reports/report-{report.Id}.html", await reports.ContentAsync(report, ct), null);
@@ -218,7 +229,7 @@ public sealed class OrganizationExportJob(DbScopes scopes, IFileStore files, Rep
                 throw new JobLeaseLostException();
             }
             var export = await scope.Db.OrganizationExports.SingleOrDefaultAsync(e => e.OrganizationId == organizationId && e.Id == exportId, ct);
-            var organization = await scope.Db.Organizations.AsNoTracking().SingleOrDefaultAsync(o => o.Id == organizationId, ct);
+            var organization = await OrganizationLifecycle.FindAsync(scope, forUpdate: false, ct);
             if (export is { State: "queued" } && organization is not null)
             {
                 var now = clock.GetUtcNow();

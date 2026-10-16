@@ -1,7 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
+using Sikkerheit.Host.Exports;
+using Sikkerheit.Host.M365;
 using Sikkerheit.Host.Operations;
+using Sikkerheit.Host.Organizations;
+using Sikkerheit.Host.Reports;
 
 namespace Sikkerheit.Host.Jobs;
 
@@ -22,8 +27,7 @@ public sealed class OrganizationDeleteJob(DbScopes scopes, IFileStore files, ISe
         {
             throw new JobLeaseLostException();
         }
-        var organization = await scope.Db.Organizations
-            .FromSqlInterpolated($"select * from organization where id = {org} for update").SingleOrDefaultAsync(ct);
+        var organization = await OrganizationLifecycle.FindAsync(scope, forUpdate: true, ct);
         var now = clock.GetUtcNow();
         if (organization is { Status: "deletion_scheduled" } && organization.DeletionDueAt <= now)
         {
@@ -40,17 +44,11 @@ public sealed class OrganizationDeleteJob(DbScopes scopes, IFileStore files, ISe
 
 /// <summary>
 /// Removal of all data of one organization in its scope: files under its prefix, the rows of every client table and a
-/// tombstone. Used by organization_delete and by the restore replay of organization.delete (06).
+/// tombstone. Used by organization_delete and by the restore replay of organization.delete (06). Every module removes its
+/// own rows; the calls follow the foreign keys.
 /// </summary>
 public static class OrganizationDeletion
 {
-    /// <summary>Client tables in an order that respects the foreign keys.</summary>
-    private static readonly string[] Tables =
-    [
-        "audit_event", "report", "organization_export", "risk_decision", "finding_event", "finding", "assessment",
-        "observation", "subject", "collection_run", "idempotency_record", "tenant_connection", "policy_revision",
-    ];
-
     /// <param name="keepJobId">The running deletion job, which completes in the same transaction.</param>
     /// <param name="deleteFiles">False in a restore drill, where the production files may only be read.</param>
     public static async Task DeleteAsync(DbScope scope, IFileStore files, DateTimeOffset now, Guid? keepJobId,
@@ -64,15 +62,14 @@ public static class OrganizationDeletion
                 await files.DeletePrefixAsync(container, FileContainers.OrganizationPrefix(org), ct);
             }
         }
-        foreach (var table in Tables)
-        {
-            await using var delete = new NpgsqlCommand($"delete from {table} where organization_id = @org",
-                scope.Connection, scope.Transaction);
-            delete.Parameters.AddWithValue("org", org);
-            await delete.ExecuteNonQueryAsync(ct);
-        }
+        await AuditLog.DeleteOrganizationDataAsync(scope, ct);
+        await ReportService.DeleteOrganizationDataAsync(scope, ct);
+        await OrganizationExports.DeleteOrganizationDataAsync(scope, ct);
+        await AssessmentData.DeleteOrganizationDataAsync(scope, ct);
+        await TenantConnections.DeleteOrganizationDataAsync(scope, ct);
+        await Idempotency.DeleteOrganizationDataAsync(scope, ct);
+        await OrganizationLifecycle.DeleteOrganizationDataAsync(scope, ct);
         await using var command = new NpgsqlCommand("""
-            delete from organization where id = @org;
             delete from job where organization_id = @org and id is distinct from @job and state <> 'running';
             insert into organization_tombstone (id, deleted_at) values (@org, @now) on conflict do nothing;
             """, scope.Connection, scope.Transaction);
@@ -108,101 +105,40 @@ public sealed class RetentionPurgeJob(DbScopes scopes, IFileStore files, TimePro
         {
             throw new JobLeaseLostException();
         }
-        if (!await scope.Db.Organizations.AnyAsync(o => o.Id == org, ct))
+        if (await OrganizationLifecycle.FindAsync(scope, forUpdate: false, ct) is null)
         {
             await lease.CompleteAsync(scope, ct);
             await scope.CommitAsync(ct);
             return;
         }
-        async Task<int> RunAsync(string sql)
-        {
-            await using var command = new NpgsqlCommand(sql, scope.Connection, scope.Transaction);
-            command.Parameters.AddWithValue("org", org);
-            command.Parameters.AddWithValue("now", now);
-            command.Parameters.AddWithValue("evidence_cut", now - Evidence);
-            command.Parameters.AddWithValue("history_cut", now - History);
-            return await command.ExecuteNonQueryAsync(ct);
-        }
+        var cuts = new RetentionCuts(now, now - Evidence, now - History);
 
-        // Decisions of closed findings older than 12 months; active decisions stay with their events.
-        var riskDecisions = await RunAsync("""
-            delete from risk_decision d using finding f
-            where d.organization_id = @org and f.organization_id = d.organization_id and f.id = d.finding_id
-              and d.decided_at < @history_cut and f.technical_state = 'resolved'
-            """);
-        var findingEvents = await RunAsync("""
-            delete from finding_event e
-            where e.organization_id = @org and e.occurred_at < @history_cut
-              and not exists (select 1 from risk_decision d where d.organization_id = e.organization_id and d.finding_event_id = e.id)
-              and e.id not in (
-                  select distinct on (x.finding_id) x.id from finding_event x
-                  join finding f on f.organization_id = x.organization_id and f.id = x.finding_id and f.technical_state = 'open'
-                  where x.organization_id = @org and x.event_type in ('opened', 'reopened')
-                  order by x.finding_id, x.occurred_at desc, x.id desc)
-            """);
-        var snapshotted = await RunAsync("""
-            update assessment a set observation_id = null, evidence_availability = 'expired'
-            from observation o
-            where a.organization_id = @org and o.organization_id = a.organization_id and o.id = a.observation_id
-              and o.observed_at < @evidence_cut
-            """);
-        var assessments = await RunAsync("""
-            delete from assessment a
-            where a.organization_id = @org and a.evaluated_at < @history_cut
-              and not exists (select 1 from finding_event e where e.organization_id = a.organization_id and e.assessment_id = a.id)
-              and not exists (select 1 from finding f where f.organization_id = a.organization_id and f.latest_assessment_id = a.id)
-            """);
-        var findings = await RunAsync("""
-            delete from finding f
-            where f.organization_id = @org and f.technical_state = 'resolved'
-              and not exists (select 1 from finding_event e where e.organization_id = f.organization_id and e.finding_id = f.id)
-              and not exists (select 1 from risk_decision d where d.organization_id = f.organization_id and d.finding_id = f.id)
-            """);
-        var observations = await RunAsync("""
-            delete from observation o
-            where o.organization_id = @org and o.observed_at < @evidence_cut
-              and not exists (select 1 from assessment a where a.organization_id = o.organization_id and a.observation_id = o.id)
-            """);
-        var runs = await RunAsync("""
-            delete from collection_run r
-            where r.organization_id = @org and r.queued_at < @evidence_cut and r.state not in ('queued', 'running')
-              and not exists (select 1 from observation o where o.organization_id = r.organization_id and o.collection_run_id = r.id)
-            """);
-        var subjects = await RunAsync("""
-            delete from subject s
-            where s.organization_id = @org and s.retired_at < @history_cut
-              and not exists (select 1 from finding f where f.organization_id = s.organization_id and f.subject_id = s.id)
-              and not exists (select 1 from assessment a where a.organization_id = s.organization_id and a.subject_id = s.id)
-              and not exists (select 1 from observation o where o.organization_id = s.organization_id and o.subject_id = s.id)
-            """);
-        await RunAsync("delete from idempotency_record where organization_id = @org and created_at < @now - interval '7 days'");
-        await RunAsync("delete from audit_event where organization_id = @org and occurred_at < @history_cut");
+        // Evidence past its term gives way to the basis snapshot before the observations go.
+        var snapshotted = await AssessmentData.ExpireEvidenceAsync(scope, cuts, ct);
+        // Every owner deletes its rows past their terms, table by table in the order of the registry, which respects the
+        // foreign keys; runs that observations still refer to stay.
+        var deleted = new Dictionary<string, int>
+        {
+            ["risk_decision"] = await AssessmentData.PurgeRiskDecisionsAsync(scope, cuts, ct),
+            ["finding_event"] = await AssessmentData.PurgeFindingEventsAsync(scope, cuts, ct),
+            ["assessment"] = await AssessmentData.PurgeAssessmentsAsync(scope, cuts, ct),
+            ["finding"] = await AssessmentData.PurgeFindingsAsync(scope, cuts, ct),
+            ["observation"] = await AssessmentData.PurgeObservationsAsync(scope, cuts, ct),
+            ["collection_run"] = await CollectionRuns.PurgeAsync(scope, cuts, await AssessmentData.ObservedRunsAsync(scope, ct), ct),
+            ["scan_batch"] = 0, ["scan_request"] = 0,
+            ["subject"] = await AssessmentData.PurgeSubjectsAsync(scope, cuts, ct),
+            ["device_presence"] = 0, ["device"] = 0, ["revoked_installation"] = 0,
+        };
+        await Idempotency.PurgeAsync(scope, cuts, ct);
+        await AuditLog.PurgeAsync(scope, cuts, ct);
 
         // Report files and rows after 12 months; export files after their 7 days.
-        var oldReports = await scope.Db.Reports.Where(r => r.OrganizationId == org && r.CreatedAt < now - History).ToListAsync(ct);
-        foreach (var report in oldReports.Where(r => r.BlobKey is not null))
-        {
-            await files.DeleteAsync(FileContainers.Reports, report.BlobKey!, ct);
-        }
-        scope.Db.Reports.RemoveRange(oldReports);
-        var expired = await scope.Db.OrganizationExports
-            .Where(e => e.OrganizationId == org && e.State == "ready" && e.ExpiresAt <= now).ToListAsync(ct);
-        foreach (var export in expired)
-        {
-            await files.DeleteAsync(FileContainers.Exports, export.BlobKey!, ct);
-            export.State = "expired";
-            export.BlobKey = null;
-        }
+        await ReportService.PurgeAsync(scope, files, cuts, ct);
+        await OrganizationExports.ExpireAsync(scope, files, now, ct);
 
         AuditLog.System(scope, "retention.purge_summary", "organization", org.ToString(), "job:" + lease.JobId, new
         {
-            deleted = new Dictionary<string, int>
-            {
-                ["risk_decision"] = riskDecisions, ["finding_event"] = findingEvents, ["assessment"] = assessments,
-                ["finding"] = findings,
-                ["observation"] = observations, ["collection_run"] = runs, ["scan_batch"] = 0, ["scan_request"] = 0,
-                ["subject"] = subjects, ["device_presence"] = 0, ["device"] = 0, ["revoked_installation"] = 0,
-            },
+            deleted,
             snapshotted,
         });
         await scope.Db.SaveChangesAsync(ct);
@@ -210,3 +146,6 @@ public sealed class RetentionPurgeJob(DbScopes scopes, IFileStore files, TimePro
         await scope.CommitAsync(ct);
     }
 }
+
+/// <summary>Cut-offs of one retention run (04 «Сроки хранения»): evidence after 90 days, history after 12 months.</summary>
+public sealed record RetentionCuts(DateTimeOffset Now, DateTimeOffset Evidence, DateTimeOffset History);

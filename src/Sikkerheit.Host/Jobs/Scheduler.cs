@@ -1,8 +1,12 @@
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Npgsql;
+using Sikkerheit.Host.Access;
 using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
+using Sikkerheit.Host.M365;
+using Sikkerheit.Host.Organizations;
 using Sikkerheit.Host.Reports;
 
 namespace Sikkerheit.Host.Jobs;
@@ -48,20 +52,13 @@ public sealed class Scheduler(DbScopes scopes, TimeProvider clock, ILogger<Sched
         // The scheduler is in the closed list of components with the read-all scope (02 «Разделение клиентов»).
         await using (var all = await scopes.ReadAllAsync(ct))
         {
-            await using var command = new NpgsqlCommand("""
-                select o.id, o.timezone,
-                       coalesce((select (p.configuration -> 'm365' ->> 'collectionHourLocal')::int from policy_revision p
-                                 where p.organization_id = o.id order by p.version desc limit 1), 3),
-                       coalesce(t.status = 'active', false), o.created_at, o.status, o.deletion_due_at
-                from organization o left join tenant_connection t on t.organization_id = o.id
-                """, all.Connection, all.Transaction);
-            await using var reader = await command.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-            {
-                plans.Add(new OrganizationPlan(reader.GetGuid(0), reader.GetString(1), reader.GetInt32(2), reader.GetBoolean(3),
-                    reader.GetFieldValue<DateTimeOffset>(4), reader.GetString(5),
-                    reader.IsDBNull(6) ? null : reader.GetFieldValue<DateTimeOffset>(6)));
-            }
+            // Organizations first: the revision and the connection of a listed organization were created with it.
+            var organizations = await OrganizationDirectory.ListAsync(all, ct);
+            var policies = await Policies.CurrentByOrganizationAsync(all, ct);
+            var connections = await TenantConnections.StatesAsync(all, ct);
+            plans.AddRange(organizations.Select(o => new OrganizationPlan(o.Id, o.Timezone,
+                CollectionHour(policies.GetValueOrDefault(o.Id)), connections.GetValueOrDefault(o.Id)?.Status == "active",
+                o.CreatedAt, o.Status, o.DeletionDueAt)));
         }
         await using var platform = await scopes.PlatformAsync(ct);
         var hour = now.UtcDateTime.ToString("yyyy-MM-dd'T'HH", CultureInfo.InvariantCulture);
@@ -108,19 +105,37 @@ public sealed class Scheduler(DbScopes scopes, TimeProvider clock, ILogger<Sched
         await platform.CommitAsync(ct);
     }
 
-    /// <summary>Platform rows past their terms (04 «Сроки хранения»): jobs, sessions, sign-in attempts, tombstones, digest marks.</summary>
+    /// <summary>m365.collectionHourLocal of the newest revision; 3 without a revision or a value.</summary>
+    private static int CollectionHour(PolicyRevision? policy)
+    {
+        if (policy is null)
+        {
+            return 3;
+        }
+        using var configuration = JsonDocument.Parse(policy.Configuration);
+        return configuration.RootElement.TryGetProperty("m365", out var m365) && m365.ValueKind == JsonValueKind.Object
+               && m365.TryGetProperty("collectionHourLocal", out var hour) && hour.ValueKind != JsonValueKind.Null
+            ? hour.GetInt32()
+            : 3;
+    }
+
+    /// <summary>
+    /// Platform rows past their terms (04 «Сроки хранения»): jobs and tombstones here, sessions and sign-in attempts in
+    /// Access, digest marks in Reports.
+    /// </summary>
     private static async Task PurgePlatformAsync(DbScope platform, DateTimeOffset now, CancellationToken ct)
     {
-        await using var command = new NpgsqlCommand("""
+        await using (var command = new NpgsqlCommand("""
             delete from job where (state = 'succeeded' and completed_at < @now - interval '30 days')
                                or (state = 'failed' and completed_at < @now - interval '90 days');
-            delete from staff_session where expires_at < @now;
-            delete from staff_login where expires_at < @now;
             delete from organization_tombstone where deleted_at < @now - interval '365 days';
-            delete from teams_digest where sent_at < @now - interval '90 days';
-            """, platform.Connection, platform.Transaction);
-        command.Parameters.AddWithValue("now", now);
-        await command.ExecuteNonQueryAsync(ct);
+            """, platform.Connection, platform.Transaction))
+        {
+            command.Parameters.AddWithValue("now", now);
+            await command.ExecuteNonQueryAsync(ct);
+        }
+        await StaffSessions.PurgeExpiredAsync(platform, now, ct);
+        await TeamsDigestJob.PurgeMarksAsync(platform, now, ct);
     }
 
     /// <summary>
