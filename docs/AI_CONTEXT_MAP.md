@@ -79,7 +79,7 @@
 
 ### Azure, распространение агента, эксплуатация, расходы
 
-`06`; `08` → ADR-02…ADR-04, ADR-09; `07` → SP-02, SP-05, WP-07, WP-11, «Runbooks»; runbooks P1 — `runbooks/` (путь от `docs/`).
+`06`; `08` → ADR-02…ADR-04, ADR-09; `07` → SP-02, SP-05, WP-07, WP-11, «Runbooks»; runbooks — `runbooks/` (путь от `docs/`; P2 — RB-08…RB-12). Скрипт RMM, MSI и их проверки: `../tools/rmm/` (скрипт `Sikkerheit-Rmm.ps1`, тесты `tests/Run-RmmTests.ps1`, `check_installer.py`), `../src/Agent/Installer/Package.wxs`; что подтверждает только Windows и RMM — `dev/rmm-windows-verification.md`; решения и отступления — `reviews/0.3.0-decisions.md`, «Распространение агента (WP-11)». Метрики колец — `../src/Sikkerheit.Host/Agents/AgentMetrics.cs`.
 
 ### План, трудоёмкость, приёмка
 

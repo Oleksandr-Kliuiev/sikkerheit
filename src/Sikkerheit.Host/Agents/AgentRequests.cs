@@ -124,7 +124,7 @@ public static class AgentRequests
         device.AgentVersion = body.GetProperty("agentVersion").GetString();
         device.ConfigSchemaVersion = body.GetProperty("configSchemaVersion").GetInt32();
         device.Telemetry = Devices.Telemetry(body) ?? "{}";
-        AgentMetrics.CheckIn(context.OrganizationId, device.Id, body, device.ClockStatus == "inconsistent");
+        AgentMetrics.CheckIn(context.OrganizationId, device.Id, body, device.ClockStatus == "inconsistent", now);
         await Devices.MarkPresentAsync(scope, device.Id, now, ct);
         await DeviceSubjects.SeenAsync(scope, device.Id, now, ct);
 

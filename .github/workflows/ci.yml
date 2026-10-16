@@ -61,6 +61,36 @@ jobs:
       - name: Agent tests including WindowsSmokeTests
         run: dotnet test --project tests/Sikkerheit.Agent.Tests --no-build -c Release
 
+  rmm:
+    # WP-11: the script of the RMM (INV-201) in PowerShell 7 and the static check of the MSI description. pwsh is on the runner.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax of the PowerShell files
+        shell: pwsh
+        run: ./tools/rmm/Test-Syntax.ps1
+      - name: Tests of the RMM script (negative cases of INV-201)
+        shell: pwsh
+        run: ./tools/rmm/tests/Run-RmmTests.ps1
+      - name: Package.wxs agrees with the agent and the RMM script
+        run: python3 -I tools/rmm/check_installer.py
+      - name: The static check of the MSI fails on every broken rule
+        run: python3 -I -m unittest discover -s tools/rmm/tests -p 'test_*.py'
+
+  rmm-windows:
+    # The same tests in Windows PowerShell 5.1 (the PowerShell of the RMM). Not SP-05: no signature, no msiexec, no RMM.
+    # continue-on-error until the first real run shows how the runner behaves.
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax in Windows PowerShell 5.1
+        shell: powershell
+        run: ./tools/rmm/Test-Syntax.ps1
+      - name: Tests of the RMM script in Windows PowerShell 5.1
+        shell: powershell
+        run: ./tools/rmm/tests/Run-RmmTests.ps1
+
   infra:
     runs-on: ubuntu-latest
     steps:

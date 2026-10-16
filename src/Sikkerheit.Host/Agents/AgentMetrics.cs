@@ -22,6 +22,9 @@ public static class AgentMetrics
     private static readonly Counter<long> ServiceStarts = Meter.CreateCounter<long>("agent.service_starts");
     private static readonly Counter<long> AbandonedCollectors = Meter.CreateCounter<long>("agent.abandoned_collectors");
     private static readonly Counter<long> ClockInconsistent = Meter.CreateCounter<long>("agent.clock_inconsistent");
+    private static readonly Histogram<long> WorkingSet = Meter.CreateHistogram<long>("agent.working_set_mb", "MB");
+    private static readonly Histogram<long> CpuSeconds = Meter.CreateHistogram<long>("agent.cpu_seconds", "s");
+    private static readonly Counter<long> RecentCrashes = Meter.CreateCounter<long>("agent.recent_crashes");
     private static readonly Counter<long> Batches = Meter.CreateCounter<long>("agent.batches");
     private static readonly Histogram<double> ScanSeconds = Meter.CreateHistogram<double>("agent.submit_scan.seconds", "s");
 
@@ -30,7 +33,10 @@ public static class AgentMetrics
         { "organizationId", organizationId.ToString() }, { "deviceId", deviceId.ToString() }, { "agentVersion", version ?? "unknown" },
     };
 
-    public static void CheckIn(Guid organizationId, Guid deviceId, JsonElement body, bool clockInconsistent)
+    /// <summary>A check-in that reports a crash newer than this counts in agent.recent_crashes (RB-08: a fresh lastCrashAt stops a ring).</summary>
+    public static readonly TimeSpan FreshCrash = TimeSpan.FromHours(24);
+
+    public static void CheckIn(Guid organizationId, Guid deviceId, JsonElement body, bool clockInconsistent, DateTimeOffset now)
     {
         var tags = Tags(organizationId, deviceId, body.GetProperty("agentVersion").GetString());
         CheckIns.Add(1, tags);
@@ -39,6 +45,14 @@ public static class AgentMetrics
         RejectedBatches.Add(body.GetProperty("rejectedBatchCount").GetInt64(), tags);
         ServiceStarts.Add(body.GetProperty("serviceStarts").GetInt64(), tags);
         AbandonedCollectors.Add(body.GetProperty("abandonedCollectors").GetInt64(), tags);
+        WorkingSet.Record(body.GetProperty("workingSetMb").GetInt64(), tags);
+        CpuSeconds.Record(body.GetProperty("cpuSeconds").GetInt64(), tags);
+        if (body.TryGetProperty("lastCrashAt", out var crash) && crash.ValueKind == JsonValueKind.String
+            && DateTimeOffset.TryParse(crash.GetString(), System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal, out var crashedAt) && now - crashedAt < FreshCrash)
+        {
+            RecentCrashes.Add(1, tags);
+        }
         if (body.GetProperty("configRejected").GetBoolean())
         {
             ConfigRejected.Add(1, tags);

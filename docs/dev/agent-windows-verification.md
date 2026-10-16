@@ -15,7 +15,7 @@
 | --- | --- | --- |
 | 1.1 | Служба `Sikkerheit.Agent` работает под LocalSystem, тип запуска автоматический (отложенный не нужен) | `sc qc Sikkerheit.Agent`, `sc qprivs` |
 | 1.2 | Каталог данных (`%ProgramData%\Sikkerheit\Agent`) доступен только SYSTEM, наследование снято | `icacls`; обычный пользователь и локальный администратор без смены владельца не читают `agent.db`, `enrollment.key.dpapi` |
-| 1.3 | Каталог установки доступен на запись только SYSTEM и администраторам (задаёт MSI, WP-11) | `icacls`; попытка заменить `Sikkerheit.Agent.exe` обычным пользователем отклонена |
+| 1.3 | Каталог установки доступен на запись только SYSTEM и администраторам (задаёт MSI, WP-11; список проверок MSI и скрипта RMM — [rmm-windows-verification.md](rmm-windows-verification.md)) | `icacls`; попытка заменить `Sikkerheit.Agent.exe` обычным пользователем отклонена |
 | 1.4 | Обычный пользователь не может остановить, перенастроить службу и подменить конфигурацию | `sc stop`, `sc config` от обычного пользователя; запись в `appsettings.json` |
 | 1.5 | Нет входящих соединений и named pipe | `netstat -ano`, `Get-NetTCPConnection`, `handle`/`pipelist` по PID службы |
 | 1.6 | Нет дочерних процессов за сутки работы и при сборе | Sysmon event 1 (ParentImage агента) или Process Monitor |

@@ -7,7 +7,7 @@ namespace Sikkerheit.ContractTests.Invariants;
 /// WP-01, WP-10: every record of the registry has an automatic negative test on its enforcement, and a record without a
 /// test fails the build. The server side of P2 (agent API, evaluator, jobs, portal, schema, operations) is tested too;
 /// the records of the Windows agent (enforcement "agent", WP-09) are tested in tests/Sikkerheit.Agent.Tests and checked
-/// here by their [Invariant] marks; only the script of the RMM (INV-201, WP-11) is reported as skipped with the reason.
+/// here by their [Invariant] marks; the script of the RMM (INV-201, WP-11) is tested in PowerShell (RmmScriptInvariantTests).
 /// </summary>
 public sealed class RegistryCoverageTests
 {
@@ -27,12 +27,14 @@ public sealed class RegistryCoverageTests
     /// <summary>Enforcement that only code on the Windows PC has (WP-09): its tests live in the agent project.</summary>
     private static readonly string[] AgentOnly = ["agent"];
 
-    private const string RmmScript = "INV-201";
+    /// <summary>Not tested in this project: the agent records (agent project).</summary>
+    private static bool OutsideThisProject(InvariantRecord record) => record.Enforcement == "agent";
 
-    private static bool WaitsForRmm(InvariantRecord record) => record.Id == RmmScript;
-
-    /// <summary>Not tested in this project: the agent records (agent project) and the script of the RMM (WP-11).</summary>
-    private static bool OutsideThisProject(InvariantRecord record) => record.Enforcement == "agent" || WaitsForRmm(record);
+    /// <summary>
+    /// Test classes of the server layers that do not use the database: they test a script or a file of the repository, not the service.
+    /// Named here, so a new class of a server layer without PostgreSQL still fails.
+    /// </summary>
+    private static readonly Type[] WithoutDatabase = [typeof(RmmScriptInvariantTests)];
 
     /// <summary>The records marked [Invariant] in tests/Sikkerheit.Agent.Tests (its own attribute; read from the sources).</summary>
     private static IReadOnlyList<string> AgentProjectMarks() =>
@@ -97,9 +99,9 @@ public sealed class RegistryCoverageTests
             {
                 wrong.Add($"{test.Test.DeclaringType!.Name}.{test.Test.Name}: {test.Id} is not in the registry");
             }
-            else if (record.Phase == "P2" && AgentOnly.Contains(record.Enforcement) || WaitsForRmm(record))
+            else if (record.Phase == "P2" && AgentOnly.Contains(record.Enforcement))
             {
-                wrong.Add($"{test.Test.DeclaringType!.Name}.{test.Test.Name}: {test.Id} is enforced by the agent (tested in the agent project) or by the RMM script");
+                wrong.Add($"{test.Test.DeclaringType!.Name}.{test.Test.Name}: {test.Id} is enforced by the agent (tested in the agent project)");
             }
             else if (record.Enforcement != test.Level)
             {
@@ -121,19 +123,18 @@ public sealed class RegistryCoverageTests
     public void Test_classes_of_server_layers_run_against_PostgreSQL()
     {
         var classes = typeof(RegistryCoverageTests).Assembly.GetTypes()
-            .Where(t => t.GetCustomAttribute<EnforcementAttribute>() is { } e && ServerLevels.Contains(e.Level));
+            .Where(t => t.GetCustomAttribute<EnforcementAttribute>() is { } e && ServerLevels.Contains(e.Level) && !WithoutDatabase.Contains(t));
         Assert.All(classes, type => Assert.Contains(type.GetConstructors().SelectMany(c => c.GetParameters()),
             p => p.ParameterType == typeof(PostgresFixture)));
     }
 
-    public static TheoryData<string> WaitingRecords => new(InvariantRegistry.P2.Where(WaitsForRmm).Select(r => r.Id));
-
-    [Theory]
-    [MemberData(nameof(WaitingRecords))]
-    public void P2_record_waits_for_the_RMM_script(string id)
+    [Fact]
+    public void Classes_without_a_database_name_a_script_or_a_file_they_test()
     {
-        var record = InvariantRegistry.Find(id)!;
-        Assert.Skip($"{id} [{record.Enforcement}], {record.Acceptance}: enforced by the RMM script that installs the agent (WP-11); "
-                    + "the server side of the record is not what it checks");
+        Assert.All(WithoutDatabase, type =>
+        {
+            Assert.DoesNotContain(type.GetConstructors().SelectMany(c => c.GetParameters()), p => p.ParameterType == typeof(PostgresFixture));
+            Assert.Equal("infra", type.GetCustomAttribute<EnforcementAttribute>()?.Level);
+        });
     }
 }

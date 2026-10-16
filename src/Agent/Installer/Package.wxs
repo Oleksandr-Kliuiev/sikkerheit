@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSI of the Sikkerheit agent (WP-11; 06 «Распространение агента через RMM»). WiX v4-v7 schema (the license, EULA and the fee of v7
+  are question 8 of 08; SP-05 fixes the choice). Not built in this repository yet: build.ps1 builds on Windows, tools/rmm/check_installer.py
+  checks the rules below statically (CI), docs/dev/rmm-windows-verification.md lists what only a Windows PC can confirm.
+
+  Variables of the build (wix build -d ...): Version (three fields, equal to the version of the agent), Manufacturer,
+  ServerUrl (https hostname of the agent), PublishDir (output of dotnet publish for win-x64, self-contained).
+  The agent is self-contained, so no .NET condition exists: the runtime is part of PublishDir.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package Name="Sikkerheit Agent" Manufacturer="$(Manufacturer)" Version="$(Version)" Scope="perMachine"
+           UpgradeCode="6f1c2a52-8c0e-4d57-9a43-5b8e0f7d1c26" Compressed="yes">
+
+    <SummaryInformation Description="Sikkerheit Agent" />
+    <Media Id="1" Cabinet="agent.cab" EmbedCab="yes" />
+
+    <!-- Rollback to a previously approved version is a MajorUpgrade to a lower version (06, «Откат»). The new product is installed
+         first and the old one is removed after InstallExecute, so the components shared by both versions (the data directory)
+         are not uninstalled by an upgrade or a rollback: the identity, the device key, the SQLite buffer, the sequence and the
+         registration key stay. -->
+    <MajorUpgrade AllowDowngrades="yes" Schedule="afterInstallExecute" />
+
+    <!-- Conditions of installation (06): client OS, native x64 (not ARM64 under emulation), Windows build 17763 or newer.
+         MsiNTProductType 1 = workstation. NATIVEARCH is the architecture of the machine, not of the process. -->
+    <Property Id="NATIVEARCH">
+      <RegistrySearch Id="NativeArchitecture" Root="HKLM" Key="SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+                      Name="PROCESSOR_ARCHITECTURE" Type="raw" Bitness="always64" />
+    </Property>
+    <Launch Condition="MsiNTProductType = 1" Message="Sikkerheit Agent installs on a client edition of Windows only." />
+    <Launch Condition="VersionNT64" Message="Sikkerheit Agent needs a 64-bit Windows." />
+    <Launch Condition="NATIVEARCH = &quot;AMD64&quot;" Message="Sikkerheit Agent does not support ARM64." />
+    <Launch Condition="WindowsBuild &gt;= 17763" Message="Sikkerheit Agent needs Windows 10 version 1809 (build 17763) or newer." />
+    <!-- A proxy with credentials is refused: the command line of msiexec is logged by the audit of processes (4688). -->
+    <Property Id="PROXY" Secure="yes" />
+    <Launch Condition="NOT PROXY OR NOT (PROXY &gt;&lt; &quot;@&quot;)" Message="PROXY must not contain credentials." />
+    <Property Id="MsiHiddenProperties" Value="PROXY" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="SIKKERHEITDIR" Name="Sikkerheit">
+        <Directory Id="INSTALLFOLDER" Name="Agent" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATAPARENT" Name="Sikkerheit">
+        <Directory Id="DATADIR" Name="Agent" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="Sikkerheit Agent" Level="1">
+      <ComponentGroupRef Id="AgentFiles" />
+      <ComponentRef Id="AgentService" />
+      <ComponentRef Id="ServiceEnvironment" />
+      <ComponentRef Id="ServiceEnvironmentWithProxy" />
+      <ComponentRef Id="DataDirectory" />
+    </Feature>
+
+    <!-- Program files: Program Files gives write access to SYSTEM and administrators only; the files are not changed by users. -->
+    <ComponentGroup Id="AgentFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(PublishDir)\**">
+        <Exclude Files="$(PublishDir)\Sikkerheit.Agent.exe" />
+        <Exclude Files="$(PublishDir)\**\*.pdb" />
+      </Files>
+    </ComponentGroup>
+
+    <!-- The service: LocalSystem, automatic start, restart 1 minute after a failure (every failure, also a process that exits
+         with an error code: three abandoned collectors end the process, 02), the counter of failures resets daily. -->
+    <Component Id="AgentService" Directory="INSTALLFOLDER" Guid="3d2a6f7e-1b94-4f3e-8c55-2f0a9d6b7e41">
+      <File Id="AgentExe" Source="$(PublishDir)\Sikkerheit.Agent.exe" KeyPath="yes" />
+      <ServiceInstall Id="AgentServiceInstall" Name="Sikkerheit.Agent" DisplayName="Sikkerheit Agent"
+                      Description="Security checks of this PC for the IT company (Sikkerheit)." Type="ownProcess" Start="auto"
+                      ErrorControl="normal" Account="LocalSystem">
+        <util:ServiceConfig FirstFailureActionType="restart" SecondFailureActionType="restart" ThirdFailureActionType="restart"
+                            RestartServiceDelayInSeconds="60" ResetPeriodInDays="1"
+                            FailureActionsWhen="failedToStopOrReturnedError" />
+      </ServiceInstall>
+      <ServiceControl Id="AgentServiceControl" Name="Sikkerheit.Agent" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+    </Component>
+
+    <!-- Settings of the service: environment variables of THIS service only (REG_MULTI_SZ Environment of its key), not of the
+         machine. Agent__ServerUrl is the hostname of the agent, Agent__Proxy is the property PROXY (without it the system
+         proxy of WinHTTP or a direct connection). The registration key is not among them. -->
+    <Component Id="ServiceEnvironment" Directory="INSTALLFOLDER" Guid="b4c8e1d2-6a07-4e9b-9f13-7c5d2a8e0b64" Condition="NOT PROXY">
+      <RegistryValue Root="HKLM" Key="SYSTEM\CurrentControlSet\Services\Sikkerheit.Agent" Name="Environment" Type="multiString"
+                     Value="Agent__ServerUrl=$(ServerUrl)" KeyPath="yes" />
+    </Component>
+    <Component Id="ServiceEnvironmentWithProxy" Directory="INSTALLFOLDER" Guid="9e7f3b15-2d68-4c0a-b8e4-1a6d5c3f7e92" Condition="PROXY">
+      <RegistryValue Root="HKLM" Key="SYSTEM\CurrentControlSet\Services\Sikkerheit.Agent" Name="Environment" Type="multiString"
+                     Value="Agent__ServerUrl=$(ServerUrl)[~]Agent__Proxy=[PROXY]" KeyPath="yes" />
+    </Component>
+
+    <!-- Data directory %ProgramData%\Sikkerheit\Agent: SYSTEM only (the agent removes inheritance at start as well). Removed on
+         uninstall together with its content (06, «Удаление агента»); an upgrade does not touch it (see MajorUpgrade). The
+         file enrollment.key written by the RMM script lands here. -->
+    <Component Id="DataDirectory" Directory="DATADIR" Guid="5a0d9c4b-7e31-4b82-a6f9-0c2e8d1b3f57">
+      <CreateFolder>
+        <util:PermissionEx User="SYSTEM" GenericAll="yes" />
+      </CreateFolder>
+      <util:RemoveFolderEx On="uninstall" Property="DATADIR" />
+    </Component>
+  </Package>
+</Wix>

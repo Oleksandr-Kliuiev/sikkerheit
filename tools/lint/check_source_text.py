@@ -6,7 +6,7 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SUFFIXES = {'.cs', '.csproj', '.props', '.sql', '.json', '.ts', '.tsx', '.js', '.css', '.html', '.bicep', '.py', '.yml', '.md'}
+SUFFIXES = {'.cs', '.csproj', '.props', '.sql', '.json', '.ts', '.tsx', '.js', '.css', '.html', '.bicep', '.py', '.yml', '.md', '.ps1', '.wxs'}
 SKIP = {'bin', 'obj', 'node_modules', 'dist', '.git', '.claude'}
 FORBIDDEN = set(range(0x200B, 0x2010)) | set(range(0x202A, 0x202F)) | set(range(0x2066, 0x206A)) | {0x061C, 0xFEFF, 0x00AD}
 

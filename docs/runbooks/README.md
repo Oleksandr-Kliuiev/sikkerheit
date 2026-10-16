@@ -1,6 +1,6 @@
 # Runbooks Sikkerheit
 
-Эксплуатационные процедуры этапа P1 по `07`, раздел «Runbooks»: признак запуска, шаги с операциями портала или командами Azure, проверка результата и запись в протокол. Runbooks агента Windows (RB-08…RB-13) появятся с P2.
+Эксплуатационные процедуры этапа P1 по `07`, раздел «Runbooks»: признак запуска, шаги с операциями портала или командами Azure, проверка результата и запись в протокол. Runbooks агента Windows этапа P2: RB-08…RB-12; RB-13 (каталог выпусков Windows) ещё не написан.
 
 ## Перечень
 
@@ -13,6 +13,11 @@
 | RB-05 | Восстановление базы из PITR | Operations (+ Security Owner) | Потеря или порча данных базы; учебное восстановление до пилота M365 и затем раз в квартал | [RB-05-database-restore.md](RB-05-database-restore.md) |
 | RB-06 | Инцидент безопасности | Security Owner | Подозрение на утечку данных, захват учётной записи сотрудника, сервиса, Key Vault или регистрации приложения | [RB-06-security-incident.md](RB-06-security-incident.md) |
 | RB-07 | Уход клиента | Service Manager | Клиент прекращает обслуживание или просит удалить данные | [RB-07-client-offboarding.md](RB-07-client-offboarding.md) |
+| RB-08 | Выпуск агента через RMM | Operations | Новая утверждённая версия; ежемесячная проверка .NET; «Alert RB-08»; откат после остановки раскатки | [RB-08-agent-release.md](RB-08-agent-release.md) |
+| RB-09 | Аварийный отзыв опасной версии агента | Security Owner | Критическая уязвимость агента или .NET; компрометация подписи кода | [RB-09-agent-emergency-revocation.md](RB-09-agent-emergency-revocation.md) |
+| RB-10 | Ключ регистрации организации | Security Owner | Плановая ротация; «Alert RB-10»; подозрение на утечку ключа; кража ПК | [RB-10-enrollment-key.md](RB-10-enrollment-key.md) |
+| RB-11 | Конфликт идентичности устройства | Service Manager | «Alert RB-11»; «Konflikt» в «Enheter»; частый `device.sequence_resync` | [RB-11-device-identity.md](RB-11-device-identity.md) |
+| RB-12 | Агент не выходит на связь | Service Manager | «Alert RB-12»; «Sist sett» старше 72 часов; отказы 422; часы; буфер | [RB-12-agent-offline.md](RB-12-agent-offline.md) |
 | RB-14 | Бюджет Azure и дневной лимит журналов | Product Owner (+ Operations) | Письмо бюджета на 80% и 100%; достигнут дневной лимит Log Analytics | [RB-14-azure-budget-and-log-cap.md](RB-14-azure-budget-and-log-cap.md) |
 
 ## Роли
