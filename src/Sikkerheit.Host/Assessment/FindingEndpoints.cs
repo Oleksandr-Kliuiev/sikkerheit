@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using NpgsqlTypes;
@@ -112,10 +113,10 @@ public static class FindingEndpoints
         CancellationToken ct)
     {
         var language = Texts.Language(http.Request.Headers.AcceptLanguage);
+        var windows = await WindowsAsync(scope, ct);
         await using var command = new NpgsqlCommand($"""
             with latest as (
-                select distinct on (organization_id) organization_id, configuration
-                from policy_revision order by organization_id, version desc)
+                select w.key::uuid as organization_id, w.value as windows from jsonb_each(@windows) w)
             select {Columns},
                    case f.severity when 'critical' then 0 else 1 end as rank
             from finding f
@@ -134,6 +135,7 @@ public static class FindingEndpoints
             order by rank, f.opened_at desc, f.id desc
             limit @take
             """, scope.Connection, scope.Transaction);
+        command.Parameters.AddWithValue("windows", NpgsqlDbType.Jsonb, windows);
         command.Parameters.AddWithValue("org", NpgsqlDbType.Uuid, (object?)organizationId ?? DBNull.Value);
         AddArray(command, "technical", filters.TechnicalState);
         AddArray(command, "severity", filters.Severity);
@@ -168,14 +170,45 @@ public static class FindingEndpoints
         return (items.Select(i => i.Dto).ToList(), next);
     }
 
+    /// <summary>
+    /// freshnessWindowHours of every check by the newest policy revision of each organization the scope sees, keyed by
+    /// organization and check id: the input of the freshness expression in the SQL.
+    /// </summary>
+    private static async Task<string> WindowsAsync(DbScope scope, CancellationToken ct)
+    {
+        var windows = new JsonObject();
+        foreach (var (organizationId, policy) in await Policies.CurrentByOrganizationAsync(scope, ct))
+        {
+            windows[organizationId.ToString()] = Windows(policy);
+        }
+        return windows.ToJsonString();
+    }
+
+    /// <summary>freshnessWindowHours of every check of a revision, as the configuration states it.</summary>
+    private static JsonObject Windows(PolicyRevision policy)
+    {
+        var windows = new JsonObject();
+        using var configuration = JsonDocument.Parse(policy.Configuration);
+        if (configuration.RootElement.TryGetProperty("checks", out var checks) && checks.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var check in checks.EnumerateObject())
+            {
+                if (check.Value.ValueKind == JsonValueKind.Object && check.Value.TryGetProperty("freshnessWindowHours", out var hours))
+                {
+                    windows[check.Name] = JsonNode.Parse(hours.GetRawText());
+                }
+            }
+        }
+        return windows;
+    }
+
     private const string FreshExpression =
-        "coalesce(f.latest_observed_at, f.opened_at) > @now - make_interval(hours => " +
-        "(l.configuration -> 'checks' -> f.check_id ->> 'freshnessWindowHours')::int)";
+        "coalesce(f.latest_observed_at, f.opened_at) > @now - make_interval(hours => (l.windows ->> f.check_id)::int)";
 
     private const string Columns = """
         f.id, f.organization_id, f.check_id, s.type, s.key, s.display_name, s.device_id, f.technical_state, f.workflow_state,
         f.assessment_result, (coalesce(f.latest_observed_at, f.opened_at) > @now - make_interval(hours =>
-            (l.configuration -> 'checks' -> f.check_id ->> 'freshnessWindowHours')::int)) as fresh,
+            (l.windows ->> f.check_id)::int)) as fresh,
         f.severity, f.revision, f.opened_at, coalesce(f.latest_observed_at, f.opened_at) as latest_observed_at, f.assignee_id,
         f.due_at, f.workflow_reason, f.review_at, f.workflow_decided_by
         """;
@@ -201,16 +234,17 @@ public static class FindingEndpoints
         CancellationToken ct)
     {
         var language = Texts.Language(http.Request.Headers.AcceptLanguage);
+        var windows = await WindowsAsync(scope, ct);
         await using var command = new NpgsqlCommand($"""
             with latest as (
-                select distinct on (organization_id) organization_id, configuration
-                from policy_revision order by organization_id, version desc)
+                select w.key::uuid as organization_id, w.value as windows from jsonb_each(@windows) w)
             select {Columns}
             from finding f
             join subject s on s.organization_id = f.organization_id and s.id = f.subject_id
             join latest l on l.organization_id = f.organization_id
             where f.id = @finding
             """, scope.Connection, scope.Transaction);
+        command.Parameters.AddWithValue("windows", NpgsqlDbType.Jsonb, windows);
         command.Parameters.AddWithValue("finding", findingId);
         command.Parameters.AddWithValue("now", clock.GetUtcNow());
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -272,7 +306,7 @@ public static class FindingEndpoints
         var changes = new Dictionary<string, object>();
         if (present.Contains("assigneeId") && body.AssigneeId != finding.AssigneeId)
         {
-            if (body.AssigneeId is { } assignee && !await CanBeAssignedAsync(scope, assignee, now, ct))
+            if (body.AssigneeId is { } assignee && !await Access.StaffDirectory.CanBeAssignedAsync(scope, assignee, now, ct))
             {
                 throw new ApiProblemException(ProblemCodes.ValidationFailed, "assignee must be an active Admin or Technician");
             }
@@ -360,13 +394,6 @@ public static class FindingEndpoints
         return id;
     }
 
-    private static async Task<bool> CanBeAssignedAsync(DbScope scope, Guid entraUserId, DateTimeOffset now, CancellationToken ct)
-    {
-        var since = now - Access.AccessEndpoints.ActiveWindow;
-        return await scope.Db.StaffUsers.AnyAsync(s => s.EntraUserId == entraUserId && s.LastRefreshOk
-            && s.LastSignInAt > since && (s.Roles.Contains(StaffRoles.Admin) || s.Roles.Contains(StaffRoles.Technician)), ct);
-    }
-
     private static async Task<IResult> Events(Guid organizationId, Guid findingId, DbScopes scopes, Cursors cursors,
         string? cursor, string? limit, CancellationToken ct)
     {
@@ -411,18 +438,16 @@ public static class FindingEndpoints
         var language = Texts.Language(http.Request.Headers.AcceptLanguage);
         await using var db = await scopes.OrganizationAsync(organizationId, ct);
         await OrganizationEndpoints.RequireOrganizationAsync(db, forUpdate: false, ct);
+        var policy = await Policies.CurrentAsync(db, ct);
         await using var command = new NpgsqlCommand("""
-            with latest as (
-                select configuration from policy_revision where organization_id = @org order by version desc limit 1),
-            picked as (
+            with picked as (
                 select a.*, row_number() over (partition by a.subject_id, a.check_id order by a.evaluated_at desc, a.id desc) as n
                 from assessment a where a.organization_id = @org and a.assessment_scope = 'current')
             select a.id, s.type, s.key, s.display_name, s.device_id, a.check_id, a.rule_id, a.rule_version,
                    a.source_policy_version, a.evaluated_policy_version, a.assessment_scope, a.assessment_mode, a.result,
                    a.severity, a.reason_code, a.observed_at, a.received_at, o.evidence::text, a.evidence_availability,
                    a.basis_snapshot::text, a.evaluated_at,
-                   (a.observed_at > @now - make_interval(hours =>
-                       ((select configuration from latest) -> 'checks' -> a.check_id ->> 'freshnessWindowHours')::int)) as fresh
+                   (a.observed_at > @now - make_interval(hours => (@windows ->> a.check_id)::int)) as fresh
             from picked a
             join subject s on s.organization_id = a.organization_id and s.id = a.subject_id
             left join observation o on o.organization_id = a.organization_id and o.id = a.observation_id
@@ -434,6 +459,8 @@ public static class FindingEndpoints
             order by a.evaluated_at desc, a.id desc
             limit @take
             """, db.Connection, db.Transaction);
+        command.Parameters.AddWithValue("windows", NpgsqlDbType.Jsonb,
+            policy is null ? DBNull.Value : (object)Windows(policy).ToJsonString());
         command.Parameters.AddWithValue("org", organizationId);
         command.Parameters.AddWithValue("now", clock.GetUtcNow());
         command.Parameters.AddWithValue("all", scope == "all");

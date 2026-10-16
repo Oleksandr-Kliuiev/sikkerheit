@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Sikkerheit.Host.Data;
 
 namespace Sikkerheit.Host.Access;
@@ -128,6 +129,17 @@ public sealed class StaffSessions(DbScopes scopes, TimeProvider clock, IDataProt
         await using var scope = await scopes.PlatformAsync(ct);
         await scope.Db.StaffSessions.Where(s => s.IdHash == hash).ExecuteDeleteAsync(ct);
         await scope.CommitAsync(ct);
+    }
+
+    /// <summary>Sessions and sign-in attempts past their expiry (04 «Сроки хранения»), in the caller's platform scope.</summary>
+    public static async Task PurgeExpiredAsync(DbScope platform, DateTimeOffset now, CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand("""
+            delete from staff_session where expires_at < @now;
+            delete from staff_login where expires_at < @now;
+            """, platform.Connection, platform.Transaction);
+        command.Parameters.AddWithValue("now", now);
+        await command.ExecuteNonQueryAsync(ct);
     }
 
     internal static string Hash(string sessionId) =>

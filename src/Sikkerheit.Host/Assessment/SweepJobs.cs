@@ -1,8 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
+using Sikkerheit.Host.Jobs;
+using Sikkerheit.Host.Organizations;
 
-namespace Sikkerheit.Host.Jobs;
+namespace Sikkerheit.Host.Assessment;
 
 /// <summary>freshness_sweep: an open fresh fail that aged past the freshness window becomes stale (quality_changed).</summary>
 public sealed class FreshnessSweepJob(DbScopes scopes, TimeProvider clock) : IJobHandler
@@ -18,8 +19,7 @@ public sealed class FreshnessSweepJob(DbScopes scopes, TimeProvider clock) : IJo
         {
             throw new JobLeaseLostException();
         }
-        var policy = await scope.Db.PolicyRevisions.Where(p => p.OrganizationId == org).OrderByDescending(p => p.Version)
-            .FirstOrDefaultAsync(ct);
+        var policy = await Policies.CurrentAsync(scope, ct);
         if (policy is not null)
         {
             using var configuration = System.Text.Json.JsonDocument.Parse(policy.Configuration);

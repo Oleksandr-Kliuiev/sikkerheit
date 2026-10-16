@@ -4,6 +4,7 @@ using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Jobs;
 using Sikkerheit.Host.Operations;
+using Sikkerheit.Host.Organizations;
 
 namespace Sikkerheit.Host.M365;
 
@@ -37,7 +38,7 @@ public sealed class M365CollectionJob(DbScopes scopes, M365Collector collector, 
                 throw new JobLeaseLostException();
             }
             var run = await start.Db.CollectionRuns.SingleOrDefaultAsync(r => r.OrganizationId == org && r.Id == runId, ct);
-            var organization = await start.Db.Organizations.SingleOrDefaultAsync(o => o.Id == org, ct);
+            var organization = await OrganizationLifecycle.FindAsync(start, forUpdate: false, ct);
             var connection = await start.Db.TenantConnections.SingleOrDefaultAsync(c => c.OrganizationId == org, ct);
             if (run is null || run.State is not ("queued" or "running"))
             {
@@ -53,8 +54,7 @@ public sealed class M365CollectionJob(DbScopes scopes, M365Collector collector, 
                 return;
             }
             tenant = connection.EntraTenantId.Value;
-            policy = await start.Db.PolicyRevisions.Where(p => p.OrganizationId == org)
-                .OrderByDescending(p => p.Version).FirstAsync(ct);
+            policy = await Policies.CurrentAsync(start, ct) ?? throw new InvalidOperationException("Organization has no policy revision");
             run.State = "running";
             run.StartedAt = clock.GetUtcNow();
             run.PolicyVersion = policy.Version;
@@ -71,8 +71,8 @@ public sealed class M365CollectionJob(DbScopes scopes, M365Collector collector, 
             throw new JobLeaseLostException();
         }
         var now = clock.GetUtcNow();
-        var lockedOrganization = await final.Db.Organizations
-            .FromSqlInterpolated($"select * from organization where id = {org} for update").SingleAsync(ct);
+        var lockedOrganization = await OrganizationLifecycle.FindAsync(final, forUpdate: true, ct)
+            ?? throw new InvalidOperationException("Organization of the collection run is missing");
         var lockedConnection = await final.Db.TenantConnections
             .FromSqlInterpolated($"select * from tenant_connection where organization_id = {org} for update").SingleAsync(ct);
         var current = await final.Db.CollectionRuns.SingleAsync(r => r.OrganizationId == org && r.Id == runId, ct);
@@ -108,8 +108,8 @@ public sealed class M365CollectionJob(DbScopes scopes, M365Collector collector, 
         else
         {
             // The projection is evaluated by the revision in effect now; the run keeps the revision it started with.
-            var effective = await final.Db.PolicyRevisions.Where(p => p.OrganizationId == org)
-                .OrderByDescending(p => p.Version).FirstAsync(ct);
+            var effective = await Policies.CurrentAsync(final, ct)
+                ?? throw new InvalidOperationException("Organization has no policy revision");
             await M365Evaluator.WriteAsync(final, current, tenant, outcome, effective, policy.Version, now, ct);
             current.State = outcome.State;
             current.CompletedAt = now;
@@ -135,7 +135,7 @@ public sealed class M365CollectionJob(DbScopes scopes, M365Collector collector, 
         {
             throw new JobLeaseLostException();
         }
-        var organization = await scope.Db.Organizations.SingleOrDefaultAsync(o => o.Id == org, ct);
+        var organization = await OrganizationLifecycle.FindAsync(scope, forUpdate: false, ct);
         var connection = await scope.Db.TenantConnections.SingleOrDefaultAsync(c => c.OrganizationId == org, ct);
         if (organization?.Status != "active" || connection?.Status != "active")
         {

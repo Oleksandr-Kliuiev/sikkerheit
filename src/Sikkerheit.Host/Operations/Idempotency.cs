@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Sikkerheit.Contracts;
 using Sikkerheit.Host.Data;
+using Sikkerheit.Host.Jobs;
 using Sikkerheit.Host.Platform;
 
 namespace Sikkerheit.Host.Operations;
@@ -13,6 +15,21 @@ public static class Idempotency
 {
     public static readonly TimeSpan Window = TimeSpan.FromHours(24);
     public static readonly TimeSpan Retention = TimeSpan.FromDays(7);
+
+    /// <summary>Removes the records of the scope's organization (its deletion).</summary>
+    public static Task DeleteOrganizationDataAsync(DbScope scope, CancellationToken ct) =>
+        OrganizationRows.DeleteAsync(scope, ["idempotency_record"], ct);
+
+    /// <summary>Records older than 7 days (04 «Сроки хранения»).</summary>
+    public static async Task PurgeAsync(DbScope scope, RetentionCuts cuts, CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand(
+            "delete from idempotency_record where organization_id = @org and created_at < @now - interval '7 days'",
+            scope.Connection, scope.Transaction);
+        command.Parameters.AddWithValue("org", scope.OrganizationId!.Value);
+        command.Parameters.AddWithValue("now", cuts.Now);
+        await command.ExecuteNonQueryAsync(ct);
+    }
 
     public static async Task<IdempotencyRecord?> FindReplayAsync(DbScope scope, string operationId, Guid key,
         string requestHash, DateTimeOffset now, CancellationToken ct)

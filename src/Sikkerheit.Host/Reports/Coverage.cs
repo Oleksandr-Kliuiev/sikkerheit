@@ -1,7 +1,9 @@
 using System.Text.Json;
-using Npgsql;
 using Sikkerheit.Contracts;
+using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
+using Sikkerheit.Host.M365;
+using Sikkerheit.Host.Organizations;
 
 namespace Sikkerheit.Host.Reports;
 
@@ -155,98 +157,20 @@ public static class Coverage
     private static async Task<CoverageResult> LoadAsync(DbScope scope, Guid organizationId, DateTimeOffset? start,
         DateTimeOffset at, CancellationToken ct)
     {
-        var (version, configuration) = await PolicyAtAsync(scope, organizationId, at, ct);
+        var (version, configuration) = await Policies.AtAsync(scope, organizationId, at, ct);
         using var policy = JsonDocument.Parse(configuration);
-        var subjects = new List<CoverageSubject>();
-        await using (var command = new NpgsqlCommand("""
-            select id, type, key, display_name, (retired_at is null or retired_at > @at) and first_seen_at <= @at
-            from subject
-            where organization_id = @org and type = any(@types)
-              and first_seen_at <= @at and (retired_at is null or retired_at > @from)
-            """, scope.Connection, scope.Transaction))
-        {
-            command.Parameters.AddWithValue("org", organizationId);
-            command.Parameters.AddWithValue("types", SubjectTypes);
-            command.Parameters.AddWithValue("at", at);
-            command.Parameters.AddWithValue("from", start ?? at);
-            await using var reader = await command.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-            {
-                subjects.Add(new CoverageSubject(reader.GetGuid(0), reader.GetString(1), reader.GetString(2),
-                    reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetBoolean(4)));
-            }
-        }
+        var subjects = (await Subjects.InPeriodAsync(scope, organizationId, SubjectTypes, start ?? at, at, ct))
+            .Select(s => new CoverageSubject(s.Id, s.Type, s.Key, s.Name, s.ActiveAtEnd)).ToList();
         // A connected tenant before its first collection: its checks count as pairs without data.
-        if (!subjects.Any(s => s is { Type: "tenant", ActiveAtEnd: true }))
+        if (!subjects.Any(s => s is { Type: "tenant", ActiveAtEnd: true })
+            && await TenantConnections.ActiveTenantAtAsync(scope, organizationId, at, ct) is { } tenant)
         {
-            await using var command = new NpgsqlCommand("""
-                select entra_tenant_id from tenant_connection
-                where organization_id = @org and status = 'active' and connected_at <= @at and entra_tenant_id is not null
-                """, scope.Connection, scope.Transaction);
-            command.Parameters.AddWithValue("org", organizationId);
-            command.Parameters.AddWithValue("at", at);
-            if (await command.ExecuteScalarAsync(ct) is Guid tenant)
-            {
-                subjects.Add(new CoverageSubject(Guid.Empty, "tenant", tenant.ToString(), null, true));
-            }
+            subjects.Add(new CoverageSubject(Guid.Empty, "tenant", tenant.ToString(), null, true));
         }
-        var latest = new Dictionary<(Guid, string), LatestAssessment>();
-        await using (var command = new NpgsqlCommand("""
-            select distinct on (a.subject_id, a.check_id) a.subject_id, a.check_id, a.assessment_mode, a.result,
-                   a.severity, a.reason_code, a.observed_at
-            from assessment a
-            where a.organization_id = @org and a.assessment_scope = 'current' and a.evaluated_at <= @at
-            order by a.subject_id, a.check_id, a.evaluated_at desc, a.id desc
-            """, scope.Connection, scope.Transaction))
-        {
-            command.Parameters.AddWithValue("org", organizationId);
-            command.Parameters.AddWithValue("at", at);
-            await using var reader = await command.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-            {
-                latest[(reader.GetGuid(0), reader.GetString(1))] = new LatestAssessment(reader.GetString(2),
-                    reader.IsDBNull(3) ? null : reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetFieldValue<DateTimeOffset>(6));
-            }
-        }
-        HashSet<(Guid, string)>? determined = null;
-        if (start is not null)
-        {
-            determined = [];
-            await using var command = new NpgsqlCommand("""
-                select distinct subject_id, check_id from assessment
-                where organization_id = @org and assessment_scope = 'current' and result in ('pass', 'fail')
-                  and observed_at >= @start and observed_at < @end
-                """, scope.Connection, scope.Transaction);
-            command.Parameters.AddWithValue("org", organizationId);
-            command.Parameters.AddWithValue("start", start.Value);
-            command.Parameters.AddWithValue("end", at);
-            await using var reader = await command.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-            {
-                determined.Add((reader.GetGuid(0), reader.GetString(1)));
-            }
-        }
+        var latest = (await Assessments.LatestAsync(scope, organizationId, at, ct)).ToDictionary(a => (a.SubjectId, a.CheckId),
+            a => new LatestAssessment(a.Mode, a.Result, a.Severity, a.ReasonCode, a.ObservedAt));
+        var determined = start is null ? null
+            : (await Assessments.DeterminedAsync(scope, organizationId, start.Value, at, ct)).ToHashSet();
         return Compute(policy.RootElement, version, subjects, latest, determined, at);
-    }
-
-    /// <summary>The revision in effect at the moment; before the first revision — the first one.</summary>
-    public static async Task<(int Version, string Configuration)> PolicyAtAsync(DbScope scope, Guid organizationId,
-        DateTimeOffset at, CancellationToken ct)
-    {
-        await using var command = new NpgsqlCommand("""
-            select version, configuration::text from policy_revision
-            where organization_id = @org
-            order by (effective_from <= @at) desc, case when effective_from <= @at then version end desc, version
-            limit 1
-            """, scope.Connection, scope.Transaction);
-        command.Parameters.AddWithValue("org", organizationId);
-        command.Parameters.AddWithValue("at", at);
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
-        {
-            throw new InvalidOperationException("Organization has no policy revision");
-        }
-        return (reader.GetInt32(0), reader.GetString(1));
     }
 }

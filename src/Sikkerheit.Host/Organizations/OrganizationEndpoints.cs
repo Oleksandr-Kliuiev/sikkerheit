@@ -2,8 +2,11 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Sikkerheit.Contracts;
+using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
+using Sikkerheit.Host.Exports;
 using Sikkerheit.Host.Jobs;
+using Sikkerheit.Host.M365;
 using Sikkerheit.Host.Operations;
 using Sikkerheit.Host.Platform;
 using Sikkerheit.Host.Reports;
@@ -43,14 +46,8 @@ public static class OrganizationEndpoints
     }
 
     /// <summary>Loads the organization of the path in its scope; deleted or foreign organizations are 404.</summary>
-    public static async Task<Organization> RequireOrganizationAsync(DbScope scope, bool forUpdate, CancellationToken ct)
-    {
-        var id = scope.OrganizationId!.Value;
-        var query = forUpdate
-            ? scope.Db.Organizations.FromSqlInterpolated($"select * from organization where id = {id} for update")
-            : scope.Db.Organizations.Where(o => o.Id == id);
-        return await query.SingleOrDefaultAsync(ct) ?? throw new ApiProblemException(ProblemCodes.NotFound);
-    }
+    public static async Task<Organization> RequireOrganizationAsync(DbScope scope, bool forUpdate, CancellationToken ct) =>
+        await OrganizationLifecycle.FindAsync(scope, forUpdate, ct) ?? throw new ApiProblemException(ProblemCodes.NotFound);
 
     /// <summary>Changes other than lifecycle, export and disconnect are refused while the organization is inactive.</summary>
     public static void RequireActive(Organization organization)
@@ -68,14 +65,8 @@ public static class OrganizationEndpoints
         var position = cursors.Read(cursor, "listOrganizations", null, "");
         await using var scope = await scopes.ReadAllAsync(ct);
         await using var command = new NpgsqlCommand("""
-            select o.id, o.name, o.timezone, o.report_language, o.status, o.deletion_due_at, o.created_at,
-                   coalesce(t.status, 'not_connected'), t.last_collected_at,
-                   (select count(*) from finding f where f.organization_id = o.id and f.technical_state = 'open'
-                       and f.severity = 'critical')::int,
-                   (select count(*) from finding f where f.organization_id = o.id and f.technical_state = 'open'
-                       and f.severity = 'warning')::int
+            select o.id, o.name, o.timezone, o.report_language, o.status, o.deletion_due_at, o.created_at
             from organization o
-            left join tenant_connection t on t.organization_id = o.id
             where @after_name::text is null or (o.name, o.id) > (@after_name::text, @after_id::uuid)
             order by o.name, o.id
             limit @take
@@ -91,10 +82,21 @@ public static class OrganizationEndpoints
                 var organization = new OrganizationDto(
                     reader.GetGuid(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4),
                     reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5), reader.GetFieldValue<DateTimeOffset>(6));
-                items.Add(new OrganizationOverviewDto(organization, reader.GetString(7),
-                    reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8), reader.GetInt32(9),
-                    reader.GetInt32(10), 0, null));
+                items.Add(new OrganizationOverviewDto(organization, "not_connected", null, 0, 0, 0, null));
             }
+        }
+        var connections = await TenantConnections.StatesAsync(scope, ct);
+        var open = await FindingHistory.OpenCountsAsync(scope, ct);
+        for (var i = 0; i < items.Count; i++)
+        {
+            var id = items[i].Organization.Id;
+            var connection = connections.GetValueOrDefault(id);
+            var counts = open.GetValueOrDefault(id);
+            items[i] = items[i] with
+            {
+                M365Status = connection?.Status ?? "not_connected", LastCollectedAt = connection?.LastCollectedAt,
+                OpenCritical = counts?.Critical ?? 0, OpenWarning = counts?.Warning ?? 0,
+            };
         }
         string? next = null;
         var hasMore = items.Count > size;
@@ -136,7 +138,7 @@ public static class OrganizationEndpoints
             OrganizationId = organization.Id, Version = 1, EffectiveFrom = now, CreatedAt = now,
             CreatedBy = actor.EntraUserId, Configuration = policy.DefaultConfiguration,
         });
-        scope.Db.TenantConnections.Add(new TenantConnection { OrganizationId = organization.Id, Status = "not_connected" });
+        TenantConnections.Create(scope);
         AuditLog.Staff(scope, actor, "organization.create", "organization", organization.Id.ToString(), http.TraceIdentifier);
         await scope.CommitAsync(ct);
         return Results.Json(OrganizationDto.From(organization), ApiJson.Options, statusCode: StatusCodes.Status201Created);
@@ -255,12 +257,8 @@ public static class OrganizationEndpoints
         return Results.Text(response, "application/json", statusCode: StatusCodes.Status200OK);
     }
 
-    private static async Task<bool> HasExportSinceDisableAsync(DbScope scope, Organization organization, CancellationToken ct)
-    {
-        var since = organization.DisabledAt ?? DateTimeOffset.MaxValue;
-        return await scope.Db.OrganizationExports.AnyAsync(
-            e => e.OrganizationId == organization.Id && e.CreatedAt >= since && (e.State == "ready" || e.State == "expired"), ct);
-    }
+    private static Task<bool> HasExportSinceDisableAsync(DbScope scope, Organization organization, CancellationToken ct) =>
+        OrganizationExports.HasExportSinceAsync(scope, organization.DisabledAt ?? DateTimeOffset.MaxValue, ct);
 
     private static async Task<IResult> ListPolicies(Guid organizationId, DbScopes scopes, Cursors cursors,
         string? cursor, string? limit, CancellationToken ct)
@@ -331,14 +329,10 @@ public static class OrganizationEndpoints
         var position = cursors.Read(cursor, "listAuditEvents", organizationId, "");
         await using var scope = await scopes.OrganizationAsync(organizationId, ct);
         await RequireOrganizationAsync(scope, forUpdate: false, ct);
-        var query = scope.Db.AuditEvents.AsNoTracking().Where(e => e.OrganizationId == organizationId);
-        if (position is not null)
-        {
-            var before = DateTimeOffset.Parse(position[0], CultureInfo.InvariantCulture);
-            var beforeId = Guid.Parse(position[1]);
-            query = query.Where(e => e.OccurredAt < before || (e.OccurredAt == before && e.Id.CompareTo(beforeId) < 0));
-        }
-        var rows = await query.OrderByDescending(e => e.OccurredAt).ThenByDescending(e => e.Id).Take(size + 1).ToListAsync(ct);
+        var before = position is null
+            ? ((DateTimeOffset, Guid)?)null
+            : (DateTimeOffset.Parse(position[0], CultureInfo.InvariantCulture), Guid.Parse(position[1]));
+        var rows = await AuditLog.ListAsync(scope, before, size + 1, ct);
         string? next = null;
         if (rows.Count > size)
         {

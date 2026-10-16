@@ -6,6 +6,8 @@ using Npgsql;
 using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Jobs;
+using Sikkerheit.Host.M365;
+using Sikkerheit.Host.Organizations;
 
 namespace Sikkerheit.Host.Reports;
 
@@ -92,6 +94,15 @@ public sealed class TeamsDigestJob(DbScopes scopes, IHttpClientFactory http, Tea
         return await command.ExecuteNonQueryAsync(ct) > 0;
     }
 
+    /// <summary>Sent marks older than 90 days (04 «Сроки хранения»), in the caller's platform scope.</summary>
+    public static async Task PurgeMarksAsync(DbScope platform, DateTimeOffset now, CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand("delete from teams_digest where sent_at < @now - interval '90 days'",
+            platform.Connection, platform.Transaction);
+        command.Parameters.AddWithValue("now", now);
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
     /// <summary>Periods whose sending time (07:30 Europe/Oslo) lies in (from, until].</summary>
     public static IReadOnlyList<string> PeriodsBetween(DateTimeOffset from, DateTimeOffset until)
     {
@@ -115,63 +126,60 @@ public sealed class TeamsDigestJob(DbScopes scopes, IHttpClientFactory http, Tea
     /// <summary>The digest is in the closed list of read-all components (02 «Разделение клиентов»).</summary>
     public async Task<IReadOnlyList<DigestItem>> CollectAsync(DateTimeOffset since, DateTimeOffset until, CancellationToken ct)
     {
-        var items = new List<DigestItem>();
         await using var scope = await scopes.ReadAllAsync(ct);
-        await using (var command = new NpgsqlCommand("""
-            select o.id, o.name, f.check_id, count(*)::int
-            from finding_event e
-            join finding f on f.organization_id = e.organization_id and f.id = e.finding_id
-            join organization o on o.id = e.organization_id
-            where e.occurred_at >= @since and e.occurred_at < @until and e.event_type in ('opened', 'reopened')
-              and e.cause = 'source_change' and f.severity = 'critical' and o.status = 'active'
-            group by o.id, o.name, f.check_id order by o.name, f.check_id
-            """, scope.Connection, scope.Transaction))
+        var organizations = await OrganizationDirectory.ListAsync(scope, ct);
+        var byId = organizations.ToDictionary(o => o.Id);
+        // Items of every kind go by organization name as the database orders names; organizations of the same name share
+        // a place, so their items keep the order of the query.
+        var place = new Dictionary<Guid, int>();
+        for (var i = 0; i < organizations.Count; i++)
         {
-            command.Parameters.AddWithValue("since", since);
-            command.Parameters.AddWithValue("until", until);
-            await using var reader = await command.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
+            place[organizations[i].Id] = i > 0 && organizations[i].Name == organizations[i - 1].Name
+                ? place[organizations[i - 1].Id]
+                : i;
+        }
+        var critical = new List<DigestItem>();
+        foreach (var count in await FindingHistory.NewCriticalAsync(scope, since, until, ct))
+        {
+            if (byId.TryGetValue(count.OrganizationId, out var organization) && organization.Status == "active")
             {
-                var check = reader.GetString(2);
-                items.Add(new DigestItem(reader.GetGuid(0), reader.GetString(1), "critical",
-                    $"{reader.GetInt32(3)} nye kritiske: {Texts.Title(check, "nb")} ({check})"));
+                critical.Add(new DigestItem(organization.Id, organization.Name, "critical",
+                    $"{count.Count} nye kritiske: {Texts.Title(count.CheckId, "nb")} ({count.CheckId})"));
             }
         }
-        await using (var command = new NpgsqlCommand("""
-            select o.id, o.name, r.failure_code, count(*)::int
-            from collection_run r join organization o on o.id = r.organization_id
-            where r.completed_at >= @since and r.completed_at < @until and r.state = 'failed' and o.status = 'active'
-            group by o.id, o.name, r.failure_code order by o.name
-            """, scope.Connection, scope.Transaction))
+        var collection = new List<DigestItem>();
+        foreach (var failed in await CollectionRuns.FailedAsync(scope, since, until, ct))
         {
-            command.Parameters.AddWithValue("since", since);
-            command.Parameters.AddWithValue("until", until);
-            await using var reader = await command.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
+            if (byId.TryGetValue(failed.OrganizationId, out var organization) && organization.Status == "active")
             {
-                var code = reader.IsDBNull(2) ? "temporary_error" : reader.GetString(2);
-                items.Add(new DigestItem(reader.GetGuid(0), reader.GetString(1), "collection",
-                    $"Innsamling mislyktes ({reader.GetInt32(3)}): {ReportTexts.Get("runFailure." + code, "nb")}"));
+                var code = failed.FailureCode ?? "temporary_error";
+                collection.Add(new DigestItem(organization.Id, organization.Name, "collection",
+                    $"Innsamling mislyktes ({failed.Count}): {ReportTexts.Get("runFailure." + code, "nb")}"));
             }
         }
+        var reports = new List<DigestItem>();
         await using (var command = new NpgsqlCommand("""
-            select o.id, o.name, r.period_start, r.timezone, r.failure_code
-            from report r join organization o on o.id = r.organization_id
+            select r.organization_id, r.period_start, r.timezone, r.failure_code
+            from report r
             where r.state = 'failed' and r.created_at >= @since - interval '6 days'
-            order by o.name, r.period_start
+            order by r.period_start
             """, scope.Connection, scope.Transaction))
         {
             command.Parameters.AddWithValue("since", since);
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
-                var zone = TimeZoneInfo.FindSystemTimeZoneById(reader.GetString(3));
-                var (year, week) = ReportPeriod.WeekOf(zone, reader.GetFieldValue<DateTimeOffset>(2));
-                items.Add(new DigestItem(reader.GetGuid(0), reader.GetString(1), "report",
-                    $"Rapport for uke {week} {year} mislyktes ({reader.GetString(4)})"));
+                if (byId.TryGetValue(reader.GetGuid(0), out var organization))
+                {
+                    var zone = TimeZoneInfo.FindSystemTimeZoneById(reader.GetString(2));
+                    var (year, week) = ReportPeriod.WeekOf(zone, reader.GetFieldValue<DateTimeOffset>(1));
+                    reports.Add(new DigestItem(organization.Id, organization.Name, "report",
+                        $"Rapport for uke {week} {year} mislyktes ({reader.GetString(3)})"));
+                }
             }
         }
-        return items;
+        IEnumerable<DigestItem> ByName(List<DigestItem> list) => list.OrderBy(i => place[i.OrganizationId]);
+        return [.. ByName(critical), .. ByName(collection), .. ByName(reports)];
     }
 
     /// <summary>

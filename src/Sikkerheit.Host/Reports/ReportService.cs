@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Jobs;
 using Sikkerheit.Host.Operations;
+using Sikkerheit.Host.Organizations;
 using Sikkerheit.Host.Platform;
 
 namespace Sikkerheit.Host.Reports;
@@ -54,6 +55,37 @@ public sealed class ReportService(DbScopes scopes, IFileStore files, TimeProvide
         (await all.Db.Reports.AsNoTracking().Where(r => r.BlobKey != null).Select(r => r.BlobKey!).ToListAsync(ct))
         .ToHashSet(StringComparer.Ordinal);
 
+    /// <summary>Removes the report rows of the scope's organization (its deletion; the files go with its prefix).</summary>
+    public static Task DeleteOrganizationDataAsync(DbScope scope, CancellationToken ct) =>
+        OrganizationRows.DeleteAsync(scope, ["report"], ct);
+
+    /// <summary>The report rows for the organization export.</summary>
+    public static Task ExportAsync(DbScope scope, TableRowsWriter write, CancellationToken ct) =>
+        OrganizationRows.ExportAsync(scope, [("report", "period_start, id")], write, ct);
+
+    /// <summary>Ready reports of the scope's organization by period, for the files of the organization export.</summary>
+    public static async Task<IReadOnlyList<Report>> ReadyAsync(DbScope scope, CancellationToken ct)
+    {
+        var organizationId = scope.OrganizationId!.Value;
+        return await scope.Db.Reports.AsNoTracking()
+            .Where(r => r.OrganizationId == organizationId && r.State == "ready").OrderBy(r => r.PeriodStart).ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Reports older than 12 months (04 «Сроки хранения»): their files are deleted now, their rows with the caller's
+    /// SaveChanges.
+    /// </summary>
+    public static async Task PurgeAsync(DbScope scope, IFileStore files, RetentionCuts cuts, CancellationToken ct)
+    {
+        var organizationId = scope.OrganizationId!.Value;
+        var old = await scope.Db.Reports.Where(r => r.OrganizationId == organizationId && r.CreatedAt < cuts.History).ToListAsync(ct);
+        foreach (var report in old.Where(r => r.BlobKey is not null))
+        {
+            await files.DeleteAsync(FileContainers.Reports, report.BlobKey!, ct);
+        }
+        scope.Db.Reports.RemoveRange(old);
+    }
+
     public async Task ExecuteAsync(JobLease lease, CancellationToken ct)
     {
         var organizationId = lease.OrganizationId ?? throw new InvalidOperationException("report_generate needs an organization");
@@ -92,7 +124,7 @@ public sealed class ReportService(DbScopes scopes, IFileStore files, TimeProvide
         var report = await scope.Db.Reports
             .FromSqlInterpolated($"select * from report where organization_id = {organizationId} and id = {reportId} for update")
             .SingleOrDefaultAsync(ct);
-        var organization = await scope.Db.Organizations.SingleOrDefaultAsync(o => o.Id == organizationId, ct);
+        var organization = await OrganizationLifecycle.FindAsync(scope, forUpdate: false, ct);
         // Only active organizations run report jobs (05 «Жизненный цикл организации»); the report stays queued.
         if (report is not { State: "queued" } || organization is not { Status: "active" })
         {
@@ -158,8 +190,7 @@ public sealed class WeeklyReportJob(DbScopes scopes, TimeProvider clock) : IJobH
         {
             throw new JobLeaseLostException();
         }
-        var organization = await scope.Db.Organizations
-            .FromSqlInterpolated($"select * from organization where id = {organizationId} for update").SingleOrDefaultAsync(ct);
+        var organization = await OrganizationLifecycle.FindAsync(scope, forUpdate: true, ct);
         var now = clock.GetUtcNow();
         if (organization is { Status: "active" } && ReportPeriod.TryParseKey(lease.PeriodKey, out var year, out var week))
         {

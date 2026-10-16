@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using NpgsqlTypes;
 using Sikkerheit.Contracts;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.M365;
@@ -149,17 +150,24 @@ public static class M365Evaluator
         var configuration = JsonDocument.Parse(policy.Configuration).RootElement;
         var active = configuration.GetProperty("activeCheckIds").EnumerateArray().Select(e => e.GetString()!).ToHashSet();
         var projections = new Dictionary<(Guid, string), (Observation Observation, int SourcePolicyVersion)>();
+        var runs = await CollectionRuns.ProjectionRunsAsync(scope, ct);
         await using (var command = new NpgsqlCommand("""
             select distinct on (o.subject_id, o.check_id) o.id, o.subject_id, o.check_id, o.collection_run_id, o.observed_at,
                    o.received_at, o.collection_status, o.evidence::text, o.reason_code, coalesce(r.policy_version, 1)
             from observation o
-            join collection_run r on r.organization_id = o.organization_id and r.id = o.collection_run_id
-            where o.organization_id = @org and o.subject_id = any(@subjects) and r.state in ('completed', 'partial')
+            join unnest(@run_ids, @run_completed_at, @run_policy_versions) as r (id, completed_at, policy_version)
+                on r.id = o.collection_run_id
+            where o.organization_id = @org and o.subject_id = any(@subjects)
             order by o.subject_id, o.check_id, r.completed_at desc, o.id desc
             """, scope.Connection, scope.Transaction))
         {
             command.Parameters.AddWithValue("org", org);
             command.Parameters.AddWithValue("subjects", ids);
+            command.Parameters.AddWithValue("run_ids", NpgsqlDbType.Array | NpgsqlDbType.Uuid, runs.Select(r => r.Id).ToArray());
+            command.Parameters.AddWithValue("run_completed_at", NpgsqlDbType.Array | NpgsqlDbType.TimestampTz,
+                runs.Select(r => r.CompletedAt).ToArray());
+            command.Parameters.AddWithValue("run_policy_versions", NpgsqlDbType.Array | NpgsqlDbType.Integer,
+                runs.Select(r => r.PolicyVersion).ToArray());
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {

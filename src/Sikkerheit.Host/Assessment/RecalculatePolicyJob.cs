@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Jobs;
+using Sikkerheit.Host.M365;
+using Sikkerheit.Host.Organizations;
 
 namespace Sikkerheit.Host.Assessment;
 
@@ -27,9 +29,8 @@ public sealed class RecalculatePolicyJob(DbScopes scopes, TimeProvider clock, IC
             {
                 throw new JobLeaseLostException();
             }
-            var organization = await scope.Db.Organizations.AsNoTracking().SingleOrDefaultAsync(o => o.Id == org, ct);
-            await scope.Db.TenantConnections
-                .FromSqlInterpolated($"select * from tenant_connection where organization_id = {org} for update").ToListAsync(ct);
+            var organization = await OrganizationLifecycle.FindAsync(scope, forUpdate: false, ct);
+            await TenantConnections.LockAsync(scope, ct);
             var subjects = organization is not { Status: "active" } ? [] : await scope.Db.Subjects
                 .FromSqlInterpolated($"""
                     select * from subject
@@ -44,8 +45,8 @@ public sealed class RecalculatePolicyJob(DbScopes scopes, TimeProvider clock, IC
                 return;
             }
             // Always the newest revision: a later revision supersedes the one that queued this job.
-            var policy = await scope.Db.PolicyRevisions.Where(p => p.OrganizationId == org)
-                .OrderByDescending(p => p.Version).FirstAsync(ct);
+            var policy = await Policies.CurrentAsync(scope, ct)
+                ?? throw new InvalidOperationException("Organization has no policy revision");
             await M365Evaluator.RecalculateAsync(scope, subjects, policy, clock.GetUtcNow(), ct);
             await scope.CommitAsync(ct);
             after = subjects[^1].Id;

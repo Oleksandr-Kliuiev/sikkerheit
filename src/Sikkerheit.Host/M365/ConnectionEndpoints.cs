@@ -184,7 +184,7 @@ public static class ConnectionEndpoints
         }
         if (previousTenant is { } old && old != tenant)
         {
-            await RetireTenantSubjectsAsync(scope, actor.EntraUserId, now, ct);
+            await SubjectRetirement.RetireTenantAsync(scope, actor.EntraUserId, now, ct);
         }
         if (!wasActive)
         {
@@ -309,22 +309,4 @@ public static class ConnectionEndpoints
 
     private static async Task<Guid?> ActiveOwnerAsync(DbScope scope, Guid tenant, CancellationToken ct) =>
         await scope.Db.Database.SqlQuery<Guid?>($"select app.active_tenant_owner({tenant}) as \"Value\"").SingleAsync(ct);
-
-    private static async Task RetireTenantSubjectsAsync(DbScope scope, Guid actorId, DateTimeOffset now, CancellationToken ct)
-    {
-        var org = scope.OrganizationId!.Value;
-        var subjects = await scope.Db.Subjects
-            .Where(s => s.OrganizationId == org && (s.Type == "tenant" || s.Type == "user") && s.RetiredAt == null)
-            .ToListAsync(ct);
-        var findings = await scope.Db.Findings.Where(f => f.OrganizationId == org && f.CheckId.StartsWith("M365-")).ToListAsync(ct);
-        var machine = new FindingMachine(scope.Db, org, now);
-        foreach (var subject in subjects)
-        {
-            subject.RetiredAt = now;
-            foreach (var finding in findings.Where(f => f.SubjectId == subject.Id))
-            {
-                machine.Retire(finding, "manual_action", actorId);
-            }
-        }
-    }
 }

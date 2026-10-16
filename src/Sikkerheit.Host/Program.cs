@@ -67,8 +67,8 @@ builder.Services.AddSingleton<IGraphTokenProvider>(sp => string.IsNullOrEmpty(m3
     : new KeyVaultGraphTokenProvider(m365, sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddTransient<M365Collector>();
 builder.Services.AddTransient<IJobHandler, M365CollectionJob>();
-builder.Services.AddTransient<IJobHandler, FreshnessSweepJob>();
-builder.Services.AddTransient<IJobHandler, ReviewExpiryJob>();
+builder.Services.AddTransient<IJobHandler, Sikkerheit.Host.Assessment.FreshnessSweepJob>();
+builder.Services.AddTransient<IJobHandler, Sikkerheit.Host.Assessment.ReviewExpiryJob>();
 builder.Services.AddTransient<IJobHandler, Sikkerheit.Host.Assessment.RecalculatePolicyJob>();
 builder.Services.AddTransient<ReportService>();
 builder.Services.AddTransient<IJobHandler>(sp => sp.GetRequiredService<ReportService>());
