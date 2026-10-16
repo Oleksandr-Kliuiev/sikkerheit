@@ -20,8 +20,9 @@ public sealed record RuleOutcome(string? Result, string? Severity, string? Reaso
         new("not_applicable", null, "policy_not_applicable", explanation);
 }
 
-/// <summary>Observation as stored: status, evidence or reason, subject key.</summary>
-public sealed record RuleInput(string CheckId, string SubjectKey, string CollectionStatus, JsonElement? Evidence, string? ReasonCode);
+/// <summary>Observation as stored: status, evidence or reason, subject key and the time it was observed.</summary>
+public sealed record RuleInput(string CheckId, string SubjectKey, string CollectionStatus, JsonElement? Evidence, string? ReasonCode,
+    DateTimeOffset? ObservedAt = null);
 
 /// <summary>
 /// Order of evaluation of 03 «Семантика результата»: missing observation → unavailable → rule; informational mode
@@ -54,6 +55,7 @@ public static class RuleEngine
                 "M365-004" => M365Rules.LegacyAuthentication(observation),
                 "M365-005" => M365Rules.GlobalAdmins(observation, check.GetProperty("parameters")),
                 "M365-006" => M365Rules.UserConsent(observation, check.GetProperty("parameters")),
+                "M365-007" => M365Rules.InactiveAccount(observation, configuration),
                 _ => RuleOutcome.Unknown("missing_observation", "common.not_implemented"),
             };
         }
@@ -66,7 +68,10 @@ public static class RuleEngine
     }
 }
 
-/// <summary>Rules M365-001…M365-006 of 03; M365-007 is deferred together with AuditLog.Read.All.</summary>
+/// <summary>
+/// Rules M365-001…M365-007 of 03. M365-007 is not collected yet (AuditLog.Read.All is deferred), its rule is ready for the
+/// version of the rules that introduces it.
+/// </summary>
 public static class M365Rules
 {
     private static readonly HashSet<string> StrongMethods =
@@ -247,6 +252,51 @@ public static class M365Rules
         return count < min || count > max
             ? RuleOutcome.Fail("warning", count < min ? "m365-005.fail.too_few" : "m365-005.fail.too_many", args)
             : RuleOutcome.Pass("m365-005.pass", args);
+    }
+
+    /// <summary>signInActivity is filled since 1 December 2023; createdDateTime is null for some accounts before June 2018.</summary>
+    public static RuleOutcome InactiveAccount(RuleInput input, JsonElement configuration)
+    {
+        var e = input.Evidence!.Value;
+        var excluded = configuration.GetProperty("m365").GetProperty("excludedUserIds").EnumerateArray()
+            .Any(id => string.Equals(id.GetString(), input.SubjectKey, StringComparison.OrdinalIgnoreCase));
+        if (!e.GetProperty("accountEnabled").GetBoolean())
+        {
+            return RuleOutcome.NotApplicable("m365-007.not_applicable.disabled");
+        }
+        if (e.GetProperty("userType").ValueKind == JsonValueKind.String && e.GetProperty("userType").GetString() == "Guest")
+        {
+            return RuleOutcome.NotApplicable("m365-007.not_applicable.guest");
+        }
+        if (excluded)
+        {
+            return RuleOutcome.NotApplicable("m365-007.not_applicable.excluded");
+        }
+        if (e.GetProperty("directorySyncAccount").GetBoolean())
+        {
+            return RuleOutcome.NotApplicable("m365-007.not_applicable.sync_account");
+        }
+        var limit = configuration.GetProperty("checks").GetProperty("M365-007").GetProperty("parameters")
+            .GetProperty("inactiveDays").GetInt32();
+        var now = input.ObservedAt ?? throw new InvalidOperationException("M365-007 needs the time of the observation");
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        int DaysSince(JsonElement value) => (int)Math.Floor((now - DateTimeOffset.Parse(value.GetString()!, culture)).TotalDays);
+        var args = new Dictionary<string, string> { ["limit"] = limit.ToString(culture) };
+        var signIn = e.GetProperty("lastSuccessfulSignInAt");
+        var created = e.GetProperty("createdAt");
+        if (signIn.ValueKind == JsonValueKind.String)
+        {
+            var days = DaysSince(signIn);
+            args["days"] = days.ToString(culture);
+            return days > limit ? RuleOutcome.Fail("warning", "m365-007.fail.inactive", args) : RuleOutcome.Pass("m365-007.pass", args);
+        }
+        if (created.ValueKind != JsonValueKind.String)
+        {
+            return RuleOutcome.Fail("warning", "m365-007.fail.legacy", args);
+        }
+        var age = DaysSince(created);
+        args["days"] = age.ToString(culture);
+        return age > limit ? RuleOutcome.Fail("warning", "m365-007.fail.never", args) : RuleOutcome.Pass("m365-007.pass.new", args);
     }
 
     private const string Legacy = "ManagePermissionGrantsForSelf.microsoft-user-default-legacy";

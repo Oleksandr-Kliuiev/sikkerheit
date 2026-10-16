@@ -1,0 +1,60 @@
+name: deploy
+
+# Manual deployment of the service to test or prod (06 «Окружения и развёртывание»). The job runs
+# infra/scripts/deploy-app.sh, the same script as on a workstation, so the protection rules of the GitHub environment
+# (reviewers, allowed branches) gate it. Azure sign-in is OIDC through the federated credential of
+# id-sikkerheit-<env>-deploy; there are no secrets. Setup: infra/README.md, «Развёртывание из GitHub».
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment
+        type: choice
+        options: [test, prod]
+        default: test
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+# One deployment per environment at a time; a new run waits instead of cancelling one in progress.
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 60
+    env:
+      SIKKERHEIT_ENV: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # tags for the version from git describe
+      - name: IaC check of the Bicep templates
+        run: python3 -I tools/iac/check_arm.py
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/Portal/package-lock.json
+      - name: Sign in to Azure (OIDC, no secrets)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy
+        id: deploy
+        run: infra/scripts/deploy-app.sh "$SIKKERHEIT_ENV"
+      # A cancelled run is killed before the script's trap can finish: stop staging (prod) or remove the temporary
+      # migrations access (test).
+      - name: Clean up after a cancelled deployment
+        if: cancelled() && steps.deploy.outcome == 'cancelled'
+        run: infra/scripts/deploy-app.sh "$SIKKERHEIT_ENV" --cleanup

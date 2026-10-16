@@ -70,7 +70,7 @@ public static class M365Evaluator
             };
             scope.Db.Observations.Add(observation);
             var input = new RuleInput(checkId, subject.Key, observation.CollectionStatus,
-                collected ? JsonDocument.Parse(observation.Evidence!).RootElement : null, observation.ReasonCode);
+                collected ? JsonDocument.Parse(observation.Evidence!).RootElement : null, observation.ReasonCode, observation.ObservedAt);
             Evaluate(scope, machine, findings, subject, checkId, input, observation, policy, configuration, now,
                 "source_change", sourcePolicyVersion);
             evaluated.Add((subject.Id, checkId));
@@ -135,10 +135,11 @@ public static class M365Evaluator
 
     /// <summary>
     /// recalculate_policy for a batch of subjects (05 «Выбор текущего состояния», steps 2–4): the current projection —
-    /// the observation of the last completed or partial run with the subject — is evaluated by the new revision with
-    /// cause policy_change; a required (assessed) check without an observation gives unknown/missing_observation; an open
-    /// finding of a check that left activeCheckIds becomes policy_changed. Pairs already evaluated by this revision are
-    /// skipped.
+    /// the observation of the last completed or partial run with the subject — is evaluated by the newest revision and
+    /// the current ruleVersion; a required (assessed) check without an observation gives unknown/missing_observation; an
+    /// open finding of a check that left activeCheckIds becomes policy_changed. The cause is rule_change when only the
+    /// ruleVersion changed since the last evaluation of the pair, otherwise policy_change. Pairs already evaluated by this
+    /// revision and ruleVersion are skipped.
     /// </summary>
     public static async Task RecalculateAsync(DbScope scope, IReadOnlyList<Subject> subjects, PolicyRevision policy,
         DateTimeOffset now, CancellationToken ct)
@@ -173,6 +174,7 @@ public static class M365Evaluator
             }
         }
         var evaluated = new HashSet<(Guid, string, Guid?)>();
+        var previous = new Dictionary<(Guid, string), (int PolicyVersion, string RuleVersion)>();
         await using (var command = new NpgsqlCommand("""
             select distinct on (subject_id, check_id) subject_id, check_id, observation_id, evaluated_policy_version, rule_version
             from assessment
@@ -185,6 +187,7 @@ public static class M365Evaluator
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
+                previous[(reader.GetGuid(0), reader.GetString(1))] = (reader.GetInt32(3), reader.GetString(4));
                 if (reader.GetInt32(3) == policy.Version && reader.GetString(4) == RuleEngine.RuleVersion)
                 {
                     evaluated.Add((reader.GetGuid(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetGuid(2)));
@@ -221,9 +224,14 @@ public static class M365Evaluator
                     continue;
                 }
                 var input = observation is null ? null : new RuleInput(check.CheckId, subject.Key, observation.CollectionStatus,
-                    observation.Evidence is null ? null : JsonDocument.Parse(observation.Evidence).RootElement, observation.ReasonCode);
+                    observation.Evidence is null ? null : JsonDocument.Parse(observation.Evidence).RootElement, observation.ReasonCode,
+                    observation.ObservedAt);
+                var cause = previous.TryGetValue((subject.Id, check.CheckId), out var last) && last.PolicyVersion == policy.Version
+                            && last.RuleVersion != RuleEngine.RuleVersion
+                    ? "rule_change"
+                    : "policy_change";
                 Evaluate(scope, machine, findings, subject, check.CheckId, input, observation, policy, configuration, now,
-                    "policy_change", hasProjection ? projection.SourcePolicyVersion : policy.Version);
+                    cause, hasProjection ? projection.SourcePolicyVersion : policy.Version);
             }
         }
     }

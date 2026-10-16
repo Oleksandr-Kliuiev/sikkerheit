@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Platform;
 
@@ -13,6 +14,14 @@ public static class AuditLog
     public static void System(DbScope scope, string action, string targetType, string targetId, string correlationId,
         object? details = null) =>
         Add(scope, "system", null, action, targetType, targetId, correlationId, details, "success");
+
+    /// <summary>True when the organization of the scope has an event with this action and correlation id (restore markers).</summary>
+    public static Task<bool> ExistsAsync(DbScope scope, string action, string correlationId, CancellationToken ct)
+    {
+        var organizationId = scope.OrganizationId!.Value;
+        return scope.Db.AuditEvents.AnyAsync(
+            e => e.OrganizationId == organizationId && e.Action == action && e.CorrelationId == correlationId, ct);
+    }
 
     private static void Add(DbScope scope, string actorType, Guid? actorId, string action, string targetType,
         string targetId, string correlationId, object? details, string outcome)

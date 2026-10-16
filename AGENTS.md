@@ -10,9 +10,9 @@
 
 - `development-package/` — версионируемый пакет: документы `01`–`10`, `specs/`, `examples/`, `scripts/`.
 - `sikkerheit-app-chat-transcript.md` — первоисточник идеи: переписка начальника с ChatGPT на нюнорске. Не редактировать.
-- `src/` — сервис (`Sikkerheit.Host`), контракт (`Sikkerheit.Contracts`), портал (`Portal`); `tests/` — модульные и интеграционные тесты; `infra/` — Bicep и скрипты Azure; `tools/` — генератор каталога, проверка исходников, локальная разработка; `Sikkerheit.slnx`, `global.json`, `Directory.*.props` — сборка .NET; `.github/workflows/ci.yml` — CI.
+- `src/` — сервис (`Sikkerheit.Host`), контракт (`Sikkerheit.Contracts`), портал (`Portal`); `tests/` — модульные, интеграционные и контрактные тесты (негативный тест на каждую запись реестра инвариантов); `infra/` — Bicep и скрипты Azure; `tools/` — генератор каталога, проверка исходников, IaC-проверка шаблонов, локальная разработка; `Sikkerheit.slnx`, `global.json`, `Directory.*.props` — сборка .NET; `.github/workflows/ci.yml` — CI, `deploy.yml` — развёртывание в Azure по OIDC.
 - `sikkerheit-development-package-v0.1.0.zip`, `sikkerheit-development-package-v0.2.0.zip` — архивы пакета, результат сборки. Не под git: содержимое воспроизводится из коммита, а хэш архива — нет; sha256 записаны в `docs/WORKFLOW.md`.
-- `AGENTS.md` — правила для всех агентов, Codex и Claude Code читают его сами. `docs/` — навигация, workflow, отчёты (`docs/reports/`) и журналы решений по ревью (`docs/reviews/`). В пакет и архив они не входят: сборка берёт только содержимое `development-package/`.
+- `AGENTS.md` — правила для всех агентов, Codex и Claude Code читают его сами. `docs/` — навигация, workflow, runbooks (`docs/runbooks/`), отчёты (`docs/reports/`) и журналы решений по ревью (`docs/reviews/`). В пакет и архив они не входят: сборка берёт только содержимое `development-package/`.
 - Не создавать `CLAUDE.md`, `.claude/CLAUDE.md` или `CLAUDE.local.md` ни в проекте, ни в родительских каталогах — в том числе командой `/init`. Если такой файл есть, Claude Code перестаёт читать `AGENTS.md`, включая `~/AGENTS.md`; глобальный `~/.claude/CLAUDE.md` на это не влияет. Заметки только для Claude добавлять в этот файл. Временные worktree агентов (`.claude/worktrees/`) удаляются после слияния и в git не попадают.
 
 ## Сгенерированные файлы

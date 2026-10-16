@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Sikkerheit.Contracts;
 using Sikkerheit.Host.Data;
+using Sikkerheit.Host.Jobs;
 using Sikkerheit.Host.Operations;
 using Sikkerheit.Host.Platform;
 using Sikkerheit.Host.Reports;
@@ -230,19 +231,16 @@ public static class OrganizationEndpoints
         switch (body.Action)
         {
             case "disable":
-                organization.Status = "disabled";
-                organization.DisabledAt = now;
+                OrganizationLifecycle.Disable(organization, now);
                 break;
             case "enable":
-                organization.Status = "active";
+                OrganizationLifecycle.Enable(organization);
                 break;
             case "schedule_deletion":
-                organization.Status = "deletion_scheduled";
-                organization.DeletionDueAt = dueAt;
+                OrganizationLifecycle.ScheduleDeletion(organization, dueAt!.Value);
                 break;
             case "cancel_deletion":
-                organization.Status = "disabled";
-                organization.DeletionDueAt = null;
+                OrganizationLifecycle.CancelDeletion(organization);
                 break;
         }
         var response = ApiJson.Serialize(OrganizationDto.From(organization));

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Jobs;
+using Sikkerheit.Host.Operations;
 
 namespace Sikkerheit.Host.M365;
 
@@ -10,7 +11,8 @@ namespace Sikkerheit.Host.M365;
 /// Job m365_collect: collects outside the database, then writes everything in one final transaction that locks the
 /// organization and the connection and checks that both are still active and the run is still running (05).
 /// </summary>
-public sealed class M365CollectionJob(DbScopes scopes, M365Collector collector, TimeProvider clock) : IJobHandler
+public sealed class M365CollectionJob(DbScopes scopes, M365Collector collector, TimeProvider clock,
+    ILogger<M365CollectionJob> logger) : IJobHandler
 {
     /// <summary>Far beyond the 30-minute run timeout and the job retries: such a run has lost its job.</summary>
     public static readonly TimeSpan AbandonedAfter = TimeSpan.FromHours(6);
@@ -89,6 +91,19 @@ public sealed class M365CollectionJob(DbScopes scopes, M365Collector collector, 
             current.CompletedAt = now;
             current.Capabilities = M365Evaluator.Capabilities(outcome.Modules);
             lockedConnection.LastCollectionState = "failed";
+            // Nothing is evaluated, so open findings stay open; the audit and the error log raise the RB-01 alert (06).
+            AuditLog.System(final, outcome.FailureCode == "tenant_mismatch" ? "m365.tenant_mismatch" : "m365.collection_failed",
+                "collection_run", runId.ToString(), "job:" + lease.JobId);
+            if (outcome.FailureCode is "consent_missing" or "tenant_mismatch" or "credential_error")
+            {
+                logger.LogError("Microsoft 365 collection of organization {OrganizationId} failed: {FailureCode} (RB-01)",
+                    org, outcome.FailureCode);
+            }
+            else
+            {
+                logger.LogWarning("Microsoft 365 collection of organization {OrganizationId} failed: {FailureCode}", org,
+                    outcome.FailureCode);
+            }
         }
         else
         {

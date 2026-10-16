@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Sikkerheit.Contracts;
 using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
+using Sikkerheit.Host.Jobs;
 using Sikkerheit.Host.Operations;
 using Sikkerheit.Host.Organizations;
 using Sikkerheit.Host.Platform;
@@ -223,18 +224,7 @@ public static class ConnectionEndpoints
             {
                 throw new ApiProblemException(ProblemCodes.TemporarilyUnavailable, "security log is unavailable");
             }
-            connection.Status = connection.EntraTenantId is null ? "not_connected" : "disconnected";
-            connection.PendingTenantId = null;
-            connection.PendingExpiresAt = null;
-            connection.DisconnectedAt = now;
-            foreach (var run in await scope.Db.CollectionRuns
-                         .Where(r => r.OrganizationId == organizationId && (r.State == "queued" || r.State == "running"))
-                         .ToListAsync(ct))
-            {
-                run.State = "failed";
-                run.FailureCode = "cancelled";
-                run.CompletedAt = now;
-            }
+            await TenantConnections.DisconnectAsync(scope, now, ct);
             AuditLog.Staff(scope, actor, "m365.disconnect", "tenant_connection", organizationId.ToString(), http.TraceIdentifier);
         }
         await scope.CommitAsync(ct);

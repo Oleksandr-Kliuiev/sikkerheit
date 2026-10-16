@@ -75,12 +75,39 @@ public sealed class TeamsDigestJob(DbScopes scopes, IHttpClientFactory http, Tea
     private async Task MarkSentAsync(string period, DateTimeOffset now, CancellationToken ct)
     {
         await using var scope = await scopes.PlatformAsync(ct);
+        await MarkSentAsync(scope, period, now, ct);
+        await scope.CommitAsync(ct);
+    }
+
+    /// <summary>Marks a period sent in the platform scope; also used by the restore for the days after the restore point.</summary>
+    public static async Task<bool> MarkSentAsync(DbScope platform, string period, DateTimeOffset now, CancellationToken ct)
+    {
         await using var command = new NpgsqlCommand(
-            "insert into teams_digest (period_key, sent_at) values (@period, @now) on conflict do nothing", scope.Connection, scope.Transaction);
+            "insert into teams_digest (period_key, sent_at) values (@period, @now) on conflict do nothing",
+            platform.Connection, platform.Transaction);
         command.Parameters.AddWithValue("period", period);
         command.Parameters.AddWithValue("now", now);
-        await command.ExecuteNonQueryAsync(ct);
-        await scope.CommitAsync(ct);
+        return await command.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    /// <summary>Periods whose sending time (07:30 Europe/Oslo) lies in (from, until].</summary>
+    public static IReadOnlyList<string> PeriodsBetween(DateTimeOffset from, DateTimeOffset until)
+    {
+        var periods = new List<string>();
+        var day = TimeZoneInfo.ConvertTime(from, Oslo).Date;
+        for (; ; day = day.AddDays(1))
+        {
+            var local = day.AddHours(7).AddMinutes(30);
+            var due = new DateTimeOffset(local, Oslo.GetUtcOffset(local));
+            if (due > until)
+            {
+                return periods;
+            }
+            if (due > from)
+            {
+                periods.Add(day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            }
+        }
     }
 
     /// <summary>The digest is in the closed list of read-all components (02 «Разделение клиентов»).</summary>

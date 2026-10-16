@@ -87,6 +87,11 @@ public sealed class FindingMachine(SikkerheitDb db, Guid organizationId, DateTim
                     {
                         Resolve(finding, "resolved", "applicability_change", assessment.Id);
                     }
+                    else if (cause == "rule_change")
+                    {
+                        // A new rule version that no longer applies to the pair: the pair leaves the queue by the rule.
+                        Resolve(finding, "resolved", "rule_change", assessment.Id);
+                    }
                     else
                     {
                         Resolve(finding, "policy_changed", "policy_change", assessment.Id);

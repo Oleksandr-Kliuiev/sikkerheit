@@ -13,9 +13,17 @@ using Sikkerheit.Host.Organizations;
 using Sikkerheit.Host.Platform;
 using Sikkerheit.Host.Reports;
 
-var builder = WebApplication.CreateBuilder(args);
+// Maintenance commands run with the configuration of the service but without its web server and jobs (RB-05).
+var maintenance = RestoreReplayCommand.Matches(args);
+var builder = WebApplication.CreateBuilder(maintenance ? [] : args);
 var configuration = builder.Configuration;
 var environment = builder.Environment;
+if (maintenance)
+{
+    // The JSON report goes to stdout; every log line goes to stderr.
+    builder.Logging.ClearProviders();
+    builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
+}
 
 var developmentLogin = configuration.GetValue("Auth:DevelopmentLogin", false);
 if (developmentLogin && !(environment.IsDevelopment() || environment.IsEnvironment("Testing")))
@@ -72,6 +80,7 @@ builder.Services.AddTransient<IJobHandler, TeamsDigestJob>();
 builder.Services.AddSingleton(configuration.GetSection("Teams").Get<TeamsOptions>() ?? new TeamsOptions());
 builder.Services.AddHttpClient(TeamsDigestJob.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton<JobRunner>();
+builder.Services.AddSingleton<RestoreReplay>();
 builder.Services.AddSingleton<Scheduler>();
 if (configuration.GetValue("Jobs:Enabled", false))
 {
@@ -88,6 +97,14 @@ builder.Services.AddAuthentication(SessionAuthenticationHandler.SchemeName)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+if (maintenance)
+{
+    Environment.ExitCode = await RestoreReplayCommand.RunAsync(app.Services, args[1..], Console.Out, Console.Error,
+        CancellationToken.None);
+    await app.DisposeAsync();
+    return;
+}
 
 if (configuration.GetValue("Database:MigrateOnStart", false))
 {

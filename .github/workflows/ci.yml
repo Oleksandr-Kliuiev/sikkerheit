@@ -39,6 +39,23 @@ jobs:
         run: dotnet test --project tests/Sikkerheit.UnitTests --no-build -c Release
       - name: Integration tests (PostgreSQL in a container)
         run: dotnet test --project tests/Sikkerheit.IntegrationTests --no-build -c Release
+      - name: Contract tests, a negative test for every record of the invariant registry (WP-01)
+        run: dotnet test --project tests/Sikkerheit.ContractTests --no-build -c Release
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bicep CLI
+        run: az bicep install
+      - name: IaC check of the Bicep templates for prod and test (INV-081, INV-083, INV-085)
+        run: python3 -I tools/iac/check_arm.py
+      - name: IaC checks fail on deliberately broken templates
+        run: python3 -I tools/iac/check_arm.py --self-test
+      - name: Deployment scripts parse and pass shellcheck
+        run: |
+          for script in infra/scripts/*.sh tools/dev/*.sh; do bash -n "$script"; done
+          shellcheck --severity=warning infra/scripts/*.sh tools/dev/*.sh
 
   portal:
     runs-on: ubuntu-latest

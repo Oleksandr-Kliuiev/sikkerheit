@@ -95,7 +95,7 @@ public sealed class EntraStaffIdentityProvider(EntraOptions options, TimeProvide
         {
             throw new StaffSignInException("error", "the nonce of the ID token does not match");
         }
-        return Verify(result, idToken, cache.Bytes);
+        return StaffTokens.Verify(options, Claims(result.AccessToken), idToken, cache.Bytes);
     }
 
     public async Task<StaffIdentity> RefreshAsync(Guid entraUserId, byte[] tokenCache, CancellationToken ct)
@@ -114,42 +114,10 @@ public sealed class EntraStaffIdentityProvider(EntraOptions options, TimeProvide
             logger.LogWarning("Staff token refresh refused for {EntraUserId}: {Error}", entraUserId, error.ErrorCode);
             throw new StaffSignInException("refresh_failed", "the refresh token was refused: " + error.ErrorCode, error);
         }
-        var identity = Verify(result, result.IdToken is null ? null : Claims(result.IdToken), cache.Bytes);
+        var identity = StaffTokens.Verify(options, Claims(result.AccessToken), result.IdToken is null ? null : Claims(result.IdToken),
+            cache.Bytes);
         return identity.EntraUserId == entraUserId ? identity
             : throw new StaffSignInException("refresh_failed", "the refreshed token belongs to another user");
-    }
-
-    /// <summary>
-    /// Tenant, user, MFA in the access token of the own API (amr mfa or the configured acrs) and app roles. The ID token,
-    /// when the response has one, must name the same tenant and user.
-    /// </summary>
-    private StaffIdentity Verify(AuthenticationResult result, JsonElement? idToken, byte[] tokenCache)
-    {
-        var access = Claims(result.AccessToken);
-        var oid = Text(access, "oid");
-        if (Text(access, "tid") != options.TenantId || (idToken is { } id && Text(id, "tid") != options.TenantId))
-        {
-            throw new StaffSignInException("error", "the token was issued by another tenant");
-        }
-        if (!Guid.TryParse(oid, out var entraUserId) || (idToken is { } named && Text(named, "oid") != oid))
-        {
-            throw new StaffSignInException("error", "the user of the tokens is missing or differs");
-        }
-        // Only «mfa» proves MFA; «wiaormfa» does not (04).
-        var mfa = Values(access, "amr").Contains("mfa")
-                  || (options.AuthenticationContext is { } context && Values(access, "acrs").Contains(context));
-        if (!mfa)
-        {
-            throw new StaffSignInException("mfa_required", "the access token has no proof of MFA");
-        }
-        var roles = Values(access, "roles").Concat(idToken is { } withRoles ? Values(withRoles, "roles") : [])
-            .Where(StaffRoles.All.Contains).Distinct().Order(StringComparer.Ordinal).ToList();
-        if (roles.Count == 0)
-        {
-            throw new StaffSignInException("no_role", "the user has no Sikkerheit role");
-        }
-        var display = idToken is { } profile ? Text(profile, "name") ?? Text(profile, "preferred_username") : Text(access, "name");
-        return new StaffIdentity(entraUserId, display, roles, tokenCache);
     }
 
     private (IConfidentialClientApplication Application, CacheHolder Cache) Application(byte[]? tokenCache)
@@ -193,7 +161,45 @@ public sealed class EntraStaffIdentityProvider(EntraOptions options, TimeProvide
         return document.RootElement.Clone();
     }
 
-    private static string? Text(JsonElement claims, string name) =>
+    private static string? Text(JsonElement claims, string name) => StaffTokens.Text(claims, name);
+}
+
+/// <summary>
+/// The checks of 04 «Вход сотрудников и роли» on the claims of the tokens Entra returned: tenant, user, MFA in the access
+/// token of the own API (amr mfa or the configured acrs) and app roles. The ID token, when the response has one, must name
+/// the same tenant and user. Separate from MSAL so that tests run the same checks behind the sign-in endpoints.
+/// </summary>
+public static class StaffTokens
+{
+    public static StaffIdentity Verify(EntraOptions options, JsonElement access, JsonElement? idToken, byte[] tokenCache)
+    {
+        var oid = Text(access, "oid");
+        if (Text(access, "tid") != options.TenantId || (idToken is { } id && Text(id, "tid") != options.TenantId))
+        {
+            throw new StaffSignInException("error", "the token was issued by another tenant");
+        }
+        if (!Guid.TryParse(oid, out var entraUserId) || (idToken is { } named && Text(named, "oid") != oid))
+        {
+            throw new StaffSignInException("error", "the user of the tokens is missing or differs");
+        }
+        // Only «mfa» proves MFA; «wiaormfa» does not (04).
+        var mfa = Values(access, "amr").Contains("mfa")
+                  || (options.AuthenticationContext is { } context && Values(access, "acrs").Contains(context));
+        if (!mfa)
+        {
+            throw new StaffSignInException("mfa_required", "the access token has no proof of MFA");
+        }
+        var roles = Values(access, "roles").Concat(idToken is { } withRoles ? Values(withRoles, "roles") : [])
+            .Where(StaffRoles.All.Contains).Distinct().Order(StringComparer.Ordinal).ToList();
+        if (roles.Count == 0)
+        {
+            throw new StaffSignInException("no_role", "the user has no Sikkerheit role");
+        }
+        var display = idToken is { } profile ? Text(profile, "name") ?? Text(profile, "preferred_username") : Text(access, "name");
+        return new StaffIdentity(entraUserId, display, roles, tokenCache);
+    }
+
+    internal static string? Text(JsonElement claims, string name) =>
         claims.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
     private static IReadOnlyList<string> Values(JsonElement claims, string name) =>

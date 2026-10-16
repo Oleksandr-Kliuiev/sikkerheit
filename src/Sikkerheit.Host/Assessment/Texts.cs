@@ -108,6 +108,15 @@ public static class Texts
         ["m365-006.pass.disabled"] = ("Brukersamtykke til apper er slått av.", "Brukarsamtykke til appar er slått av.", "User consent to applications is turned off."),
         ["m365-006.pass.allowed"] = ("Bare tillatte samtykkepolicyer er i bruk ({policies}).", "Berre tillatne samtykkepolicyar er i bruk ({policies}).", "Only allowed consent policies are in use ({policies})."),
         ["m365-006.unknown.custom"] = ("En egendefinert samtykkepolicy er i bruk; den må vurderes manuelt.", "Ein eigendefinert samtykkepolicy er i bruk; han må vurderast manuelt.", "A custom consent policy is in use; it needs a manual review."),
+        ["m365-007.pass"] = ("Siste vellykkede pålogging for {days} dager siden.", "Siste vellukka pålogging for {days} dagar sidan.", "Last successful sign-in {days} days ago."),
+        ["m365-007.pass.new"] = ("Kontoen ble opprettet for {days} dager siden og har ikke logget på ennå.", "Kontoen vart oppretta for {days} dagar sidan og har ikkje logga på enno.", "The account was created {days} days ago and has not signed in yet."),
+        ["m365-007.fail.inactive"] = ("Siste vellykkede pålogging for {days} dager siden, grensen er {limit} dager.", "Siste vellukka pålogging for {days} dagar sidan, grensa er {limit} dagar.", "Last successful sign-in {days} days ago; the limit is {limit} days."),
+        ["m365-007.fail.never"] = ("Ingen vellykket pålogging siden desember 2023, kontoen ble opprettet for {days} dager siden.", "Inga vellukka pålogging sidan desember 2023, kontoen vart oppretta for {days} dagar sidan.", "No successful sign-in since December 2023; the account was created {days} days ago."),
+        ["m365-007.fail.legacy"] = ("Ingen vellykket pålogging siden desember 2023, og kontoen ble opprettet før juni 2018.", "Inga vellukka pålogging sidan desember 2023, og kontoen vart oppretta før juni 2018.", "No successful sign-in since December 2023, and the account was created before June 2018."),
+        ["m365-007.not_applicable.disabled"] = ("Kontoen er deaktivert.", "Kontoen er deaktivert.", "The account is disabled."),
+        ["m365-007.not_applicable.guest"] = ("Gjestekontoer vurderes ikke.", "Gjestekontoar blir ikkje vurderte.", "Guest accounts are not assessed."),
+        ["m365-007.not_applicable.excluded"] = ("Kontoen er unntatt i policyen (nødtilgang eller tjenestekonto).", "Kontoen er unnateken i policyen (naudtilgang eller tenestekonto).", "The account is excluded by policy (emergency access or service account)."),
+        ["m365-007.not_applicable.sync_account"] = ("Synkroniseringskontoen til Entra Connect vurderes ikke.", "Synkroniseringskontoen til Entra Connect blir ikkje vurdert.", "The Entra Connect synchronization account is not assessed."),
     };
 
     public static string Title(string checkId, string language) => Pick(Titles, checkId, language) ?? checkId;

@@ -75,11 +75,11 @@
 
 ### Персональные данные, сроки хранения, удаление, восстановление
 
-`04` → «Минимизация данных» (таблица сроков), «Журнал безопасности»; `05` → «Жизненный цикл организации»; `06` → «Резервное копирование и восстановление», «Удаление данных клиента»; `07` → AT-09, AT-11, RB-05, RB-07.
+`04` → «Минимизация данных» (таблица сроков), «Журнал безопасности»; `05` → «Жизненный цикл организации»; `06` → «Резервное копирование и восстановление», «Удаление данных клиента»; `07` → AT-09, AT-11, RB-05, RB-07. Команда восстановления в коде — `dev/README.md` → «Восстановление после PITR» (путь от `docs/`).
 
 ### Azure, распространение агента, эксплуатация, расходы
 
-`06`; `08` → ADR-02…ADR-04, ADR-09; `07` → SP-02, SP-05, WP-07, WP-11, «Runbooks».
+`06`; `08` → ADR-02…ADR-04, ADR-09; `07` → SP-02, SP-05, WP-07, WP-11, «Runbooks»; runbooks P1 — `runbooks/` (путь от `docs/`).
 
 ### План, трудоёмкость, приёмка
 
@@ -98,23 +98,27 @@
 
 ### Код сервиса, портала и инфраструктуры
 
-Обзор и команды — `dev/README.md` (путь от `docs/`); развёртывание — `../infra/README.md`. Модули сервиса — папки проекта `src/Sikkerheit.Host`:
+Обзор и команды — `dev/README.md` (путь от `docs/`); развёртывание — `../infra/README.md`; эксплуатация — `runbooks/`. Модули сервиса — папки проекта `src/Sikkerheit.Host`; модуль обращается только к своим таблицам (`dev/module-boundaries.md`):
 
 | Задача | Код | Тесты |
 | --- | --- | --- |
 | Контракт, схемы, каталог | `src/Sikkerheit.Contracts` (`ContractSchemas`, `Catalog.g.cs` из `tools/contracts/gen_csharp_catalog.py`) | `tests/Sikkerheit.UnitTests/Contracts` |
 | Схема БД, RLS, области | `Data/Migrations/0001_p1_core.sql`, `Data/DbScopes.cs`, `Data/SchemaMigrator.cs`, `Data/DatabaseConnections.cs` (вход Entra) | `RowLevelSecurityTests` |
-| Организации, политика, жизненный цикл | `Organizations/` | `OrganizationApiTests` |
+| Организации, политика, жизненный цикл | `Organizations/` (`OrganizationEndpoints`, `OrganizationLifecycle` — переходы и эпоха версий политики) | `OrganizationApiTests` |
 | Вход сотрудников, сессии, CSRF | `Access/` (`LoginEndpoints`, `StaffIdentity`, `StaffSessions`) | `StaffSignInTests` |
-| Сбор Microsoft 365 | `M365/` (`GraphClient`, `M365Collector`, `M365CollectionJob`, `ConnectionEndpoints`) | `M365CollectionTests`, `Infrastructure/FakeGraph.cs` |
-| Правила, оценки, проблемы, пересчёт политики | `Assessment/` (`Rules`, `FindingMachine`, `M365Evaluator`, `RecalculatePolicyJob`, `FindingEndpoints`, `Texts`) | `M365RulesTests`, `FindingApiTests` |
+| Сбор Microsoft 365 | `M365/` (`GraphClient`, `M365Collector` — в том числе активации PIM, `M365CollectionJob`, `ConnectionEndpoints`, `TenantConnections`) | `M365CollectionTests`, `Infrastructure/FakeGraph.cs` |
+| Правила, оценки, проблемы, пересчёт политики и `ruleVersion` | `Assessment/` (`Rules`, `FindingMachine`, `M365Evaluator`, `RecalculatePolicyJob`, `FindingEndpoints`, `Texts`) | `M365RulesTests`, `FindingApiTests` |
 | Отчёт, покрытие, сводка Teams | `Reports/` (`Coverage`, `ReportBuilder`, `ReportHtml`, `ReportService`, `TeamsDigest`) | `Reports/*Tests`, `ReportApiTests`, `LifecycleJobTests` |
 | Экспорт, удаление, сроки хранения | `Exports/`, `Jobs/DataLifecycleJobs.cs` | `LifecycleJobTests` |
-| Задания и планировщик | `Jobs/` (`JobRunner`, `Scheduler`, `SweepJobs`) | `ReportPeriodTests`, интеграционные тесты заданий |
-| Журнал безопасности, аудит, файлы, идемпотентность | `Operations/` | через API-тесты |
+| Задания и планировщик | `Jobs/` (`JobQueue`, `JobRunner`, `Scheduler`, `SweepJobs`) | `ReportPeriodTests`, интеграционные тесты заданий |
+| Журнал безопасности, аудит, файлы, идемпотентность | `Operations/` | через API-тесты, `InfraInvariantTests` |
+| Восстановление после PITR (RB-05) | `Operations/RestoreReplay.cs`, `RestoreReplayCommand.cs` (`dotnet Sikkerheit.Host.dll restore-replay --since <T>`) | `RestoreReplayTests`, `InfraInvariantTests`, `Operations/RestoreReplayCommandTests` |
+| Негативные тесты реестра инвариантов (WP-01) | `tests/Sikkerheit.ContractTests`: классы по `enforcement`, `Invariants/` (атрибуты, реестр, проверка покрытия), `Support/ContractHost.cs` | `RegistryCoverageTests` |
+| Границы модулей | Владельцы таблиц и известные нарушения — `tests/Sikkerheit.UnitTests/Architecture/ModuleBoundaryTests.cs`; план устранения — `dev/module-boundaries.md` | `ModuleBoundaryTests` |
 | Problem, курсоры, заголовки, телеметрия | `Platform/` | `PortalHostingTests` |
 | Портал | `src/Portal/src` (`pages/`, `components/`, `api/schema.d.ts` из OpenAPI, строки `i18n/*.json`) | `src/Portal/src/**/*.test.ts` |
-| Azure | `infra/bicep/main.bicep` и `modules/`, `infra/scripts/setup.sh`, `deploy-app.sh` | `az bicep build` |
+| Azure | `infra/bicep/main.bicep` и `modules/`, `infra/scripts/setup.sh`, `deploy-app.sh`; развёртывание из GitHub по OIDC — `.github/workflows/deploy.yml` | `tools/iac/check_arm.py` (и `--self-test`; выражения ARM — `arm_eval.py`) |
+| Runbooks P1 (RB-01…RB-07, RB-14) | `runbooks/` (путь от `docs/`): указатель и шаблон протокола — `README.md` | — |
 | Локальная разработка | `tools/dev/` (база в Docker, демо-данные), `.claude/launch.json` | — |
 
 Отступления реализации от пакета и вопросы к 0.3.1 — `reviews/0.3.0-decisions.md`, раздел «Реализация P1».

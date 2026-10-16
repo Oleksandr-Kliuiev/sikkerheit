@@ -12,6 +12,7 @@
     <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
     <InternalsVisibleTo Include="Sikkerheit.UnitTests" />
     <InternalsVisibleTo Include="Sikkerheit.IntegrationTests" />
+    <InternalsVisibleTo Include="Sikkerheit.ContractTests" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Extensions.AspNetCore.DataProtection.Blobs" />

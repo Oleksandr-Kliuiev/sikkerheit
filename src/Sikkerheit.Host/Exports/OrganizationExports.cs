@@ -45,6 +45,11 @@ public static class OrganizationExports
 
     public static string FileKey(Guid organizationId, Guid exportId) => $"{organizationId}/{exportId}.zip";
 
+    /// <summary>Keys of every export file the database knows; only for components with the read-all scope.</summary>
+    public static async Task<IReadOnlySet<string>> KnownFileKeysAsync(DbScope all, CancellationToken ct) =>
+        (await all.Db.OrganizationExports.AsNoTracking().Where(e => e.BlobKey != null).Select(e => e.BlobKey!).ToListAsync(ct))
+        .ToHashSet(StringComparer.Ordinal);
+
     public static void Map(IEndpointRouteBuilder app)
     {
         var org = app.MapGroup("/api/v1/organizations/{organizationId:guid}");

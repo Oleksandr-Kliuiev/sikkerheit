@@ -25,6 +25,21 @@ public sealed class FakeTenant
     public int UsersPageSize { get; set; } = 999;
     public HashSet<string> Forbidden { get; } = [];
 
+    /// <summary>Entra ID P2 (PIM): roleAssignmentScheduleInstances lists the activations below.</summary>
+    public bool EntraP2 { get; set; }
+
+    /// <summary>Assignments that exist only as a PIM activation (assignmentType=Activated).</summary>
+    public HashSet<(Guid Principal, string Role)> Activations { get; } = [];
+
+    /// <summary>/organization answers with this id instead of the tenant's own (the token went to another tenant).</summary>
+    public Guid? OrganizationIdOverride { get; set; }
+
+    /// <summary>The @odata.nextLink of the first /users page, when the test wants a link to another host.</summary>
+    public string? UsersNextLink { get; set; }
+
+    /// <summary>Path prefix → remaining 429 answers and their Retry-After in seconds.</summary>
+    public Dictionary<string, (int Remaining, int RetryAfterSeconds)> Throttled { get; } = [];
+
     public FakeUser AddUser(string name, bool enabled = true, string? type = "Member", params string[] methods)
     {
         var user = new FakeUser(Guid.NewGuid(), $"{name}@fjord.example", enabled, type, methods);
@@ -61,6 +76,12 @@ public sealed class FakeGraph : HttpMessageHandler
     public Dictionary<Guid, FakeTenant> Tenants { get; } = [];
     public List<string> Requests { get; } = [];
 
+    /// <summary>Times of the requests, in the same order as Requests.</summary>
+    public List<DateTimeOffset> RequestTimes { get; } = [];
+
+    /// <summary>Called before a request is answered, e.g. to disconnect the tenant in the middle of a run.</summary>
+    public Func<string, Task>? OnRequest { get; set; }
+
     public FakeTenant AddTenant()
     {
         var tenant = new FakeTenant();
@@ -76,6 +97,20 @@ public sealed class FakeGraph : HttpMessageHandler
         lock (Requests)
         {
             Requests.Add(request.Method + " " + request.RequestUri.PathAndQuery);
+            RequestTimes.Add(DateTimeOffset.UtcNow);
+        }
+        var relative = path.StartsWith("/v1.0", StringComparison.Ordinal) ? path[5..] : path;
+        if (OnRequest is { } hook)
+        {
+            await hook(relative);
+        }
+        var throttled = tenant.Throttled.Keys.FirstOrDefault(p => relative.StartsWith(p, StringComparison.Ordinal));
+        if (throttled is not null && tenant.Throttled[throttled] is { Remaining: > 0 } limit)
+        {
+            tenant.Throttled[throttled] = (limit.Remaining - 1, limit.RetryAfterSeconds);
+            var tooMany = Json(429, new JsonObject { ["error"] = new JsonObject { ["code"] = "TooManyRequests" } });
+            tooMany.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(limit.RetryAfterSeconds));
+            return tooMany;
         }
         if (request.Method == HttpMethod.Post && path == "/v1.0/$batch")
         {
@@ -106,7 +141,7 @@ public sealed class FakeGraph : HttpMessageHandler
         {
             return (200, Value(new JsonObject
             {
-                ["id"] = tenant.TenantId.ToString(), ["displayName"] = tenant.DisplayName,
+                ["id"] = (tenant.OrganizationIdOverride ?? tenant.TenantId).ToString(), ["displayName"] = tenant.DisplayName,
                 ["verifiedDomains"] = new JsonArray(new JsonObject { ["name"] = "fjord.example", ["isDefault"] = true }),
             }));
         }
@@ -115,6 +150,10 @@ public sealed class FakeGraph : HttpMessageHandler
             var plans = tenant.EntraP1
                 ? new JsonArray(new JsonObject { ["servicePlanId"] = "41781fb2-bc02-4b7c-bd55-b576c07bb09d" })
                 : new JsonArray(new JsonObject { ["servicePlanId"] = "57ff2da0-773e-42df-b2af-ffb7a2317929" });
+            if (tenant.EntraP2)
+            {
+                plans.Add(new JsonObject { ["servicePlanId"] = "eec0eb4f-6444-4f95-aba0-50c24d67f998" });
+            }
             return (200, Value(new JsonObject { ["capabilityStatus"] = "Enabled", ["servicePlans"] = plans }));
         }
         if (path == "/users")
@@ -129,7 +168,8 @@ public sealed class FakeGraph : HttpMessageHandler
             var result = new JsonObject { ["value"] = new JsonArray(page) };
             if (skip + tenant.UsersPageSize < tenant.Users.Count)
             {
-                result["@odata.nextLink"] = $"https://graph.microsoft.com/v1.0/users?$top={tenant.UsersPageSize}&skip={skip + tenant.UsersPageSize}";
+                result["@odata.nextLink"] = skip == 0 && tenant.UsersNextLink is { } link ? link
+                    : $"https://graph.microsoft.com/v1.0/users?$top={tenant.UsersPageSize}&skip={skip + tenant.UsersPageSize}";
             }
             return (200, result);
         }
@@ -137,14 +177,30 @@ public sealed class FakeGraph : HttpMessageHandler
         {
             return (200, new JsonObject
             {
-                ["value"] = new JsonArray(tenant.Assignments.Select(a => (JsonNode)new JsonObject
+                ["value"] = new JsonArray(tenant.Assignments.Select((a, i) => (JsonNode)new JsonObject
                 {
-                    ["principalId"] = a.Principal.ToString(), ["roleDefinitionId"] = a.Role, ["directoryScopeId"] = "/",
+                    ["id"] = "ra-" + i, ["principalId"] = a.Principal.ToString(), ["roleDefinitionId"] = a.Role, ["directoryScopeId"] = "/",
                     ["principal"] = new JsonObject
                     {
                         ["@odata.type"] = a.IsGroup ? "#microsoft.graph.group" : "#microsoft.graph.user", ["id"] = a.Principal.ToString(),
                     },
                 }).ToArray()),
+            });
+        }
+        if (path == "/roleManagement/directory/roleAssignmentScheduleInstances")
+        {
+            if (!tenant.EntraP2 || !query.Contains("assignmentType%20eq%20'Activated'", StringComparison.Ordinal))
+            {
+                return (400, new JsonObject { ["error"] = new JsonObject { ["code"] = "AadPremiumLicenseRequired" } });
+            }
+            return (200, new JsonObject
+            {
+                ["value"] = new JsonArray(tenant.Assignments.Select((a, i) => (a, i))
+                    .Where(x => tenant.Activations.Contains((x.a.Principal, x.a.Role)))
+                    .Select(x => (JsonNode)new JsonObject
+                    {
+                        ["roleAssignmentOriginId"] = "ra-" + x.i, ["assignmentType"] = "Activated",
+                    }).ToArray()),
             });
         }
         if (path.StartsWith("/groups/", StringComparison.Ordinal) && path.EndsWith("/transitiveMembers", StringComparison.Ordinal))
@@ -164,7 +220,9 @@ public sealed class FakeGraph : HttpMessageHandler
             var methods = new JsonArray(new JsonObject { ["@odata.type"] = "#microsoft.graph.passwordAuthenticationMethod" });
             foreach (var kind in user.Methods ?? [])
             {
-                methods.Add(new JsonObject { ["@odata.type"] = "#microsoft.graph." + kind + "AuthenticationMethod" });
+                // «untyped» stands for an element of a 200 answer without the required @odata.type.
+                methods.Add(kind == "untyped" ? new JsonObject { ["id"] = Guid.NewGuid().ToString() }
+                    : new JsonObject { ["@odata.type"] = "#microsoft.graph." + kind + "AuthenticationMethod" });
             }
             return (200, new JsonObject { ["value"] = methods });
         }

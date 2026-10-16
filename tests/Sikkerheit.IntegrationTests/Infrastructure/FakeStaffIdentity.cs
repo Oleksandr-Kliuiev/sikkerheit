@@ -18,6 +18,15 @@ public sealed class FakeStaffIdentity : IStaffIdentityProvider
 
     public void Issue(string code, StaffIdentity identity) => _codes[code] = (identity, null);
 
+    /// <summary>
+    /// Issues a code whose tokens carry these claims: redeeming it runs the real checks of StaffTokens on them, as the
+    /// Entra provider does after the token endpoint answers.
+    /// </summary>
+    public void IssueTokens(string code, EntraOptions options, string accessClaims, string? idClaims = null) =>
+        _tokens[code] = (options, accessClaims, idClaims);
+
+    private readonly Dictionary<string, (EntraOptions Options, string Access, string? Id)> _tokens = [];
+
     public void Refuse(string code, string reason) => _codes[code] = (null, reason);
 
     public Uri AuthorizeUrl(string state, string nonce, string codeChallenge)
@@ -32,6 +41,12 @@ public sealed class FakeStaffIdentity : IStaffIdentityProvider
         LastVerifier = codeVerifier;
         var expected = Convert.ToBase64String(SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier)))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        if (expected == LastChallenge && _tokens.Remove(code, out var tokens))
+        {
+            using var access = System.Text.Json.JsonDocument.Parse(tokens.Access);
+            using var id = tokens.Id is null ? null : System.Text.Json.JsonDocument.Parse(tokens.Id);
+            return Task.FromResult(StaffTokens.Verify(tokens.Options, access.RootElement, id?.RootElement, [1, 2, 3]));
+        }
         if (expected != LastChallenge || !_codes.Remove(code, out var answer))
         {
             throw new StaffSignInException("error", "unknown code or PKCE mismatch");

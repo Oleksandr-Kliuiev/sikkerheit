@@ -8,7 +8,8 @@ using Sikkerheit.Host.M365;
 namespace Sikkerheit.IntegrationTests.Infrastructure;
 
 /// <summary>The service in the Testing environment on the shared PostgreSQL, with the development login enabled.</summary>
-public sealed class ApiFactory(string connectionString, string? securityLogDirectory = null) : WebApplicationFactory<Program>
+public sealed class ApiFactory(string connectionString, string? securityLogDirectory = null, string? filesDirectory = null)
+    : WebApplicationFactory<Program>
 {
     /// <summary>A service instance on its own database copied from the migrated template.</summary>
     public static async Task<ApiFactory> CreateAsync(PostgresFixture postgres, string? securityLogDirectory = null) =>
@@ -23,8 +24,9 @@ public sealed class ApiFactory(string connectionString, string? securityLogDirec
     public string SecurityLogDirectory { get; } =
         securityLogDirectory ?? Path.Combine(Path.GetTempPath(), "sikkerheit-tests", Guid.NewGuid().ToString("N"));
 
-    /// <summary>Report and export files of this factory.</summary>
-    public string FilesDirectory { get; } = Path.Combine(Path.GetTempPath(), "sikkerheit-tests", Guid.NewGuid().ToString("N"), "files");
+    /// <summary>Report and export files of this factory; a restore test shares them between the instances before and after.</summary>
+    public string FilesDirectory { get; } =
+        filesDirectory ?? Path.Combine(Path.GetTempPath(), "sikkerheit-tests", Guid.NewGuid().ToString("N"), "files");
 
     /// <summary>«Now» of the service; tests move it to run scenarios over days and weeks.</summary>
     public TestClock Clock { get; } = new();
@@ -36,6 +38,12 @@ public sealed class ApiFactory(string connectionString, string? securityLogDirec
     public CapturingHandler Teams { get; } = new();
 
     public const string TeamsWebhook = "https://teams.test/workflows/digest";
+
+    /// <summary>Extra configuration of this instance (for example M365:CompanyTenantId); set before the first request.</summary>
+    public Dictionary<string, string?> Settings { get; } = [];
+
+    /// <summary>Log records of this instance: errors are what the alerts of 06 react to.</summary>
+    public LogCapture Logs { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -52,8 +60,13 @@ public sealed class ApiFactory(string connectionString, string? securityLogDirec
         builder.UseSetting("Database:MigrateOnStart", "false");
         builder.UseSetting("M365:ClientId", "11111111-2222-4333-8444-555555555555");
         builder.UseSetting("M365:ConsentRedirectUri", "https://localhost/consent-complete");
+        foreach (var (key, value) in Settings)
+        {
+            builder.UseSetting(key, value);
+        }
         builder.ConfigureTestServices(services =>
         {
+            services.AddSingleton<Microsoft.Extensions.Logging.ILoggerProvider>(Logs);
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
             services.RemoveAll<Sikkerheit.Host.Access.IStaffIdentityProvider>();

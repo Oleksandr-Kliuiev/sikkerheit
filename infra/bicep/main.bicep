@@ -10,10 +10,15 @@ param alertEmail string
 param portalClientId string = ''
 @description('Client id of «Sikkerheit Graph Reader» from setup.sh; empty on the first pass.')
 param graphClientId string = ''
-param monthlyBudget int = 200
+@description('NFR-09: up to 200 USD a month for production and 50 USD for test.')
+param monthlyBudget int = environmentName == 'prod' ? 200 : 50
 param budgetStartDate string = '${utcNow('yyyy-MM')}-01'
+@description('True once setup.sh has locked the security-log immutability policy: a locked policy accepts no PUT, only extend.')
+param securityLogLocked bool = false
 
 var name = 'sikkerheit-${environmentName}'
+// Production deploys through a staging slot; test runs on B1, and Basic plans have no slots (06 «Ресурсы»).
+var stagingSlot = environmentName == 'prod'
 var unique = '${name}-${take(uniqueString(resourceGroup().id), 5)}'
 var tenantId = subscription().tenantId
 
@@ -48,7 +53,7 @@ module postgres 'modules/postgres.bicep' = {
 
 module storage 'modules/storage.bicep' = {
   name: 'storage'
-  params: { name: unique, location: location }
+  params: { name: unique, location: location, securityLogLocked: securityLogLocked }
 }
 
 module vault 'modules/keyvault.bicep' = {
@@ -62,6 +67,7 @@ module app 'modules/app.bicep' = {
     name: unique
     location: location
     planSku: environmentName == 'prod' ? 'P0v3' : 'B1'
+    stagingSlot: stagingSlot
     subnetId: network.outputs.appSubnetId
     tenantId: tenantId
     databaseHost: postgres.outputs.host
@@ -84,7 +90,7 @@ module access 'modules/access.bicep' = {
     storageAccountName: storage.outputs.accountName
     vaultName: vault.outputs.vaultName
     dataProtectionKeyName: vault.outputs.dataProtectionKeyName
-    principalIds: [ app.outputs.productionPrincipalId, app.outputs.stagingPrincipalId ]
+    principalIds: stagingSlot ? [ app.outputs.productionPrincipalId, app.outputs.stagingPrincipalId ] : [ app.outputs.productionPrincipalId ]
   }
 }
 

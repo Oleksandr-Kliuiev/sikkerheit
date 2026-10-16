@@ -6,10 +6,12 @@
 #   SIKKERHEIT_ALERT_EMAIL=drift@firma.no infra/scripts/setup.sh prod
 #
 # Optional: SIKKERHEIT_LOCATION (norwayeast), SIKKERHEIT_TEAMS_WEBHOOK (Workflows webhook URL),
-#           SIKKERHEIT_LOCK_SECURITY_LOG=yes (locks the 30-day immutability policy; cannot be undone).
+#           SIKKERHEIT_LOCK_SECURITY_LOG=yes (locks the 30-day immutability policy; cannot be undone),
+#           SIKKERHEIT_GITHUB_REPO=owner/repo (identity for .github/workflows/deploy.yml, OIDC without secrets).
 set -euo pipefail
 
 env="${1:-prod}"
+[[ "$env" == prod || "$env" == test ]] || { echo "Usage: $0 prod|test"; exit 2; }
 location="${SIKKERHEIT_LOCATION:-norwayeast}"
 group="rg-sikkerheit-${env}"
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -17,17 +19,34 @@ root="$(cd "$here/../.." && pwd)"
 state="$root/infra/.state"
 mkdir -p "$state"
 : "${SIKKERHEIT_ALERT_EMAIL:?Set SIKKERHEIT_ALERT_EMAIL to the operations mailbox}"
+repository_pattern='^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
+if [[ -n "${SIKKERHEIT_GITHUB_REPO:-}" && ! "$SIKKERHEIT_GITHUB_REPO" =~ $repository_pattern ]]; then
+  echo "SIKKERHEIT_GITHUB_REPO must be owner/repo exactly as on GitHub"; exit 2
+fi
 
 say() { printf '\n== %s\n' "$*"; }
 tenant="$(az account show --query tenantId -o tsv)"
 me="$(az ad signed-in-user show --query id -o tsv)"
 say "Subscription $(az account show --query name -o tsv), tenant $tenant, environment $env in $location"
 
+# A locked immutability policy accepts no PUT, only extend: once locked, the template leaves it out.
+security_log_locked() {
+  local account
+  account="$(az storage account list --resource-group "$group" --query "[?starts_with(name, 'stsikkerheit${env}')].name | [0]" -o tsv)"
+  if [[ -n "$account" && "$(az storage container immutability-policy show --account-name "$account" --resource-group "$group" \
+        --container-name security-log --query state -o tsv 2>/dev/null)" == Locked ]]; then
+    echo true
+  else
+    echo false
+  fi
+}
 deploy() {
+  local locked
+  locked="$(security_log_locked)"
   az deployment group create --resource-group "$group" --name "sikkerheit-$(date +%Y%m%d%H%M%S)" \
     --template-file "$root/infra/bicep/main.bicep" \
     --parameters environmentName="$env" location="$location" alertEmail="$SIKKERHEIT_ALERT_EMAIL" \
-                 portalClientId="${1:-}" graphClientId="${2:-}" \
+                 portalClientId="${1:-}" graphClientId="${2:-}" securityLogLocked="$locked" \
     --query properties.outputs -o json > "$state/$env.json"
 }
 output() { jq -r ".$1.value" "$state/$env.json"; }
@@ -54,16 +73,16 @@ graph_patch() { az rest --method PATCH --url "https://graph.microsoft.com/v1.0/a
 say "2/7 Entra application «Sikkerheit Portal ($env)»: sign-in, app roles, own API with v1 tokens (amr)"
 portal="$(ensure_app "Sikkerheit Portal ($env)" AzureADMyOrg)"
 scope_id="$(az ad app show --id "$portal" --query "api.oauth2PermissionScopes[?value=='access_as_user'].id | [0]" -o tsv)"
-[[ -n "$scope_id" ]] || scope_id="$(uuidgen | tr 'A-Z' 'a-z')"
+[[ -n "$scope_id" ]] || scope_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
 role_id() { az ad app show --id "$portal" --query "appRoles[?value=='$1'].id | [0]" -o tsv; }
 admin_role="$(role_id Admin)"; technician_role="$(role_id Technician)"; reader_role="$(role_id Reader)"
-[[ -n "$admin_role" ]] || admin_role="$(uuidgen | tr 'A-Z' 'a-z')"
-[[ -n "$technician_role" ]] || technician_role="$(uuidgen | tr 'A-Z' 'a-z')"
-[[ -n "$reader_role" ]] || reader_role="$(uuidgen | tr 'A-Z' 'a-z')"
+[[ -n "$admin_role" ]] || admin_role="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+[[ -n "$technician_role" ]] || technician_role="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+[[ -n "$reader_role" ]] || reader_role="$(uuidgen | tr '[:upper:]' '[:lower:]')"
 graph_patch "$portal" "$(jq -n --arg portal "$portal" --arg scope "$scope_id" --arg prod "$prod_host" --arg staging "$staging_host" \
   --arg admin "$admin_role" --arg technician "$technician_role" --arg reader "$reader_role" '{
   identifierUris: ["api://\($portal)"],
-  web: { redirectUris: ["https://\($prod)/auth/callback", "https://\($staging)/auth/callback"],
+  web: { redirectUris: ([$prod, $staging] | map(select(. != "")) | map("https://\(.)/auth/callback")),
          implicitGrantSettings: { enableIdTokenIssuance: false, enableAccessTokenIssuance: false } },
   api: { requestedAccessTokenVersion: 1, oauth2PermissionScopes: [{ id: $scope, value: "access_as_user", type: "User",
          isEnabled: true, adminConsentDisplayName: "Use Sikkerheit", adminConsentDescription: "Sign in to the Sikkerheit portal.",
@@ -77,6 +96,7 @@ portal_sp="$(az ad sp show --id "$portal" --query id -o tsv)"
 az rest --method PATCH --url "https://graph.microsoft.com/v1.0/servicePrincipals/$portal_sp" --headers 'Content-Type=application/json' \
   --body '{"appRoleAssignmentRequired": true}' -o none
 for principal in "$prod_principal" "$staging_principal"; do
+  [[ -n "$principal" ]] || continue  # test has no staging slot
   name="slot-$principal"
   if [[ -z "$(az ad app federated-credential list --id "$portal" --query "[?name=='$name'].id | [0]" -o tsv)" ]]; then
     az ad app federated-credential create --id "$portal" --parameters "$(jq -n --arg name "$name" --arg tenant "$tenant" --arg subject "$principal" \
@@ -117,6 +137,12 @@ if ! az keyvault certificate show --vault-name "$vault" --name graph-reader -o n
     lifetimeActions: [ { trigger: { daysBeforeExpiry: 30 }, action: { actionType: "EmailContacts" } } ] }')"
   az keyvault certificate create --vault-name "$vault" --name graph-reader --policy "$policy" -o none
 fi
+# The certificate policy mails the contacts of the vault 30 days before expiry (06 «Наблюдаемость», RB-02); without a
+# contact no mail goes out. «contact add» refuses an existing address, so it runs only when the address is missing.
+if ! az keyvault certificate contact list --vault-name "$vault" -o json 2>/dev/null \
+    | jq -e --arg email "$SIKKERHEIT_ALERT_EMAIL" 'any(.[]?; (.email // .emailAddress) == $email)' >/dev/null; then
+  az keyvault certificate contact add --vault-name "$vault" --email "$SIKKERHEIT_ALERT_EMAIL" -o none
+fi
 az keyvault certificate download --vault-name "$vault" --name graph-reader --file "$state/graph-reader.pem" --encoding PEM
 thumb="$(az keyvault certificate show --vault-name "$vault" --name graph-reader --query x509ThumbprintHex -o tsv)"
 if [[ -z "$(az ad app credential list --id "$graph" --cert --query "[?customKeyIdentifier=='$thumb'].keyId | [0]" -o tsv)" ]]; then
@@ -135,10 +161,15 @@ if [[ -n "${SIKKERHEIT_TEAMS_WEBHOOK:-}" ]]; then
 fi
 
 say "5/7 Security log immutability"
-if [[ "${SIKKERHEIT_LOCK_SECURITY_LOG:-no}" == yes ]]; then
-  etag="$(az storage container immutability-policy show --account-name "$storage" --container-name security-log --auth-mode login --query etag -o tsv 2>/dev/null \
-    || az storage container immutability-policy show --account-name "$storage" --container-name security-log --query etag -o tsv)"
-  az storage container immutability-policy lock --account-name "$storage" --container-name security-log --if-match "$etag" -o none
+policy_state="$(az storage container immutability-policy show --account-name "$storage" --resource-group "$group" \
+  --container-name security-log --query state -o tsv)"
+if [[ "$policy_state" == Locked ]]; then
+  echo "   locked for 30 days per record"
+elif [[ "${SIKKERHEIT_LOCK_SECURITY_LOG:-no}" == yes ]]; then
+  etag="$(az storage container immutability-policy show --account-name "$storage" --resource-group "$group" \
+    --container-name security-log --query etag -o tsv)"
+  az storage container immutability-policy lock --account-name "$storage" --resource-group "$group" \
+    --container-name security-log --if-match "$etag" -o none
   echo "   locked for 30 days per record"
 else
   echo "   not locked yet: set SIKKERHEIT_LOCK_SECURITY_LOG=yes before the pilot (locking cannot be undone)"
@@ -146,11 +177,42 @@ fi
 
 say "6/7 Resources with the application ids (second pass)"
 deploy "$portal" "$graph"
+if [[ -n "$staging_host" ]]; then
+  # The staging slot runs only during deployments (06); deploy-app.sh starts it.
+  az webapp stop --resource-group "$group" --name "$site" --slot staging -o none
+fi
+
+if [[ -n "${SIKKERHEIT_GITHUB_REPO:-}" ]]; then
+  say "GitHub deployment identity for $SIKKERHEIT_GITHUB_REPO, environment $env (OIDC, no secrets)"
+  deployer="id-sikkerheit-${env}-deploy"
+  az identity show --resource-group "$group" --name "$deployer" -o none 2>/dev/null \
+    || az identity create --resource-group "$group" --name "$deployer" --location "$location" -o none
+  deployer_client="$(az identity show --resource-group "$group" --name "$deployer" --query clientId -o tsv)"
+  deployer_principal="$(az identity show --resource-group "$group" --name "$deployer" --query principalId -o tsv)"
+  az identity federated-credential create --resource-group "$group" --identity-name "$deployer" --name "github-$env" \
+    --issuer https://token.actions.githubusercontent.com --subject "repo:${SIKKERHEIT_GITHUB_REPO}:environment:${env}" \
+    --audiences api://AzureADTokenExchange -o none
+  # Code deployment only: the app and its slots. No access to the database, Key Vault or the storage data (06).
+  az role assignment create --assignee-object-id "$deployer_principal" --assignee-principal-type ServicePrincipal \
+    --role "Website Contributor" --scope "$(az group show --name "$group" --query id -o tsv)" -o none
+  if [[ -z "$staging_host" ]]; then
+    # Without a slot the deployment attaches the migrations identity to the app for its duration.
+    az role assignment create --assignee-object-id "$deployer_principal" --assignee-principal-type ServicePrincipal \
+      --role "Managed Identity Operator" \
+      --scope "$(az identity show --resource-group "$group" --name "id-sikkerheit-${env}-migrations" --query id -o tsv)" -o none
+  fi
+  cat <<VARIABLES
+   GitHub → Settings → Environments → $env → Environment variables:
+     AZURE_CLIENT_ID=$deployer_client
+     AZURE_TENANT_ID=$tenant
+     AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+VARIABLES
+fi
 
 say "7/7 Done"
+echo "Portal:        https://$prod_host"
+[[ -z "$staging_host" ]] || echo "Staging slot:  https://$staging_host (stopped; deploy-app.sh starts it)"
 cat <<NEXT
-Portal:        https://$prod_host
-Staging slot:  https://$staging_host
 Next:
   * Deploy the service:  infra/scripts/deploy-app.sh $env
   * Give staff roles: Entra admin center → Enterprise applications → «Sikkerheit Portal ($env)» → Users and groups

@@ -79,6 +79,27 @@ public sealed class PostgresFixture : IAsyncLifetime
         return new NpgsqlConnectionStringBuilder(AppConnectionString) { Database = name }.ConnectionString;
     }
 
+    /// <summary>
+    /// A copy of a database at this moment — the stand-in for a point-in-time restore. Sessions still open on the source
+    /// are ended first (a template database must have none). Returns the app role connection string of the copy.
+    /// </summary>
+    public async Task<string> CloneDatabaseAsync(string appConnectionString)
+    {
+        var source = new NpgsqlConnectionStringBuilder(appConnectionString).Database!;
+        var name = "sikkerheit_" + Guid.NewGuid().ToString("N")[..16];
+        await _create.WaitAsync();
+        try
+        {
+            await ExecuteAsync($"select pg_terminate_backend(pid) from pg_stat_activity where datname = '{source}' and pid <> pg_backend_pid()");
+            await ExecuteAsync($"create database {name} template {source} owner {OwnerRole}");
+        }
+        finally
+        {
+            _create.Release();
+        }
+        return new NpgsqlConnectionStringBuilder(AppConnectionString) { Database = name }.ConnectionString;
+    }
+
     private async Task ExecuteAsync(string sql)
     {
         await using var connection = new NpgsqlConnection(_admin);

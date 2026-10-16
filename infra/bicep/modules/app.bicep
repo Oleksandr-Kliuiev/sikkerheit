@@ -1,8 +1,11 @@
 // App Service (02 «Развёртывание и окружения», 06 «Ресурсы»): one Linux instance with Always On and a health check,
-// VNet integration, a staging slot for deployments, managed identities and no secrets in settings.
+// VNet integration, managed identities and no secrets in settings. Production deploys through a staging slot; test
+// runs on B1 without slots (Basic has none), and its deployment attaches the migrations identity only for that time.
 param name string
 param location string
 param planSku string
+@description('Production: the staging slot that runs only during deployments and alone carries the migrations identity.')
+param stagingSlot bool
 param subnetId string
 param tenantId string
 param databaseHost string
@@ -55,7 +58,7 @@ resource site 'Microsoft.Web/sites@2024-04-01' = {
 }
 
 // The staging slot runs only during deployments; it alone carries the migrations identity (02).
-resource staging 'Microsoft.Web/sites/slots@2024-04-01' = {
+resource staging 'Microsoft.Web/sites/slots@2024-04-01' = if (stagingSlot) {
   parent: site
   name: 'staging'
   location: location
@@ -95,7 +98,8 @@ var common = {
 }
 
 var productionHost = site.properties.defaultHostName
-var stagingHost = staging.properties.defaultHostName
+// staging! is safe: every use is guarded by stagingSlot, the condition of the slot itself.
+var stagingHost = stagingSlot ? staging!.properties.defaultHostName : ''
 
 resource productionSettings 'Microsoft.Web/sites/config@2024-04-01' = {
   parent: site
@@ -111,7 +115,7 @@ resource productionSettings 'Microsoft.Web/sites/config@2024-04-01' = {
   })
 }
 
-resource stagingSettings 'Microsoft.Web/sites/slots/config@2024-04-01' = {
+resource stagingSettings 'Microsoft.Web/sites/slots/config@2024-04-01' = if (stagingSlot) {
   parent: staging
   name: 'appsettings'
   properties: union(common, {
@@ -127,12 +131,12 @@ resource stagingSettings 'Microsoft.Web/sites/slots/config@2024-04-01' = {
     Database__AppPrincipals__0__Name: 'sikkerheit-app'
     Database__AppPrincipals__0__ObjectId: site.identity.principalId
     Database__AppPrincipals__1__Name: 'sikkerheit-staging'
-    Database__AppPrincipals__1__ObjectId: staging.identity.principalId
+    Database__AppPrincipals__1__ObjectId: staging!.identity.principalId
   })
 }
 
 // Settings that stay with their slot when slots are swapped.
-resource sticky 'Microsoft.Web/sites/config@2024-04-01' = {
+resource sticky 'Microsoft.Web/sites/config@2024-04-01' = if (stagingSlot) {
   parent: site
   name: 'slotConfigNames'
   properties: {
@@ -150,4 +154,4 @@ output siteId string = site.id
 output productionHost string = productionHost
 output stagingHost string = stagingHost
 output productionPrincipalId string = site.identity.principalId
-output stagingPrincipalId string = staging.identity.principalId
+output stagingPrincipalId string = stagingSlot ? staging!.identity.principalId : ''

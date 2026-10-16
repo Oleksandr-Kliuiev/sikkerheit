@@ -49,7 +49,8 @@ public sealed record CollectionOutcome(
 public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, CollectorOptions options, TimeProvider clock)
 {
     private const string GlobalAdministrator = "62e90394-69f5-4237-9190-012177145e10";
-    private static readonly string[] P1Plans = ["41781fb2-bc02-4b7c-bd55-b576c07bb09d", "eec0eb4f-6444-4f95-aba0-50c24d67f998"];
+    private const string P2Plan = "eec0eb4f-6444-4f95-aba0-50c24d67f998";
+    private static readonly string[] P1Plans = ["41781fb2-bc02-4b7c-bd55-b576c07bb09d", P2Plan];
 
     private static readonly Dictionary<string, string> MethodTypes = new(StringComparer.Ordinal)
     {
@@ -145,6 +146,10 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
         public string? DisplayName { get; set; }
         public string? PrimaryDomain { get; set; }
         public bool? EntraP1 { get; set; }
+        public bool? EntraP2 { get; set; }
+
+        /// <summary>PIM activations could not be read: the global administrator count is not reliable (M365-005).</summary>
+        public bool ActivationsUnknown { get; set; }
         public bool UsersComplete { get; set; }
         public Dictionary<Guid, UserRecord> Users { get; } = [];
         public HashSet<Guid> SyncAccounts { get; } = [];
@@ -212,11 +217,13 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
         try
         {
             var body = await graph.GetAsync(tenantId, "v1.0/subscribedSkus?$select=capabilityStatus,servicePlans", GraphLimit.Default, ct);
-            run.EntraP1 = body.GetProperty("value").EnumerateArray().Any(sku =>
+            bool Has(params string[] plansWanted) => body.GetProperty("value").EnumerateArray().Any(sku =>
                 sku.TryGetProperty("capabilityStatus", out var status) && status.GetString() is "Enabled" or "Warning"
                 && sku.TryGetProperty("servicePlans", out var plans)
                 && plans.EnumerateArray().Any(p => p.TryGetProperty("servicePlanId", out var plan)
-                                                   && P1Plans.Contains(plan.GetString(), StringComparer.OrdinalIgnoreCase)));
+                                                   && plansWanted.Contains(plan.GetString(), StringComparer.OrdinalIgnoreCase)));
+            run.EntraP1 = Has(P1Plans);
+            run.EntraP2 = Has(P2Plan);
             run.Modules["licenses"] = "available";
         }
         catch (GraphException error)
@@ -230,13 +237,17 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
         try
         {
             var assignments = await graph.GetAllPagesAsync(tenantId,
-                "v1.0/roleManagement/directory/roleAssignments?$select=principalId,roleDefinitionId,directoryScopeId&$expand=principal($select=id)",
+                "v1.0/roleManagement/directory/roleAssignments?$select=id,principalId,roleDefinitionId,directoryScopeId&$expand=principal($select=id)",
                 GraphLimit.Default, ct);
             var partial = !assignments.Complete;
             run.RoleAssignmentsComplete = assignments.Complete;
+            var activations = await ActivationsAsync(tenantId, run, ct);
+            partial |= run.ActivationsUnknown;
             foreach (var assignment in assignments.Items)
             {
                 var role = assignment.GetProperty("roleDefinitionId").GetString()!.ToLowerInvariant();
+                var activated = assignment.TryGetProperty("id", out var assignmentId) && assignmentId.ValueKind == JsonValueKind.String
+                                && activations.Contains(assignmentId.GetString()!);
                 if (!Guid.TryParse(assignment.GetProperty("principalId").GetString(), out var principal))
                 {
                     partial = true;
@@ -297,6 +308,11 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
                     {
                         run.SyncAccounts.Add(member);
                     }
+                    if (activated)
+                    {
+                        // A temporary PIM activation is neither a standing administrator nor a new problem (03).
+                        continue;
+                    }
                     if (role == GlobalAdministrator)
                     {
                         run.GlobalAdmins.Add(member);
@@ -316,6 +332,42 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
         {
             run.Modules["roles"] = Status(error);
         }
+    }
+
+    /// <summary>
+    /// With Entra ID P2 the active assignments that exist only as a PIM activation (assignmentType=Activated) are read from
+    /// roleAssignmentScheduleInstances: roleAssignmentOriginId names the assignment (02 «Сбор данных Microsoft 365», 03).
+    /// </summary>
+    private async Task<HashSet<string>> ActivationsAsync(Guid tenantId, RunState run, CancellationToken ct)
+    {
+        var activated = new HashSet<string>(StringComparer.Ordinal);
+        if (run.EntraP2 != true)
+        {
+            return activated;
+        }
+        try
+        {
+            var instances = await graph.GetAllPagesAsync(tenantId,
+                "v1.0/roleManagement/directory/roleAssignmentScheduleInstances?$filter=assignmentType%20eq%20'Activated'"
+                + "&$select=roleAssignmentOriginId,assignmentType", GraphLimit.Default, ct);
+            foreach (var instance in instances.Items)
+            {
+                if (instance.TryGetProperty("roleAssignmentOriginId", out var origin) && origin.ValueKind == JsonValueKind.String)
+                {
+                    activated.Add(origin.GetString()!);
+                }
+                else
+                {
+                    run.ActivationsUnknown = true;
+                }
+            }
+            run.ActivationsUnknown |= !instances.Complete;
+        }
+        catch (GraphException)
+        {
+            run.ActivationsUnknown = true;
+        }
+        return activated;
     }
 
     private async Task CollectMethodsAsync(Guid tenantId, CollectorPolicy policy, IReadOnlySet<Guid> previouslyPrivileged,
@@ -338,11 +390,19 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
         {
             var id = Guid.Parse(answer.Url.Split('/')[2]);
             if (answer.Status == 200 && answer.Body.ValueKind == JsonValueKind.Object
-                && answer.Body.TryGetProperty("value", out var value))
+                && answer.Body.TryGetProperty("value", out var value) && value.ValueKind == JsonValueKind.Array)
             {
+                if (value.EnumerateArray().Any(m => m.ValueKind != JsonValueKind.Object
+                        || !m.TryGetProperty("@odata.type", out var type) || type.ValueKind != JsonValueKind.String))
+                {
+                    // 200 without a required property is not a complete answer (03): the user's methods are unknown.
+                    failed++;
+                    run.MethodFailures[id] = "partial_data";
+                    continue;
+                }
                 run.Methods[id] = value.EnumerateArray()
-                    .Select(m => m.TryGetProperty("@odata.type", out var type) ? type.GetString() : null)
-                    .Select(type => type is not null && MethodTypes.TryGetValue(type, out var kind) ? kind : "other")
+                    .Select(m => m.GetProperty("@odata.type").GetString()!)
+                    .Select(type => MethodTypes.TryGetValue(type, out var kind) ? kind : "other")
                     .Distinct().OrderBy(k => Catalog.MethodKinds.ToList().IndexOf(k)).ToList();
             }
             else if (answer.Status == 403)
@@ -787,7 +847,7 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
         }
         if (policy.ActiveCheckIds.Contains("M365-005"))
         {
-            var failure = rolesFailure;
+            var failure = rolesFailure ?? (run.ActivationsUnknown ? "partial_data" : null);
             var enabledAdmins = run.GlobalAdmins.Where(id => run.Users.TryGetValue(id, out var u) && u.AccountEnabled).Order().ToList();
             var disabledAdmins = run.GlobalAdmins.Where(id => run.Users.TryGetValue(id, out var u) && !u.AccountEnabled).Order().ToList();
             result.Add(failure is not null

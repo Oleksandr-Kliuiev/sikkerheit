@@ -20,7 +20,39 @@ public sealed class ReportService(DbScopes scopes, IFileStore files, TimeProvide
 
     public string Type => "report_generate";
 
-    public static string FileKey(Guid organizationId, Guid reportId) => $"{organizationId}/{reportId}.html";
+    /// <summary>
+    /// The file of a report: organization prefix, ISO week and report id. The week in the name lets the restore tell
+    /// which week a file without a database row belongs to (06 «Резервное копирование и восстановление», step 5).
+    /// </summary>
+    public static string FileKey(Guid organizationId, string periodKey, Guid reportId) =>
+        $"{organizationId}/{periodKey}/{reportId}.html";
+
+    /// <summary>The ISO week key of a report in its own time zone.</summary>
+    public static string PeriodKey(Report report)
+    {
+        var (year, week) = ReportPeriod.WeekOf(TimeZoneInfo.FindSystemTimeZoneById(report.Timezone), report.PeriodStart);
+        return ReportPeriod.Key(year, week);
+    }
+
+    /// <summary>Organization and week of a report file key; false for keys of another shape.</summary>
+    public static bool TryParseFileKey(string key, out Guid organizationId, out string periodKey)
+    {
+        organizationId = Guid.Empty;
+        periodKey = "";
+        var parts = key.Split('/');
+        if (parts.Length != 3 || !Guid.TryParse(parts[0], out organizationId) || !ReportPeriod.TryParseKey(parts[1], out _, out _)
+            || !parts[2].EndsWith(".html", StringComparison.Ordinal) || !Guid.TryParse(parts[2][..^5], out _))
+        {
+            return false;
+        }
+        periodKey = parts[1];
+        return true;
+    }
+
+    /// <summary>Keys of every report file the database knows; only for components with the read-all scope.</summary>
+    public static async Task<IReadOnlySet<string>> KnownFileKeysAsync(DbScope all, CancellationToken ct) =>
+        (await all.Db.Reports.AsNoTracking().Where(r => r.BlobKey != null).Select(r => r.BlobKey!).ToListAsync(ct))
+        .ToHashSet(StringComparer.Ordinal);
 
     public async Task ExecuteAsync(JobLease lease, CancellationToken ct)
     {
@@ -38,8 +70,13 @@ public sealed class ReportService(DbScopes scopes, IFileStore files, TimeProvide
             {
                 throw new JobLeaseLostException();
             }
-            await scope.Db.Reports.Where(r => r.OrganizationId == organizationId && r.Id == reportId && r.State == "queued")
+            var failed = await scope.Db.Reports.Where(r => r.OrganizationId == organizationId && r.Id == reportId && r.State == "queued")
                 .ExecuteUpdateAsync(u => u.SetProperty(r => r.State, "failed").SetProperty(r => r.FailureCode, "generation_error"), ct);
+            if (failed > 0)
+            {
+                AuditLog.System(scope, "report.failed", "report", reportId.ToString(), "job:" + lease.JobId);
+                await scope.Db.SaveChangesAsync(ct);
+            }
             await lease.CompleteAsync(scope, ct);
             await scope.CommitAsync(ct);
         }
@@ -72,10 +109,11 @@ public sealed class ReportService(DbScopes scopes, IFileStore files, TimeProvide
                 report.Id, report.Language, string.Join(", ", missing));
             report.State = "failed";
             report.FailureCode = "translation_missing";
+            AuditLog.System(scope, "report.failed", "report", report.Id.ToString(), "job:" + lease.JobId);
         }
         else
         {
-            var key = FileKey(organizationId, report.Id);
+            var key = FileKey(organizationId, PeriodKey(report), report.Id);
             await files.PutAsync(FileContainers.Reports, key, Encoding.UTF8.GetBytes(ReportHtml.Render(snapshot)), ContentType, ct);
             report.State = "ready";
             report.FailureCode = null;
@@ -91,7 +129,7 @@ public sealed class ReportService(DbScopes scopes, IFileStore files, TimeProvide
     /// <summary>The HTML of a ready report; a missing file is rendered again from the stored snapshot.</summary>
     public async Task<byte[]> ContentAsync(Report report, CancellationToken ct)
     {
-        var key = report.BlobKey ?? FileKey(report.OrganizationId, report.Id);
+        var key = report.BlobKey ?? FileKey(report.OrganizationId, PeriodKey(report), report.Id);
         if (await files.GetAsync(FileContainers.Reports, key, ct) is { } content)
         {
             return content;

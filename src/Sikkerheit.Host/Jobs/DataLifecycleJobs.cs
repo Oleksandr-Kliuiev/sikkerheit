@@ -12,13 +12,6 @@ namespace Sikkerheit.Host.Jobs;
 public sealed class OrganizationDeleteJob(DbScopes scopes, IFileStore files, ISecurityLog securityLog, TimeProvider clock,
     ILogger<OrganizationDeleteJob> logger) : IJobHandler
 {
-    /// <summary>Client tables in an order that respects the foreign keys.</summary>
-    private static readonly string[] Tables =
-    [
-        "audit_event", "report", "organization_export", "risk_decision", "finding_event", "finding", "assessment",
-        "observation", "subject", "collection_run", "idempotency_record", "tenant_connection", "policy_revision",
-    ];
-
     public string Type => "organization_delete";
 
     public async Task ExecuteAsync(JobLease lease, CancellationToken ct)
@@ -37,33 +30,61 @@ public sealed class OrganizationDeleteJob(DbScopes scopes, IFileStore files, ISe
             // Without the record the deletion does not happen; after a restore the record deletes the organization again.
             await securityLog.AppendAsync(new SecurityLogRecord(Guid.CreateVersion7(), "organization.delete", org,
                 "organization", org.ToString(), now, "job:" + lease.JobId, null), ct);
-            foreach (var container in FileContainers.All)
-            {
-                await files.DeletePrefixAsync(container, FileContainers.OrganizationPrefix(org), ct);
-            }
-            foreach (var table in Tables)
-            {
-                await using var delete = new NpgsqlCommand($"delete from {table} where organization_id = @org",
-                    scope.Connection, scope.Transaction);
-                delete.Parameters.AddWithValue("org", org);
-                await delete.ExecuteNonQueryAsync(ct);
-            }
-            await using (var command = new NpgsqlCommand("""
-                delete from organization where id = @org;
-                delete from job where organization_id = @org and id <> @job and state <> 'running';
-                insert into organization_tombstone (id, deleted_at) values (@org, @now) on conflict do nothing;
-                """, scope.Connection, scope.Transaction))
-            {
-                command.Parameters.AddWithValue("org", org);
-                command.Parameters.AddWithValue("job", lease.JobId);
-                command.Parameters.AddWithValue("now", now);
-                await command.ExecuteNonQueryAsync(ct);
-            }
+            await OrganizationDeletion.DeleteAsync(scope, files, now, lease.JobId, deleteFiles: true, ct);
             logger.LogWarning("Organization {OrganizationId} deleted after its deletion date", org);
         }
         await lease.CompleteAsync(scope, ct);
         await scope.CommitAsync(ct);
     }
+}
+
+/// <summary>
+/// Removal of all data of one organization in its scope: files under its prefix, the rows of every client table and a
+/// tombstone. Used by organization_delete and by the restore replay of organization.delete (06).
+/// </summary>
+public static class OrganizationDeletion
+{
+    /// <summary>Client tables in an order that respects the foreign keys.</summary>
+    private static readonly string[] Tables =
+    [
+        "audit_event", "report", "organization_export", "risk_decision", "finding_event", "finding", "assessment",
+        "observation", "subject", "collection_run", "idempotency_record", "tenant_connection", "policy_revision",
+    ];
+
+    /// <param name="keepJobId">The running deletion job, which completes in the same transaction.</param>
+    /// <param name="deleteFiles">False in a restore drill, where the production files may only be read.</param>
+    public static async Task DeleteAsync(DbScope scope, IFileStore files, DateTimeOffset now, Guid? keepJobId,
+        bool deleteFiles, CancellationToken ct)
+    {
+        var org = scope.OrganizationId!.Value;
+        if (deleteFiles)
+        {
+            foreach (var container in FileContainers.All)
+            {
+                await files.DeletePrefixAsync(container, FileContainers.OrganizationPrefix(org), ct);
+            }
+        }
+        foreach (var table in Tables)
+        {
+            await using var delete = new NpgsqlCommand($"delete from {table} where organization_id = @org",
+                scope.Connection, scope.Transaction);
+            delete.Parameters.AddWithValue("org", org);
+            await delete.ExecuteNonQueryAsync(ct);
+        }
+        await using var command = new NpgsqlCommand("""
+            delete from organization where id = @org;
+            delete from job where organization_id = @org and id is distinct from @job and state <> 'running';
+            insert into organization_tombstone (id, deleted_at) values (@org, @now) on conflict do nothing;
+            """, scope.Connection, scope.Transaction);
+        command.Parameters.AddWithValue("org", org);
+        command.Parameters.AddWithValue("job", NpgsqlTypes.NpgsqlDbType.Uuid, (object?)keepJobId ?? DBNull.Value);
+        command.Parameters.AddWithValue("now", now);
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>True when the organization was deleted (a tombstone exists).</summary>
+    public static async Task<bool> TombstoneExistsAsync(DbScope platform, Guid organizationId, CancellationToken ct) =>
+        await platform.Db.OrganizationTombstones.AnyAsync(t => t.Id == organizationId, ct);
 }
 
 /// <summary>

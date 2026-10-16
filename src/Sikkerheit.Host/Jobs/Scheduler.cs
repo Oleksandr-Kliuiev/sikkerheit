@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using Npgsql;
+using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
-using Sikkerheit.Host.Operations;
 using Sikkerheit.Host.Reports;
 
 namespace Sikkerheit.Host.Jobs;
@@ -79,6 +79,8 @@ public sealed class Scheduler(DbScopes scopes, TimeProvider clock, ILogger<Sched
                     await JobQueue.EnqueueAsync(platform, "m365_collect", plan.Id, null, localDate, now + jitter, ct);
                 }
                 await JobQueue.EnqueueAsync(platform, "freshness_sweep", plan.Id, null, hour, now, ct);
+                // A new ruleVersion recalculates the current projections once per organization (cause rule_change).
+                await JobQueue.EnqueueAsync(platform, "recalculate_policy", plan.Id, "rule:" + RuleEngine.RuleVersion, null, now, ct);
                 await JobQueue.EnqueueAsync(platform, "review_expiry", plan.Id, null, hour, now, ct);
                 foreach (var week in DueReportWeeks(zone, now, plan.CreatedAt))
                 {
