@@ -55,7 +55,9 @@ jobs:
       - name: Deployment scripts parse and pass shellcheck
         run: |
           for script in infra/scripts/*.sh tools/dev/*.sh; do bash -n "$script"; done
-          shellcheck --severity=warning infra/scripts/*.sh tools/dev/*.sh
+          shellcheck --severity=warning infra/scripts/*.sh tools/dev/*.sh tools/iac/tests/stubs/*
+      - name: Offline tests of drill.sh, setup.sh and deploy-app.sh on the az stub
+        run: python3 -I -m unittest discover -s tools/iac/tests
 
   portal:
     runs-on: ubuntu-latest

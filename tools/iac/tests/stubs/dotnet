@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# «dotnet publish ... -o <dir>»: an empty portal in the output, as the real publish produces.
+printf 'dotnet %s\n' "$*" >> "$AZ_LOG"
+while (( $# )); do
+  if [[ "$1" == -o ]]; then mkdir -p "$2/wwwroot" && echo '<html></html>' > "$2/wwwroot/index.html"; fi
+  shift
+done
