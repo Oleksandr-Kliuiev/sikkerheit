@@ -115,10 +115,22 @@ def check_database_server(ctx):
     return f'default psql-<unique>; with databaseServerName the server and the connection strings ({count}) follow it'
 
 
+def check_database_disk(ctx):
+    """The disk of the server follows databaseStorageGb: setup.sh passes at least the current size of an existing
+    server, and Azure refuses to shrink a disk."""
+    for wanted in (48, 64):
+        other = Context(ctx.template, ctx.environment, {'databaseStorageGb': wanted})
+        size = one_or_more(other, PSQL, 'PostgreSQL flexible server')[0].get('properties', 'storage', 'storageSizeGB')
+        if size != wanted:
+            raise Failed(f'with databaseStorageGb={wanted} storageSizeGB is {show(size)}: the disk would be set back')
+    return 'the disk size is the parameter databaseStorageGb (32 by default), so a repeated deployment never shrinks it'
+
+
 CHECKS = (
     ('restore identity on the production slot', None, check_restore_identity),
     ('restore identity reads only', 'INV-081', check_restore_access),
     ('database server parameter', None, check_database_server),
+    ('database disk parameter', None, check_database_disk),
 )
 
 
@@ -152,6 +164,19 @@ def check_setup_server(scripts):
     return 'setup.sh keeps the server of the app (or SIKKERHEIT_DATABASE_SERVER) and refuses an unknown one'
 
 
+def check_setup_safety(scripts):
+    text_ = '\n'.join(commands(scripts['setup']))
+    if not re.search(r'databaseStorageGb="\$database_storage"', text_) or 'storage.storageSizeGb' not in text_:
+        raise Failed('setup.sh does not read the disk size of the existing server and pass it as databaseStorageGb')
+    if not re.search(r'security_log_locked\)"\s*\|\|', text_) or not re.search(r'resolve_database_storage\)"', text_):
+        raise Failed('setup.sh does not stop when the lock check or the disk size cannot be read')
+    start = text_.index('security_log_locked()')
+    body = text_[start:text_.index('resolve_database_server()', start)] if 'resolve_database_server()' in text_[start:] else text_[start:]
+    if '2>/dev/null' in body or '|| {' not in body or 'if ! state=' not in body:
+        raise Failed('security_log_locked hides or ignores a failed az call')
+    return 'setup.sh raises the disk to the current size and stops when the lock or the size is unreadable'
+
+
 def check_drill_production(scripts):
     lines = commands(scripts['drill'])
     assignments = [line for line in lines if re.match(r'(?:local\s+)?group=', line)]
@@ -181,6 +206,7 @@ def check_drill_replay(scripts):
 
 SCRIPT_CHECKS = (
     ('setup.sh keeps the database server', None, check_setup_server),
+    ('setup.sh is safe to repeat', None, check_setup_safety),
     ('drill.sh only reads production', None, check_drill_production),
     ('drill.sh lists files and cleans up', 'INV-081', check_drill_replay),
 )
@@ -222,6 +248,15 @@ mutation('scripts', 'setup.sh keeps the database server', 'setup.sh without data
     lambda t, s: replace_script(s, 'setup', r' databaseServerName="[^"]*"', ''))
 mutation('scripts', 'setup.sh keeps the database server', 'setup.sh without the server check')(
     lambda t, s: replace_script(s, 'setup', r'az postgres flexible-server show', 'true'))
+mutation('prod', 'database disk parameter', 'fixed 32 GiB disk')(
+    lambda t, s: replace_text(t, '"[parameters(\'storageSizeGb\')]"', '32'))
+mutation('scripts', 'setup.sh is safe to repeat', 'setup.sh without databaseStorageGb')(
+    lambda t, s: replace_script(s, 'setup', r' databaseStorageGb="[^"]*"', ''))
+mutation('scripts', 'setup.sh is safe to repeat', 'setup.sh ignores a failed lock check')(
+    lambda t, s: replace_script(s, 'setup', r'locked="\$\(security_log_locked\)" \|\| return 1', 'locked="$(security_log_locked)"'))
+mutation('scripts', 'setup.sh is safe to repeat', 'setup.sh hides a failed policy read')(
+    lambda t, s: replace_script(s, 'setup', r'--container-name security-log --query state -o tsv 2>"\$errors"\)"; then',
+                                '--container-name security-log --query state -o tsv 2>/dev/null)"; then'))
 mutation('scripts', 'drill.sh only reads production', 'drill.sh changes a production setting')(
     lambda t, s: replace_script(s, 'drill', r'access-restriction set --resource-group "\$group"',
                                 'access-restriction set --resource-group "$production"'))

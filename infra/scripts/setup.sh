@@ -31,16 +31,29 @@ tenant="$(az account show --query tenantId -o tsv)"
 me="$(az ad signed-in-user show --query id -o tsv)"
 say "Subscription $(az account show --query name -o tsv), tenant $tenant, environment $env in $location"
 
-# A locked immutability policy accepts no PUT, only extend: once locked, the template leaves it out.
+# A locked immutability policy accepts no PUT, only extend: once locked, the template leaves it out. A failed az call
+# stops the run (set -e does not hold in «$(...)»): guessing «locked» or «not locked» would make Bicep send a PUT that
+# Azure rejects, or leave a lock out of the template. Only «no storage account yet» and «no container yet» (a first
+# install) count as not locked.
 security_log_locked() {
-  local account
-  account="$(az storage account list --resource-group "$group" --query "[?starts_with(name, 'stsikkerheit${env}')].name | [0]" -o tsv)"
-  if [[ -n "$account" && "$(az storage container immutability-policy show --account-name "$account" --resource-group "$group" \
-        --container-name security-log --query state -o tsv 2>/dev/null)" == Locked ]]; then
-    echo true
-  else
-    echo false
+  local account state errors
+  errors="$(mktemp)"
+  account="$(az storage account list --resource-group "$group" --query "[?starts_with(name, 'stsikkerheit${env}')].name | [0]" -o tsv)" \
+    || { rm -f "$errors"; echo "Cannot list storage accounts in $group: the lock of security-log is unknown, stopping" >&2; return 1; }
+  if [[ -z "$account" ]]; then
+    rm -f "$errors"; echo false; return 0
   fi
+  if ! state="$(az storage container immutability-policy show --account-name "$account" --resource-group "$group" \
+        --container-name security-log --query state -o tsv 2>"$errors")"; then
+    if grep -q -E 'ContainerNotFound|ResourceNotFound' "$errors"; then
+      rm -f "$errors"; echo false; return 0
+    fi
+    cat "$errors" >&2; rm -f "$errors"
+    echo "Cannot read the immutability policy of security-log in $account: the lock is unknown, stopping" >&2
+    return 1
+  fi
+  rm -f "$errors"
+  if [[ "$state" == Locked ]]; then echo true; else echo false; fi
 }
 # The database server the service runs on. A restore (RB-05) moves the service to a new server, so a repeated run keeps
 # the server of the app's connection string; SIKKERHEIT_DATABASE_SERVER must name the same server and is needed only
@@ -71,13 +84,27 @@ resolve_database_server() {
   }
   echo "$server"
 }
+# PostgreSQL storage in GiB for the template. Azure refuses to shrink a disk and autoGrow may have enlarged it, so an
+# existing server is never given less than it has now; the first install gets the 32 GiB of the template.
+resolve_database_storage() {
+  local minimum=32 current
+  if [[ -z "$database_server" ]]; then
+    echo "$minimum"; return 0
+  fi
+  current="$(az postgres flexible-server show --resource-group "$group" --name "$database_server" --query storage.storageSizeGb -o tsv)" \
+    || { echo "Cannot read the disk size of $database_server: stopping before the deployment" >&2; return 1; }
+  if [[ ! "$current" =~ ^[0-9]+$ ]]; then
+    echo "Unexpected disk size «$current» of $database_server: stopping before the deployment" >&2; return 1
+  fi
+  echo $(( current > minimum ? current : minimum ))
+}
 deploy() {
   local locked
-  locked="$(security_log_locked)"
+  locked="$(security_log_locked)" || return 1
   az deployment group create --resource-group "$group" --name "sikkerheit-$(date +%Y%m%d%H%M%S)" \
     --template-file "$root/infra/bicep/main.bicep" \
     --parameters environmentName="$env" location="$location" alertEmail="$SIKKERHEIT_ALERT_EMAIL" \
-                 portalClientId="${1:-}" graphClientId="${2:-}" securityLogLocked="$locked" databaseServerName="$database_server" \
+                 portalClientId="${1:-}" graphClientId="${2:-}" securityLogLocked="$locked" databaseServerName="$database_server" databaseStorageGb="$database_storage" \
     --query properties.outputs -o json > "$state/$env.json"
 }
 output() { jq -r ".$1.value" "$state/$env.json"; }
@@ -85,7 +112,8 @@ output() { jq -r ".$1.value" "$state/$env.json"; }
 say "1/7 Resource group and resources (first pass)"
 az group create --name "$group" --location "$location" --tags app=sikkerheit environment="$env" -o none
 database_server="$(resolve_database_server)"
-echo "   database server: ${database_server:-psql-sikkerheit-$env-<5> (new)}"
+database_storage="$(resolve_database_storage)"
+echo "   database server: ${database_server:-psql-sikkerheit-$env-<5> (new)}, disk ${database_storage} GiB"
 deploy "$(cat "$state/$env.portal" 2>/dev/null || true)" "$(cat "$state/$env.graph" 2>/dev/null || true)"
 site="$(output siteName)"; prod_host="$(output productionHost)"; staging_host="$(output stagingHost)"
 prod_principal="$(output productionPrincipalId)"; staging_principal="$(output stagingPrincipalId)"

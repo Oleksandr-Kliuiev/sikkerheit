@@ -17,6 +17,9 @@ param budgetStartDate string = '${utcNow('yyyy-MM')}-01'
 param securityLogLocked bool = false
 @description('PostgreSQL server of the environment. Empty: psql-sikkerheit-<env>-<5>, the server of the first install. After a restore (RB-05): the restored server, which setup.sh takes from the connection string of the app.')
 param databaseServerName string = ''
+@description('PostgreSQL disk in GiB. setup.sh passes the current size of an existing server: autoGrow may have enlarged it and Azure refuses to shrink a disk.')
+@minValue(32)
+param databaseStorageGb int = 32
 
 var name = 'sikkerheit-${environmentName}'
 // Production deploys through a staging slot; test runs on B1, and Basic plans have no slots (06 «Ресурсы»).
@@ -53,6 +56,7 @@ module postgres 'modules/postgres.bicep' = {
     location: location
     tenantId: tenantId
     skuName: 'Standard_B1ms'
+    storageSizeGb: databaseStorageGb
     subnetId: network.outputs.databaseSubnetId
     dnsZoneId: network.outputs.dnsZoneId
     adminPrincipalId: migrations.properties.principalId
