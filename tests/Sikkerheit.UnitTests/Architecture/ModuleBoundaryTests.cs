@@ -28,6 +28,10 @@ public sealed partial class ModuleBoundaryTests
         ["organization_export"] = "Exports",
         ["job"] = "Jobs", ["organization_tombstone"] = "Jobs",
         ["audit_event"] = "Operations", ["idempotency_record"] = "Operations",
+        ["enrollment_key"] = "Agents", ["enrollment"] = "Agents", ["device"] = "Agents", ["device_presence"] = "Agents",
+        ["revoked_installation"] = "Agents", ["scan_batch"] = "Agents", ["scan_request"] = "Agents",
+        ["agent_challenge"] = "Agents", ["agent_session"] = "Agents",
+        ["windows_release"] = "Assessment", ["windows_release_month"] = "Assessment",
     };
 
     /// <summary>The schema and its access layer belong to no module; the composition root wires the modules.</summary>

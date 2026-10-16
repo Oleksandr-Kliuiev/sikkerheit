@@ -30,6 +30,7 @@ export function Layout() {
         <nav aria-label={t('nav.main')} className="nav">
           <NavLink to="/organizations">{t('nav.organizations')}</NavLink>
           <NavLink to="/findings">{t('nav.findings')}</NavLink>
+          <NavLink to="/windows-releases">{t('nav.releases')}</NavLink>
           <NavLink to="/staff">{t('nav.staff')}</NavLink>
         </nav>
         <div className="topbar-end">

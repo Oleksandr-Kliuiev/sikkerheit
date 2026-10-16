@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sikkerheit.Host.Agents;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Jobs;
 using Sikkerheit.Host.M365;
@@ -40,9 +41,8 @@ public sealed class RecalculatePolicyJob(DbScopes scopes, TimeProvider clock, IC
                     """).ToListAsync(ct);
             if (subjects.Count == 0)
             {
-                await lease.CompleteAsync(scope, ct);
                 await scope.CommitAsync(ct);
-                return;
+                break;
             }
             // Always the newest revision: a later revision supersedes the one that queued this job.
             var policy = await Policies.CurrentAsync(scope, ct)
@@ -50,6 +50,44 @@ public sealed class RecalculatePolicyJob(DbScopes scopes, TimeProvider clock, IC
             await M365Evaluator.RecalculateAsync(scope, subjects, policy, clock.GetUtcNow(), ct);
             await scope.CommitAsync(ct);
             after = subjects[^1].Id;
+        }
+        await RecalculateDevicesAsync(org, lease, ct);
+        await using var done = await scopes.OrganizationAsync(org, ct);
+        if (!await lease.HoldAsync(done, ct))
+        {
+            throw new JobLeaseLostException();
+        }
+        await lease.CompleteAsync(done, ct);
+        await done.CommitAsync(ct);
+    }
+
+    /// <summary>
+    /// The devices of the organization, one transaction each: it holds the lease and the row of the device, the same
+    /// serialization point as the intake of a batch, so the job and a batch of one device never write findings together.
+    /// </summary>
+    private async Task RecalculateDevicesAsync(Guid org, JobLease lease, CancellationToken ct)
+    {
+        List<Guid> ids;
+        await using (var list = await scopes.OrganizationAsync(org, ct))
+        {
+            ids = (await Devices.ActiveAsync(list, org, ct)).Where(d => d.ProjectionSequence is not null).Select(d => d.Id).ToList();
+        }
+        foreach (var id in ids)
+        {
+            await using var scope = await scopes.OrganizationAsync(org, ct);
+            if (!await lease.HoldAsync(scope, ct))
+            {
+                throw new JobLeaseLostException();
+            }
+            var organization = await OrganizationLifecycle.FindAsync(scope, forUpdate: false, ct);
+            if (organization is not { Status: "active" } || await Devices.LockAsync(scope, id, ct) is not { Status: "active" } device)
+            {
+                continue;
+            }
+            var policy = await Policies.CurrentAsync(scope, ct) ?? throw new InvalidOperationException("Organization has no policy revision");
+            var catalog = await ReleaseCatalogStore.ViewAsync(scope, ct);
+            await WindowsEvaluator.RecalculateAsync(scope, device, policy, catalog, clock.GetUtcNow(), ct);
+            await scope.CommitAsync(ct);
         }
     }
 }

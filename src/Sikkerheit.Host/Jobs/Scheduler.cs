@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Npgsql;
 using Sikkerheit.Host.Access;
+using Sikkerheit.Host.Agents;
 using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.M365;
@@ -79,6 +80,13 @@ public sealed class Scheduler(DbScopes scopes, TimeProvider clock, ILogger<Sched
                 // A new ruleVersion recalculates the current projections once per organization (cause rule_change).
                 await JobQueue.EnqueueAsync(platform, "recalculate_policy", plan.Id, "rule:" + RuleEngine.RuleVersion, null, now, ct);
                 await JobQueue.EnqueueAsync(platform, "review_expiry", plan.Id, null, hour, now, ct);
+                await JobQueue.EnqueueAsync(platform, "scan_request_expiry", plan.Id, null, hour, now, ct);
+                await JobQueue.EnqueueAsync(platform, "agent_health_check", plan.Id, null, localDate, now, ct);
+                if (local.Hour >= 4)
+                {
+                    // SYS-002 and SYS-003 follow the calendar: once a day at 04:00 local time (02 «Фоновые задания»).
+                    await JobQueue.EnqueueAsync(platform, "patch_level_sweep", plan.Id, null, localDate, now, ct);
+                }
                 foreach (var week in DueReportWeeks(zone, now, plan.CreatedAt))
                 {
                     await JobQueue.EnqueueAsync(platform, "weekly_report", plan.Id, null, week, now, ct);
@@ -93,6 +101,17 @@ public sealed class Scheduler(DbScopes scopes, TimeProvider clock, ILogger<Sched
                 await JobQueue.EnqueueAsync(platform, "organization_delete", plan.Id, null, hour, now, ct);
             }
         }
+        // Months of the release catalog that were just verified are swept in every active organization at the next tick.
+        foreach (var (month, verifiedAt) in await ReleaseCatalogStore.RecentlyVerifiedAsync(platform, now, ct))
+        {
+            foreach (var plan in plans.Where(p => p.Status == "active"))
+            {
+                // The key carries the minute of the verification: a month verified again with new entries is swept again.
+                await JobQueue.EnqueueAsync(platform, "patch_level_sweep", plan.Id, null,
+                    month + "@" + verifiedAt.UtcDateTime.ToString("yyyyMMddHHmm", CultureInfo.InvariantCulture), now, ct);
+            }
+        }
+        await JobQueue.EnqueueAsync(platform, "release_catalog_check", null, null, now.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), now, ct);
         if (TeamsDigestJob.DuePeriod(now) is { } day)
         {
             await JobQueue.EnqueueAsync(platform, "teams_digest", null, null, day, now, ct);
@@ -136,6 +155,7 @@ public sealed class Scheduler(DbScopes scopes, TimeProvider clock, ILogger<Sched
         }
         await StaffSessions.PurgeExpiredAsync(platform, now, ct);
         await TeamsDigestJob.PurgeMarksAsync(platform, now, ct);
+        await AgentData.PurgePlatformAsync(platform, now, ct);
     }
 
     /// <summary>

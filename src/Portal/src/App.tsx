@@ -10,6 +10,7 @@ import { NotFoundPage } from './pages/NotFound';
 import { OrganizationsPage } from './pages/Organizations';
 import { ConsentCompletePage } from './pages/ConsentComplete';
 import { AssessmentsTab } from './pages/organization/AssessmentsTab';
+import { DevicesTab } from './pages/organization/DevicesTab';
 import { FindingsTab } from './pages/organization/FindingsTab';
 import { OrganizationLayout } from './pages/organization/OrganizationLayout';
 import { OverviewTab } from './pages/organization/Overview';
@@ -18,6 +19,7 @@ import { ReportsTab } from './pages/organization/ReportsTab';
 import { SettingsTab } from './pages/organization/SettingsTab';
 import { SignInPage } from './pages/SignIn';
 import { StaffPage } from './pages/Staff';
+import { WindowsReleasesPage } from './pages/WindowsReleases';
 
 /** The consent return page is public; everything else needs a staff session. */
 export function Root() {
@@ -55,11 +57,13 @@ export function App() {
             <Route index element={<OverviewTab />} />
             <Route path="findings" element={<FindingsTab />} />
             <Route path="assessments" element={<AssessmentsTab />} />
+            <Route path="devices" element={<DevicesTab />} />
             <Route path="reports" element={<ReportsTab />} />
             <Route path="policy" element={<PolicyTab />} />
             <Route path="settings" element={<SettingsTab />} />
           </Route>
           <Route path="findings" element={<FindingsQueuePage />} />
+          <Route path="windows-releases" element={<WindowsReleasesPage />} />
           <Route path="staff" element={<StaffPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

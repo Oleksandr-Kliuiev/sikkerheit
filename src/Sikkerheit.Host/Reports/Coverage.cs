@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Sikkerheit.Contracts;
+using Sikkerheit.Host.Agents;
 using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.M365;
@@ -8,7 +9,8 @@ using Sikkerheit.Host.Organizations;
 namespace Sikkerheit.Host.Reports;
 
 /// <summary>A subject of the calculation; ActiveAtEnd is false for subjects active only earlier in the period.</summary>
-public sealed record CoverageSubject(Guid Id, string Type, string Key, string? Name, bool ActiveAtEnd);
+public sealed record CoverageSubject(Guid Id, string Type, string Key, string? Name, bool ActiveAtEnd, bool Dormant = false,
+    bool NoPresence = false);
 
 /// <summary>The latest current assessment of a pair at the moment of the calculation.</summary>
 public sealed record LatestAssessment(string Mode, string? Result, string? Severity, string? ReasonCode, DateTimeOffset ObservedAt);
@@ -21,7 +23,8 @@ public sealed record CoveragePair(
 public sealed record CoverageResult(
     DateTimeOffset At, int PolicyVersion, int Pairs, int FreshPass, int FreshFail, int Stale, int Unknown, int NoData,
     int Informational, int NotApplicable, int NotConfigured, double? CoverageAt, double? Compliance, double? StaleShare,
-    int? PeriodPairs, int? PeriodDetermined, double? CoveragePeriod, IReadOnlyList<CoveragePair> Rows);
+    int? PeriodPairs, int? PeriodDetermined, double? CoveragePeriod, IReadOnlyList<CoveragePair> Rows, int DormantDevices = 0,
+    int NoPresenceDevices = 0);
 
 /// <summary>
 /// Coverage and compliance of 05 «Отчёт и покрытие»: one function for the portal (coverageAt now) and the report
@@ -33,7 +36,7 @@ public static class Coverage
     /// <summary>Checks whose subjects are only the users the collector reports (M365-002: privileged users).</summary>
     private static readonly HashSet<string> PresenceDefinesApplicability = ["M365-002"];
 
-    private static readonly string[] SubjectTypes = ["tenant", "user"];
+    private static readonly string[] SubjectTypes = Catalog.Checks.Select(c => c.SubjectType).Distinct().ToArray();
 
     public static CoverageResult Compute(JsonElement policy, int policyVersion, IReadOnlyList<CoverageSubject> subjects,
         IReadOnlyDictionary<(Guid, string), LatestAssessment> latest, ISet<(Guid, string)>? determinedInPeriod,
@@ -89,12 +92,17 @@ public static class Coverage
                     }
                     continue;
                 }
-                periodPairs++;
-                if (determined)
+                // A device with no day of presence in the period is outside the denominator of the period (INV-173).
+                if (!subject.NoPresence)
                 {
-                    periodDetermined++;
+                    periodPairs++;
+                    if (determined)
+                    {
+                        periodDetermined++;
+                    }
                 }
-                if (!subject.ActiveAtEnd)
+                // A dormant device (no check-in for 14 days) is outside the denominator of the moment and is shown apart.
+                if (!subject.ActiveAtEnd || subject.Dormant)
                 {
                     rows.Add(Row("required", false));
                     continue;
@@ -128,7 +136,9 @@ public static class Coverage
             notApplicable, notConfigured, Share(freshPass + freshFail, pairs), Share(freshPass, freshPass + freshFail),
             Share(stale, pairs), determinedInPeriod is null ? null : periodPairs,
             determinedInPeriod is null ? null : periodDetermined,
-            determinedInPeriod is null ? null : Share(periodDetermined, periodPairs), rows);
+            determinedInPeriod is null ? null : Share(periodDetermined, periodPairs), rows,
+            subjects.Count(s => s is { Type: "device", ActiveAtEnd: true, Dormant: true }),
+            subjects.Count(s => s is { Type: "device", NoPresence: true }));
     }
 
     /// <summary>Informational only because inputs are missing (WIN-010 without expectedTenantId, WIN-003 without products).</summary>
@@ -139,9 +149,11 @@ public static class Coverage
         {
             "WIN-010" => parameters.ValueKind != JsonValueKind.Object
                          || !parameters.TryGetProperty("expectedTenantId", out var tenant) || tenant.ValueKind == JsonValueKind.Null,
+            // WIN-003 has no input for assessed mode without an approved provider and without Defender (03 «Правило WIN-003»).
             "WIN-003" => parameters.ValueKind != JsonValueKind.Object
-                         || !parameters.TryGetProperty("approvedProducts", out var products)
-                         || products.ValueKind != JsonValueKind.Array || products.GetArrayLength() == 0,
+                         || (parameters.TryGetProperty("approvedProviders", out var providers) && providers.ValueKind == JsonValueKind.Array
+                             && providers.GetArrayLength() == 0
+                             && parameters.TryGetProperty("defenderApproved", out var defender) && defender.ValueKind == JsonValueKind.False),
             _ => false,
         };
     }
@@ -159,8 +171,14 @@ public static class Coverage
     {
         var (version, configuration) = await Policies.AtAsync(scope, organizationId, at, ct);
         using var policy = JsonDocument.Parse(configuration);
-        var subjects = (await Subjects.InPeriodAsync(scope, organizationId, SubjectTypes, start ?? at, at, ct))
-            .Select(s => new CoverageSubject(s.Id, s.Type, s.Key, s.Name, s.ActiveAtEnd)).ToList();
+        var inPeriod = await Subjects.InPeriodAsync(scope, organizationId, SubjectTypes, start ?? at, at, ct);
+        // Windows devices: dormant ones (14 days without a check-in) and those without a day of presence in the period.
+        var devices = (await Devices.ActiveAsync(scope, organizationId, ct)).ToDictionary(d => d.Id);
+        var presence = await Devices.PresenceDaysAsync(scope, organizationId, start ?? at.AddDays(-1), at, ct);
+        bool Dormant(Guid? id) => id is { } d && devices.TryGetValue(d, out var device) && (device.LastSeenAt ?? device.EnrolledAt) < at - Devices.DormantAfter;
+        bool NoPresence(Guid? id) => start is not null && id is { } d && !presence.ContainsKey(d);
+        var subjects = inPeriod.Select(s => new CoverageSubject(s.Id, s.Type, s.Key, s.Name, s.ActiveAtEnd, Dormant(s.DeviceId),
+            NoPresence(s.DeviceId))).ToList();
         // A connected tenant before its first collection: its checks count as pairs without data.
         if (!subjects.Any(s => s is { Type: "tenant", ActiveAtEnd: true })
             && await TenantConnections.ActiveTenantAtAsync(scope, organizationId, at, ct) is { } tenant)

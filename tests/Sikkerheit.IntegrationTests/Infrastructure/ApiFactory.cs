@@ -37,6 +37,9 @@ public sealed class ApiFactory(string connectionString, string? securityLogDirec
     /// <summary>The Teams webhook: captured digest messages.</summary>
     public CapturingHandler Teams { get; } = new();
 
+    /// <summary>The MSRC CVRF API: release documents by month (release_import).</summary>
+    public FakeMsrc Msrc { get; } = new();
+
     public const string TeamsWebhook = "https://teams.test/workflows/digest";
 
     /// <summary>Extra configuration of this instance (for example M365:CompanyTenantId); set before the first request.</summary>
@@ -73,6 +76,7 @@ public sealed class ApiFactory(string connectionString, string? securityLogDirec
             services.AddSingleton<Sikkerheit.Host.Access.IStaffIdentityProvider>(StaffIdentity);
             services.AddHttpClient(Sikkerheit.Host.Reports.TeamsDigestJob.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => Teams);
+            services.AddHttpClient(Sikkerheit.Host.Assessment.ReleaseImportJob.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => Msrc);
             services.AddHttpClient<GraphClient>().ConfigurePrimaryHttpMessageHandler(() => Graph);
             services.RemoveAll<IGraphTokenProvider>();
             services.AddSingleton<IGraphTokenProvider>(new FakeGraphTokens(Graph));

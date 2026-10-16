@@ -7,6 +7,7 @@ using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Jobs;
 using Sikkerheit.Host.M365;
+using Sikkerheit.Host.Operations;
 using Sikkerheit.Host.Organizations;
 
 namespace Sikkerheit.Host.Reports;
@@ -178,8 +179,26 @@ public sealed class TeamsDigestJob(DbScopes scopes, IHttpClientFactory http, Tea
                 }
             }
         }
+        // Windows devices (P2): counts only, no computer names (04 «Минимизация данных»).
+        var devices = new List<DigestItem>();
+        foreach (var count in await AuditLog.CountsAsync(scope, ["device.enroll", "device.key_replaced"], since, until, ct))
+        {
+            if (byId.TryGetValue(count.OrganizationId, out var organization) && organization.Status == "active")
+            {
+                devices.Add(new DigestItem(organization.Id, organization.Name, "device", count.Action == "device.enroll"
+                    ? $"{count.Count} nye enheter registrert"
+                    : $"Enhetsnøkkel byttet på {count.Count} enheter"));
+            }
+        }
         IEnumerable<DigestItem> ByName(List<DigestItem> list) => list.OrderBy(i => place[i.OrganizationId]);
-        return [.. ByName(critical), .. ByName(collection), .. ByName(reports)];
+        var items = new List<DigestItem>([.. ByName(critical), .. ByName(collection), .. ByName(reports), .. ByName(devices)]);
+        // The state of the release catalog is a fact of the platform, not of an organization.
+        if (await ReleaseCatalogCheckJob.StateAsync(scope, until, ct) is { Verified: false } catalog)
+        {
+            items.Add(new DigestItem(Guid.Empty, "Windows-utgivelser", "catalog",
+                $"Måneden {catalog.Month} i katalogen over Windows-utgivelser er ikke kontrollert (RB-13)"));
+        }
+        return items;
     }
 
     /// <summary>

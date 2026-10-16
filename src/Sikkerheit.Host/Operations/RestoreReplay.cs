@@ -1,4 +1,5 @@
 using System.Globalization;
+using Sikkerheit.Host.Agents;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Exports;
 using Sikkerheit.Host.Jobs;
@@ -42,6 +43,7 @@ public sealed class RestoreReport
     public List<RestoreOrphanFile> OrphanFiles { get; } = [];
     public List<string> DigestPeriodsMarked { get; } = [];
     public List<RestoreWeekMark> WeeklyReportsMarked { get; } = [];
+    public List<Guid> OrganizationsWithoutEnrollmentKey { get; } = [];
     public int LeasesReset { get; set; }
     public RestoreVerification Verification { get; set; } = new(false, []);
     public List<RestoreStep> Steps { get; } = [];
@@ -59,6 +61,8 @@ public sealed class RestoreReplay(DbScopes scopes, ISecurityLog securityLog, IFi
 {
     public const string AppliedAction = "restore.replay_applied";
     public static readonly TimeSpan ReplayMargin = TimeSpan.FromMinutes(5);
+
+    private static readonly string[] AgentActions = ["device.revoke", "enrollment_key.revoke"];
 
     private static readonly string[] LifecycleActions =
         ["organization.disable", "organization.schedule_deletion", "organization.cancel_deletion", "organization.delete"];
@@ -88,6 +92,18 @@ public sealed class RestoreReplay(DbScopes scopes, ISecurityLog securityLog, IFi
         await StepAsync(report, "policy_epochs", () => AdvancePolicyEpochsAsync(run, report, ct));
         await StepAsync(report, "quarantine_files", () => QuarantineFilesAsync(run, report, ct));
         await StepAsync(report, "mark_done_periods", () => MarkDonePeriodsAsync(run, report, ct));
+        await StepAsync(report, "enrollment_keys", async () =>
+        {
+            // An organization that had keys but none is active after the restore: the technician issues a new one (RB-05).
+            foreach (var state in (await OrganizationsAsync(ct)).Where(o => o.Status == "active"))
+            {
+                await using var scope = await scopes.OrganizationAsync(state.Id, ct);
+                if (!await AgentReplay.HasActiveKeyAsync(scope, ct))
+                {
+                    report.OrganizationsWithoutEnrollmentKey.Add(state.Id);
+                }
+            }
+        });
         await StepAsync(report, "reset_leases", async () =>
         {
             await using var platform = await scopes.PlatformAsync(ct);
@@ -121,13 +137,7 @@ public sealed class RestoreReplay(DbScopes scopes, ISecurityLog securityLog, IFi
         RestoreRecordResult Result(string outcome, string? reason = null) => new(record.Id, record.Action, record.OrganizationId,
             record.TargetId, record.OccurredAt, outcome, reason);
 
-        if (record.Action is "device.revoke" or "enrollment_key.revoke")
-        {
-            // Devices and enrollment keys arrive with the Windows agent (P2); P1 never writes these records.
-            logger.LogWarning("Security log record {RecordId} {Action} skipped: no device tables in P1", record.Id, record.Action);
-            return Result("skipped", "p2_not_implemented");
-        }
-        if (record.Action != "m365.disconnect" && !LifecycleActions.Contains(record.Action))
+        if (record.Action != "m365.disconnect" && !LifecycleActions.Contains(record.Action) && !AgentActions.Contains(record.Action))
         {
             logger.LogWarning("Security log record {RecordId} has an unknown action {Action}", record.Id, record.Action);
             return Result("skipped", "unknown_action");
@@ -153,6 +163,8 @@ public sealed class RestoreReplay(DbScopes scopes, ISecurityLog securityLog, IFi
             "organization.disable" => OrganizationLifecycle.ReplayDisable(organization, record.OccurredAt),
             "organization.schedule_deletion" => OrganizationLifecycle.ReplayScheduleDeletion(organization, record.DeletionDueAt, run.Now),
             "organization.cancel_deletion" => OrganizationLifecycle.ReplayCancelDeletion(organization),
+            "device.revoke" => await AgentReplay.RevokeDeviceAsync(scope, record, run.Now, ct),
+            "enrollment_key.revoke" => await AgentReplay.RevokeKeyAsync(scope, record, ct),
             _ => await TenantConnections.DisconnectAsync(scope, run.Now, ct),
         };
         if (!applied)
@@ -330,6 +342,17 @@ public sealed class RestoreReplay(DbScopes scopes, ISecurityLog securityLog, IFi
             if (await TenantConnections.IsOpenAsync(scope, ct))
             {
                 problems.Add($"organization {organizationId} still has an open Microsoft 365 connection after m365.disconnect");
+            }
+        }
+        foreach (var record in records.Where(r => r.Action is "device.revoke" or "enrollment_key.revoke" && organizations.ContainsKey(r.OrganizationId)))
+        {
+            await using var scope = await scopes.OrganizationAsync(record.OrganizationId, ct);
+            var satisfied = record.Action == "device.revoke"
+                ? await AgentReplay.InstallationRevokedAsync(scope, record, ct)
+                : await AgentReplay.KeyRevokedAsync(scope, record, ct);
+            if (!satisfied)
+            {
+                problems.Add($"{record.Action} {record.Id} of organization {record.OrganizationId} is not in effect after the restore");
             }
         }
         foreach (var state in organizations.Values.Where(o => o.Status == "deletion_scheduled"

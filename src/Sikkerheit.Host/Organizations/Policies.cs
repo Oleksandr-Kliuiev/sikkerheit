@@ -18,6 +18,13 @@ public static class Policies
             .OrderByDescending(p => p.Version).FirstOrDefaultAsync(ct);
     }
 
+    /// <summary>The revision with this version of the scope's organization, or null when it has none.</summary>
+    public static async Task<PolicyRevision?> GetAsync(DbScope scope, int version, CancellationToken ct)
+    {
+        var id = scope.OrganizationId!.Value;
+        return await scope.Db.PolicyRevisions.AsNoTracking().SingleOrDefaultAsync(p => p.OrganizationId == id && p.Version == version, ct);
+    }
+
     /// <summary>The newest revision of every organization the scope sees: its own one, or all in the read-all scope.</summary>
     public static async Task<IReadOnlyDictionary<Guid, PolicyRevision>> CurrentByOrganizationAsync(DbScope scope,
         CancellationToken ct) =>

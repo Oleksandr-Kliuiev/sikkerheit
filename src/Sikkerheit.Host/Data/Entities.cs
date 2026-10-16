@@ -266,3 +266,152 @@ public sealed class AuditEvent
     public string CorrelationId { get; set; } = "";
     public string? Details { get; set; }
 }
+
+// P2 (05 «Сущности и ограничения»): enrollment keys, devices, agent sessions, scan batches and the release catalog.
+
+public sealed class EnrollmentKey
+{
+    public Guid OrganizationId { get; set; }
+    public Guid Id { get; set; }
+    public string KeyHash { get; set; } = "";
+    public string KeyPrefix { get; set; } = "";
+    public string Label { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
+    public Guid CreatedBy { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+    public DateTimeOffset? LastUsedAt { get; set; }
+}
+
+public sealed class Device
+{
+    public Guid OrganizationId { get; set; }
+    public Guid Id { get; set; }
+    public string DisplayName { get; set; } = "";
+    public string Status { get; set; } = "active";
+    public Guid InstallationId { get; set; }
+    public string MachineFingerprintHash { get; set; } = "";
+    public string PublicKeyJwk { get; set; } = "{}";
+    public string KeyThumbprint { get; set; } = "";
+    public string KeyProtection { get; set; } = "software";
+    public string IdentityState { get; set; } = "ok";
+    public DateTimeOffset? IdentityConflictAt { get; set; }
+    public string? ConflictKind { get; set; }
+    public string? ConflictFingerprintHash { get; set; }
+    public string? ConflictPublicKeyJwk { get; set; }
+    public string? ConflictDisplayName { get; set; }
+    public string ClockStatus { get; set; } = "ok";
+    public Guid? EnrollmentKeyId { get; set; }
+    public DateTimeOffset EnrolledAt { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+    public DateTimeOffset? LastSeenAt { get; set; }
+    public DateTimeOffset? LastFullScanAt { get; set; }
+    public long LastAcceptedSequence { get; set; }
+    public long? ProjectionSequence { get; set; }
+    public DateTimeOffset? ProjectionCompletedAt { get; set; }
+    public string? AgentVersion { get; set; }
+    public int? ConfigSchemaVersion { get; set; }
+    public string Telemetry { get; set; } = "{}";
+    public DateTimeOffset? RebootEpisodeSince { get; set; }
+    public DateTimeOffset? RebootEpisodeBootAt { get; set; }
+}
+
+public sealed class DevicePresence
+{
+    public Guid OrganizationId { get; set; }
+    public Guid DeviceId { get; set; }
+    public DateOnly Day { get; set; }
+}
+
+public sealed class RevokedInstallation
+{
+    public Guid OrganizationId { get; set; }
+    public Guid InstallationId { get; set; }
+    public string? KeyThumbprint { get; set; }
+    public Guid? DeviceId { get; set; }
+    public DateTimeOffset RevokedAt { get; set; }
+    public string Source { get; set; } = "revoke";
+}
+
+public sealed class Enrollment
+{
+    public Guid OrganizationId { get; set; }
+    public Guid Id { get; set; }
+    public Guid RegistrationRequestId { get; set; }
+    public Guid EnrollmentKeyId { get; set; }
+    public Guid DeviceId { get; set; }
+    public string RequestHash { get; set; } = "";
+    public string Response { get; set; } = "{}";
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+public sealed class ScanBatch
+{
+    public Guid OrganizationId { get; set; }
+    public Guid DeviceId { get; set; }
+    public Guid Id { get; set; }
+    public Guid ScanId { get; set; }
+    public long Sequence { get; set; }
+    public int PolicyVersion { get; set; }
+    public DateTimeOffset StartedAt { get; set; }
+    public DateTimeOffset CompletedAt { get; set; }
+    public DateTimeOffset SentAt { get; set; }
+    public DateTimeOffset ReceivedAt { get; set; }
+    public string PayloadHash { get; set; } = "";
+    public bool ClockInconsistent { get; set; }
+    public bool IsFull { get; set; }
+    public bool ReplacedProjection { get; set; }
+}
+
+public sealed class ScanRequest
+{
+    public Guid OrganizationId { get; set; }
+    public Guid Id { get; set; }
+    public Guid DeviceId { get; set; }
+    public Guid RequestedBy { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public string State { get; set; } = "requested";
+}
+
+public sealed class AgentChallenge
+{
+    public string NonceHash { get; set; } = "";
+    public string Purpose { get; set; } = "";
+    public Guid? DeviceId { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset UsedAt { get; set; }
+}
+
+public sealed class AgentSession
+{
+    public string TokenHash { get; set; } = "";
+    public Guid OrganizationId { get; set; }
+    public Guid DeviceId { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+}
+
+public sealed class WindowsRelease
+{
+    public string Product { get; set; } = "client";
+    public int BranchBuild { get; set; }
+    public int Ubr { get; set; }
+    public string Kb { get; set; } = "";
+    public DateTimeOffset ReleaseAt { get; set; }
+    public string Kind { get; set; } = "security_monthly";
+    public string? SecurityMonth { get; set; }
+    public string CatalogMonth { get; set; } = "";
+    public bool AutoOffered { get; set; }
+    public string State { get; set; } = "draft";
+    public string Source { get; set; } = "manual";
+    public Guid ImportedBy { get; set; }
+    public DateTimeOffset ImportedAt { get; set; }
+}
+
+public sealed class WindowsReleaseMonth
+{
+    public string SecurityMonth { get; set; } = "";
+    public string State { get; set; } = "draft";
+    public DateTimeOffset? VerifiedAt { get; set; }
+    public Guid? VerifiedBy { get; set; }
+    public bool NoNewReleases { get; set; }
+}

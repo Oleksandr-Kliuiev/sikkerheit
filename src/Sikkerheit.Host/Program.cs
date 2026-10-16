@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.DataProtection;
 using Npgsql;
 using Sikkerheit.Contracts;
 using Sikkerheit.Host.Access;
+using Sikkerheit.Host.Agents;
+using Sikkerheit.Host.Assessment;
 using Sikkerheit.Host.Data;
 using Sikkerheit.Host.Jobs;
 using Sikkerheit.Host.M365;
@@ -70,6 +72,23 @@ builder.Services.AddTransient<IJobHandler, M365CollectionJob>();
 builder.Services.AddTransient<IJobHandler, Sikkerheit.Host.Assessment.FreshnessSweepJob>();
 builder.Services.AddTransient<IJobHandler, Sikkerheit.Host.Assessment.ReviewExpiryJob>();
 builder.Services.AddTransient<IJobHandler, Sikkerheit.Host.Assessment.RecalculatePolicyJob>();
+builder.Services.AddSingleton(new AgentOptions
+{
+    NonceKey = AgentNonceKey(configuration, environment),
+    MinimumAgentVersion = configuration["Agents:MinimumAgentVersion"] ?? "0.1.0",
+});
+builder.Services.AddSingleton(sp => new Nonces(sp.GetRequiredService<AgentOptions>().NonceKey, sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton<AgentLimits>();
+builder.Services.AddHttpClient(ReleaseImportJob.HttpClientName, client =>
+{
+    client.BaseAddress = new Uri("https://" + ReleaseImportJob.Host);
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
+builder.Services.AddTransient<IJobHandler, PatchLevelSweepJob>();
+builder.Services.AddTransient<IJobHandler, ScanRequestExpiryJob>();
+builder.Services.AddTransient<IJobHandler, AgentHealthJob>();
+builder.Services.AddTransient<IJobHandler, ReleaseImportJob>();
+builder.Services.AddTransient<IJobHandler, ReleaseCatalogCheckJob>();
 builder.Services.AddTransient<ReportService>();
 builder.Services.AddTransient<IJobHandler>(sp => sp.GetRequiredService<ReportService>());
 builder.Services.AddTransient<IJobHandler, WeeklyReportJob>();
@@ -140,6 +159,8 @@ else if (environment.IsProduction())
 }
 OrganizationEndpoints.Map(app);
 ConnectionEndpoints.Map(app);
+AgentEndpoints.Map(app);
+ReleaseCatalog.Map(app);
 Sikkerheit.Host.Assessment.FindingEndpoints.Map(app);
 ReportEndpoints.Map(app);
 Sikkerheit.Host.Exports.OrganizationExports.Map(app);
@@ -194,6 +215,21 @@ static IFileStore FileStore(IConfiguration configuration, IHostEnvironment envir
         throw new InvalidOperationException("Storage:BlobServiceUri is required in Production");
     }
     return new LocalFileStore(configuration["Storage:LocalDirectory"] ?? Path.Combine(Path.GetTempPath(), "sikkerheit-files"));
+}
+
+// The HMAC key of the nonces: a Key Vault secret in Azure (04 «Ключ устройства и сессия»).
+static byte[] AgentNonceKey(IConfiguration configuration, IHostEnvironment environment)
+{
+    var configured = configuration["Agents:NonceKey"];
+    if (!string.IsNullOrEmpty(configured))
+    {
+        return Convert.FromBase64String(configured);
+    }
+    if (environment.IsProduction())
+    {
+        throw new InvalidOperationException("Agents:NonceKey is required in Production");
+    }
+    return RandomNumberGenerator.GetBytes(32);
 }
 
 static byte[] CursorKey(IConfiguration configuration, IHostEnvironment environment)
