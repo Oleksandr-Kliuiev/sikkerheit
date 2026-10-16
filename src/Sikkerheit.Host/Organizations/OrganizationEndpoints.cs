@@ -224,6 +224,9 @@ public static class OrganizationEndpoints
             catch (Exception error) when (error is SecurityLogUnavailableException or OperationCanceledException
                                           && !ct.IsCancellationRequested)
             {
+                // The restrictive action is refused; operations are alerted by the error (06 «Наблюдаемость»).
+                http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Sikkerheit.SecurityLog")
+                    .LogError(error, "Security log record {Action} was not created; the action is refused with 503", logAction);
                 throw new ApiProblemException(ProblemCodes.TemporarilyUnavailable, "security log is unavailable");
             }
         }

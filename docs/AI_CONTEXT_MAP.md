@@ -107,7 +107,7 @@
 | Организации, политика, жизненный цикл | `Organizations/` (`OrganizationEndpoints`, `OrganizationLifecycle` — переходы и эпоха версий политики) | `OrganizationApiTests` |
 | Вход сотрудников, сессии, CSRF | `Access/` (`LoginEndpoints`, `StaffIdentity`, `StaffSessions`) | `StaffSignInTests` |
 | Сбор Microsoft 365 | `M365/` (`GraphClient`, `M365Collector` — в том числе активации PIM, `M365CollectionJob`, `ConnectionEndpoints`, `TenantConnections`) | `M365CollectionTests`, `Infrastructure/FakeGraph.cs` |
-| Правила, оценки, проблемы, пересчёт политики и `ruleVersion` | `Assessment/` (`Rules`, `FindingMachine`, `M365Evaluator`, `RecalculatePolicyJob`, `FindingEndpoints`, `Texts`) | `M365RulesTests`, `FindingApiTests` |
+| Правила, оценки, проблемы, пересчёт политики и `ruleVersion` | `Assessment/` (`Rules`, `FindingMachine`, `M365Evaluator`, `RecalculatePolicyJob`, `FindingEndpoints`, `Texts`, `RoleNames`) | `M365RulesTests`, `FindingApiTests` |
 | Отчёт, покрытие, сводка Teams | `Reports/` (`Coverage`, `ReportBuilder`, `ReportHtml`, `ReportService`, `TeamsDigest`) | `Reports/*Tests`, `ReportApiTests`, `LifecycleJobTests` |
 | Экспорт, удаление, сроки хранения | `Exports/`, `Jobs/DataLifecycleJobs.cs` | `LifecycleJobTests` |
 | Задания и планировщик | `Jobs/` (`JobQueue`, `JobRunner`, `Scheduler`, `SweepJobs`) | `ReportPeriodTests`, интеграционные тесты заданий |

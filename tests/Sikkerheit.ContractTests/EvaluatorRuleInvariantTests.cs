@@ -364,4 +364,51 @@ public sealed class EvaluatorRuleInvariantTests
         Assert.Equal(["quality_changed/data_quality", "quality_changed/data_quality", "quality_changed/data_quality"], Events(db));
         Assert.Equal("fresh_fail", finding.Quality);
     }
+
+    private const string GlobalAdministratorRole = "62e90394-69f5-4237-9190-012177145e10";
+
+    [Fact]
+    [Invariant("INV-178")]
+    public void Inv178_a_pim_activation_is_its_own_kind_and_without_mfa_fails_critical()
+    {
+        var activation = $$"""{"accountEnabled":true,"userType":"Member","roleTemplateIds":["{{GlobalAdministratorRole}}"],"temporaryRoleTemplateIds":["{{GlobalAdministratorRole}}"],"assignment":"direct","methodKinds":["password"]}""";
+        var withoutMfa = Run("M365-002", activation);
+        Outcome(withoutMfa, "fail", severity: "critical");
+        Assert.Equal("m365-002.fail.temporary", withoutMfa.Explanation);
+        var withMfa = Run("M365-002", activation.Replace("[\"password\"]", "[\"password\",\"fido2\"]", StringComparison.Ordinal));
+        Outcome(withMfa, "pass");
+        Assert.Equal("m365-002.pass.temporary", withMfa.Explanation);
+        // A standing assignment keeps the plain explanation.
+        Assert.Equal("m365-002.fail", Run("M365-002", Admin("""["password"]""")).Explanation);
+    }
+
+    [Fact]
+    [Invariant("INV-179")]
+    public void Inv179_roles_outside_the_policy_are_listed_and_change_no_result()
+    {
+        const string globalReader = "f2ef992c-3afb-46b9-b7cf-a126ee74c451";
+        static string Evidence(int admins, bool uncovered) =>
+            $$"""{"globalAdminUserIds":[{{string.Join(',', Enumerable.Range(1, admins).Select(i => $"\"00000000-0000-4000-8000-00000000000{i}\""))}}],"disabledGlobalAdminUserIds":[],"unresolvedGroupAssignments":0{{(uncovered ? $",\"uncoveredRoleTemplateIds\":[\"{globalReader}\"]" : "")}}}""";
+        var plain = Run("M365-005", Evidence(2, uncovered: false));
+        var listed = Run("M365-005", Evidence(2, uncovered: true));
+        Assert.Equal((plain.Result, plain.Severity, plain.ReasonCode), (listed.Result, listed.Severity, listed.ReasonCode));
+        Assert.Equal("m365-005.pass.uncovered", listed.Explanation);
+        Assert.Contains("Global Reader", listed.Arguments!["roles"], StringComparison.Ordinal);
+        Outcome(Run("M365-005", Evidence(1, uncovered: true)), "fail", severity: "warning");
+        // M365-002 takes its subjects only from privilegedRoleTemplateIds: a role outside them is no privileged role.
+        Outcome(Run("M365-002", """{"accountEnabled":true,"userType":"Member","roleTemplateIds":[],"assignment":"none","methodKinds":["password"]}"""),
+            "not_applicable", "policy_not_applicable");
+    }
+
+    [Fact]
+    [Invariant("INV-180")]
+    public void Inv180_per_user_enabled_is_not_enforcement()
+    {
+        static string Evidence(string perUser) =>
+            $$"""{"securityDefaults":"disabled","conditionalAccess":"license_missing","mfaPolicies":[],"perUserMfa":{{perUser}}}""";
+        Outcome(Run("M365-003", Evidence("""{"required":3,"notRequired":0,"unknown":0,"enabled":2}""")), "unknown", "enforcement_unconfirmed");
+        // Without the field «enabled» is counted in unknown.
+        Outcome(Run("M365-003", Evidence("""{"required":3,"notRequired":0,"unknown":2}""")), "unknown", "enforcement_unconfirmed");
+        Outcome(Run("M365-003", Evidence("""{"required":5,"notRequired":0,"unknown":0,"enabled":0}""")), "pass");
+    }
 }

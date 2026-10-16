@@ -17,8 +17,9 @@ public static class Telemetry
         {
             return;
         }
-        services.AddOpenTelemetry().UseAzureMonitor();
+        // The scrubber is registered first, so it runs before the exporter's processor sees a span.
         services.ConfigureOpenTelemetryTracerProvider(tracing => tracing.AddProcessor(new QueryScrubber()));
+        services.AddOpenTelemetry().UseAzureMonitor();
     }
 
     /// <summary>Removes query strings from every span before export.</summary>

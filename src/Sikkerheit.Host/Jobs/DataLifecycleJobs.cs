@@ -125,7 +125,7 @@ public sealed class RetentionPurgeJob(DbScopes scopes, IFileStore files, TimePro
         }
 
         // Decisions of closed findings older than 12 months; active decisions stay with their events.
-        await RunAsync("""
+        var riskDecisions = await RunAsync("""
             delete from risk_decision d using finding f
             where d.organization_id = @org and f.organization_id = d.organization_id and f.id = d.finding_id
               and d.decided_at < @history_cut and f.technical_state = 'resolved'
@@ -198,7 +198,8 @@ public sealed class RetentionPurgeJob(DbScopes scopes, IFileStore files, TimePro
         {
             deleted = new Dictionary<string, int>
             {
-                ["finding_event"] = findingEvents, ["assessment"] = assessments, ["finding"] = findings,
+                ["risk_decision"] = riskDecisions, ["finding_event"] = findingEvents, ["assessment"] = assessments,
+                ["finding"] = findings,
                 ["observation"] = observations, ["collection_run"] = runs, ["scan_batch"] = 0, ["scan_request"] = 0,
                 ["subject"] = subjects, ["device_presence"] = 0, ["device"] = 0, ["revoked_installation"] = 0,
             },

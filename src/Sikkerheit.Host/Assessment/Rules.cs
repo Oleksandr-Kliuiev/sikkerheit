@@ -139,9 +139,13 @@ public static class M365Rules
         var methods = e.GetProperty("methodKinds");
         var phone = configuration.GetProperty("checks").GetProperty("M365-001").GetProperty("parameters")
             .GetProperty("phoneMethodsAccepted").GetBoolean();
+        // A role held only through a PIM activation is assessed like a standing one; the explanation names it (03).
+        var temporary = e.TryGetProperty("temporaryRoleTemplateIds", out var t) && t.ValueKind == JsonValueKind.Array
+                        && t.GetArrayLength() > 0;
+        var suffix = temporary ? ".temporary" : "";
         return HasMfaMethod(methods, phone)
-            ? RuleOutcome.Pass("m365-002.pass", Methods(methods))
-            : RuleOutcome.Fail("critical", "m365-002.fail", Methods(methods));
+            ? RuleOutcome.Pass("m365-002.pass" + suffix, Methods(methods))
+            : RuleOutcome.Fail("critical", "m365-002.fail" + suffix, Methods(methods));
     }
 
     /// <summary>Unconditional policy of 03 «Правило M365-003».</summary>
@@ -196,9 +200,10 @@ public static class M365Rules
         var perUser = e.GetProperty("perUserMfa");
         if (perUser.ValueKind == JsonValueKind.Object && perUser.GetProperty("notRequired").GetInt32() == 0)
         {
-            return perUser.GetProperty("unknown").GetInt32() == 0
+            // Per-user «enabled» is not counted as enforcement until SP-01 confirms it; without the field it is in unknown.
+            var enabled = perUser.TryGetProperty("enabled", out var en) && en.ValueKind == JsonValueKind.Number ? en.GetInt32() : 0;
+            return perUser.GetProperty("unknown").GetInt32() + enabled == 0
                 ? RuleOutcome.Pass("m365-003.pass.per_user_mfa")
-                // Per-user "enabled" is not counted as enforcement until SP-01 confirms it.
                 : RuleOutcome.Unknown("enforcement_unconfirmed", "m365-003.unknown.per_user_enabled");
         }
         if (caAvailable && policies.Any(p => p.GetProperty("state").GetString() == "enabled"))
@@ -249,9 +254,17 @@ public static class M365Rules
         };
         var min = parameters.GetProperty("minGlobalAdmins").GetInt32();
         var max = parameters.GetProperty("maxGlobalAdmins").GetInt32();
+        // Roles outside privilegedRoleTemplateIds never change the result; the explanation lists them (03).
+        var uncovered = e.TryGetProperty("uncoveredRoleTemplateIds", out var u) && u.ValueKind == JsonValueKind.Array
+            ? u.EnumerateArray().Select(r => r.GetString()!).ToList() : [];
+        var suffix = uncovered.Count > 0 ? ".uncovered" : "";
+        if (uncovered.Count > 0)
+        {
+            args["roles"] = string.Join(", ", uncovered.Select(RoleNames.Name));
+        }
         return count < min || count > max
-            ? RuleOutcome.Fail("warning", count < min ? "m365-005.fail.too_few" : "m365-005.fail.too_many", args)
-            : RuleOutcome.Pass("m365-005.pass", args);
+            ? RuleOutcome.Fail("warning", (count < min ? "m365-005.fail.too_few" : "m365-005.fail.too_many") + suffix, args)
+            : RuleOutcome.Pass("m365-005.pass" + suffix, args);
     }
 
     /// <summary>signInActivity is filled since 1 December 2023; createdDateTime is null for some accounts before June 2018.</summary>

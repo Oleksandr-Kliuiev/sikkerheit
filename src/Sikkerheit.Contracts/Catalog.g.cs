@@ -8,7 +8,7 @@ namespace Sikkerheit.Contracts;
 /// <summary>Closed catalogs of the Development Package; see 03 and 05.</summary>
 public static partial class Catalog
 {
-    public const string Version = "0.3.0";
+    public const string Version = "0.3.1";
 
     public static readonly IReadOnlyList<CheckDefinition> Checks =
     [
@@ -35,7 +35,8 @@ public static partial class Catalog
         new("SYS-003", "os_patch_level", "P2", "assessed", "server", "device"),
     ];
 
-    public static readonly IReadOnlyList<string> GraphPermissions = ["Organization.Read.All", "User.Read.All", "UserAuthenticationMethod.Read.All", "RoleManagement.Read.Directory", "GroupMember.ReadBasic.All", "Policy.Read.All", "AuditLog.Read.All"];
+    public static readonly IReadOnlyList<string> GraphPermissions = ["Organization.Read.All", "User.Read.All", "UserAuthenticationMethod.Read.All", "RoleManagement.Read.Directory", "GroupMember.Read.All", "Policy.Read.All"];
+    public static readonly IReadOnlyList<string> DeferredIds = ["M365-007"];
     public const string DirectorySyncRole = "d29b2b05-8046-44ba-8758-1e26182fcf32";
     public static readonly IReadOnlyList<string> CaConditions = ["user_risk", "sign_in_risk", "insider_risk", "locations_trusted_excluded", "locations_other", "platforms", "devices", "authentication_flows", "client_applications"];
     public static readonly IReadOnlyList<string> CaGrantControls = ["mfa", "authentication_strength", "compliant_device", "domain_joined_device", "approved_application", "compliant_application", "password_change", "terms_of_use", "other"];
@@ -55,7 +56,7 @@ public static partial class Catalog
     public static readonly IReadOnlyList<string> AuditReads = ["downloadOrganizationExport", "listAuditEvents", "downloadReport"];
     public static readonly IReadOnlyList<string> CrossOrganizationOperations = ["listOrganizations", "createOrganization", "listFindingsAcrossOrganizations", "listStaff", "getCurrentStaff", "listWindowsReleases", "importWindowsReleases", "verifyWindowsReleaseMonth"];
     public static readonly IReadOnlyList<string> LifecycleActions = ["disable", "enable", "schedule_deletion", "cancel_deletion"];
-    public static readonly IReadOnlyList<string> RetentionPurgeOrder = ["finding_event", "assessment", "finding", "observation", "collection_run", "scan_batch", "scan_request", "subject", "device_presence", "device", "revoked_installation"];
+    public static readonly IReadOnlyList<string> RetentionPurgeOrder = ["risk_decision", "finding_event", "assessment", "finding", "observation", "collection_run", "scan_batch", "scan_request", "subject", "device_presence", "device", "revoked_installation"];
     public static readonly IReadOnlyList<string> SecurityLogActions = ["device.revoke", "enrollment_key.revoke", "organization.disable", "organization.schedule_deletion", "organization.cancel_deletion", "organization.delete", "m365.disconnect"];
     public static readonly IReadOnlyList<string> AlwaysInformational = ["WIN-011", "SYS-001"];
     public static readonly IReadOnlyList<string> OsFamilies = ["home_pro", "enterprise_education", "ltsc", "iot_ltsc"];

@@ -8,7 +8,8 @@ namespace Sikkerheit.Host.M365;
 
 /// <summary>Policy inputs the collector needs (05 «Политика клиента»).</summary>
 public sealed record CollectorPolicy(
-    IReadOnlySet<Guid> ExcludedUserIds, IReadOnlySet<string> PrivilegedRoleTemplateIds, IReadOnlySet<string> ActiveCheckIds)
+    IReadOnlySet<Guid> ExcludedUserIds, IReadOnlySet<string> PrivilegedRoleTemplateIds, IReadOnlySet<string> ActiveCheckIds,
+    bool DeviceAlternativeAccepted = false, bool TrustedLocationsExclusionAccepted = false)
 {
     public static CollectorPolicy From(JsonElement configuration)
     {
@@ -17,7 +18,9 @@ public sealed record CollectorPolicy(
         var roles = configuration.GetProperty("checks").GetProperty("M365-002").GetProperty("parameters")
             .GetProperty("privilegedRoleTemplateIds").EnumerateArray().Select(e => e.GetString()!.ToLowerInvariant()).ToHashSet();
         var active = configuration.GetProperty("activeCheckIds").EnumerateArray().Select(e => e.GetString()!).ToHashSet();
-        return new CollectorPolicy(excluded, roles, active);
+        var mfa = configuration.GetProperty("checks").GetProperty("M365-003").GetProperty("parameters");
+        return new CollectorPolicy(excluded, roles, active, mfa.GetProperty("deviceAlternativeAccepted").GetBoolean(),
+            mfa.GetProperty("trustedLocationsExclusionAccepted").GetBoolean());
     }
 }
 
@@ -153,7 +156,10 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
         public bool UsersComplete { get; set; }
         public Dictionary<Guid, UserRecord> Users { get; } = [];
         public HashSet<Guid> SyncAccounts { get; } = [];
-        public Dictionary<Guid, (HashSet<string> Roles, bool Direct, bool Group)> Privileged { get; } = [];
+        public Dictionary<Guid, PrivilegedRoles> Privileged { get; } = [];
+
+        /// <summary>Members of some group with a role could not be read: a missing role is not proof of its removal.</summary>
+        public bool GroupMembersIncomplete { get; set; }
         public HashSet<Guid> GlobalAdmins { get; } = [];
         public int UnresolvedGroups { get; set; }
         public bool RoleAssignmentsComplete { get; set; } = true;
@@ -165,6 +171,19 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
         public JsonArray? GrantPolicies { get; set; }
         public JsonObject? PerUserMfa { get; set; }
         public Dictionary<Guid, HashSet<string>> RoleMembers { get; } = [];
+    }
+
+    /// <summary>Roles of privileged role templates of one user: standing assignments and PIM activations apart (03).</summary>
+    private sealed class PrivilegedRoles
+    {
+        public HashSet<string> Roles { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> Standing { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> Activated { get; } = new(StringComparer.Ordinal);
+        public bool Direct { get; set; }
+        public bool Group { get; set; }
+
+        /// <summary>Roles that act only as an activation (no standing assignment of the same role).</summary>
+        public IEnumerable<string> Temporary => Activated.Except(Standing);
     }
 
     private async Task CollectTenantAsync(Guid tenantId, RunState run, CancellationToken ct)
@@ -271,6 +290,7 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
                         if (!groupMembers.Complete)
                         {
                             partial = true;
+                            run.GroupMembersIncomplete = true;
                             if (role == GlobalAdministrator)
                             {
                                 run.UnresolvedGroups++;
@@ -280,6 +300,7 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
                     catch (GraphException)
                     {
                         partial = true;
+                        run.GroupMembersIncomplete = true;
                         if (role == GlobalAdministrator)
                         {
                             run.UnresolvedGroups++;
@@ -308,21 +329,22 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
                     {
                         run.SyncAccounts.Add(member);
                     }
-                    if (activated)
-                    {
-                        // A temporary PIM activation is neither a standing administrator nor a new problem (03).
-                        continue;
-                    }
-                    if (role == GlobalAdministrator)
+                    // A PIM activation counts for M365-002 as its own kind of assignment, never for M365-005 (03).
+                    if (role == GlobalAdministrator && !activated)
                     {
                         run.GlobalAdmins.Add(member);
                     }
                     if (policy.PrivilegedRoleTemplateIds.Contains(role))
                     {
-                        var entry = run.Privileged.TryGetValue(member, out var existing)
-                            ? existing : (new HashSet<string>(StringComparer.Ordinal), false, false);
-                        entry.Item1.Add(role);
-                        run.Privileged[member] = (entry.Item1, entry.Item2 || !viaGroup, entry.Item3 || viaGroup);
+                        if (!run.Privileged.TryGetValue(member, out var entry))
+                        {
+                            entry = new PrivilegedRoles();
+                            run.Privileged[member] = entry;
+                        }
+                        entry.Roles.Add(role);
+                        (activated ? entry.Activated : entry.Standing).Add(role);
+                        entry.Direct |= !viaGroup;
+                        entry.Group |= viaGroup;
                     }
                 }
             }
@@ -587,9 +609,17 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
     private static List<string>? Conditions(JsonElement conditions)
     {
         var kinds = new List<string>();
-        if (NonEmpty(conditions, "userRiskLevels")) { kinds.Add("user_risk"); }
-        if (NonEmpty(conditions, "signInRiskLevels")) { kinds.Add("sign_in_risk"); }
-        if (NonEmpty(conditions, "insiderRiskLevels")) { kinds.Add("insider_risk"); }
+        foreach (var (name, kind) in new[] { ("userRiskLevels", "user_risk"), ("signInRiskLevels", "sign_in_risk"), ("insiderRiskLevels", "insider_risk") })
+        {
+            switch (RiskLevels(conditions, name))
+            {
+                case null:
+                    return null;
+                case true:
+                    kinds.Add(kind);
+                    break;
+            }
+        }
         if (conditions.TryGetProperty("locations", out var locations) && locations.ValueKind == JsonValueKind.Object)
         {
             var include = locations.TryGetProperty("includeLocations", out var il) ? Strings(il) : [];
@@ -615,8 +645,9 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
         };
         foreach (var property in conditions.EnumerateObject())
         {
-            if (property.Value.ValueKind is JsonValueKind.Null || (property.Value.ValueKind == JsonValueKind.Array
-                                                                   && property.Value.GetArrayLength() == 0))
+            if (property.Value.ValueKind is JsonValueKind.Null
+                || (property.Value.ValueKind == JsonValueKind.Array && property.Value.GetArrayLength() == 0)
+                || (property.Value.ValueKind == JsonValueKind.String && RiskLevels(conditions, property.Name) == false))
             {
                 continue;
             }
@@ -708,14 +739,14 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
 
     private async Task CollectPerUserMfaAsync(Guid tenantId, CollectorPolicy policy, RunState run, CancellationToken ct)
     {
-        var needed = run.SecurityDefaults != true && !HasUnconditionalPolicy(run);
+        var needed = run.SecurityDefaults != true && !HasUnconditionalPolicy(run, policy);
         if (!options.PerUserMfa || !needed)
         {
             run.Modules["per_user_mfa"] = "skipped";
             return;
         }
         var users = run.Users.Values.Where(u => NeedsMethods(u, policy, run)).Select(u => u.Id).ToList();
-        int enforced = 0, notRequired = 0, unknown = 0, forbidden = 0, failed = 0;
+        int enforced = 0, notRequired = 0, enabled = 0, unknown = 0, forbidden = 0, failed = 0;
         foreach (var user in users)
         {
             try
@@ -729,8 +760,11 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
                     case "disabled":
                         notRequired++;
                         break;
+                    case "enabled":
+                        // Not proof of enforcement until SP-01 confirms it; the rule gives unknown (03, F01).
+                        enabled++;
+                        break;
                     default:
-                        // "enabled" is not proof of enforcement until SP-01 confirms it (external review F01).
                         unknown++;
                         break;
                 }
@@ -757,14 +791,22 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
             run.Modules["per_user_mfa"] = "partial";
             return;
         }
-        run.PerUserMfa = new JsonObject { ["required"] = enforced, ["notRequired"] = notRequired, ["unknown"] = unknown };
+        run.PerUserMfa = new JsonObject
+        {
+            ["required"] = enforced, ["notRequired"] = notRequired, ["unknown"] = unknown, ["enabled"] = enabled,
+        };
         run.Modules["per_user_mfa"] = "available";
     }
 
-    private static bool HasUnconditionalPolicy(RunState run) =>
-        run.MfaPolicies.Any(p => p!["state"]!.GetValue<string>() == "enabled" && p["allUsers"]!.GetValue<bool>()
-                                 && p["allApplications"]!.GetValue<bool>() && p["excludedApplications"]!.GetValue<int>() == 0
-                                 && p["conditions"]!.AsArray().Count == 0);
+    /// <summary>The criterion of the rule itself (03 «Правило M365-003»): per-user MFA is skipped only when M365-003 passes.</summary>
+    private static bool HasUnconditionalPolicy(RunState run, CollectorPolicy policy) =>
+        run.Modules.GetValueOrDefault("conditional_access") == "available"
+        && run.MfaPolicies.Any(p =>
+        {
+            using var document = JsonDocument.Parse(p!.ToJsonString());
+            return Assessment.M365Rules.IsUnconditional(document.RootElement, policy.DeviceAlternativeAccepted,
+                policy.TrustedLocationsExclusionAccepted);
+        });
 
     private static bool NeedsMethods(UserRecord user, CollectorPolicy policy, RunState run) =>
         user.AccountEnabled && (user.UserType ?? "Member") == "Member" && !policy.ExcludedUserIds.Contains(user.Id)
@@ -799,18 +841,27 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
             var privileged = run.Privileged.TryGetValue(user.Id, out var roles);
             if (policy.ActiveCheckIds.Contains("M365-002") && (privileged || previouslyPrivileged.Contains(user.Id)))
             {
-                var failure = rolesFailure ?? MethodFailure(user.Id, run);
+                // A role may hide in a group whose members could not be read: no false «role removed» (03).
+                var failure = rolesFailure ?? (!privileged && run.GroupMembersIncomplete ? "partial_data" : null)
+                              ?? MethodFailure(user.Id, run);
+                var evidence = new JsonObject
+                {
+                    ["accountEnabled"] = user.AccountEnabled, ["userType"] = user.UserType,
+                    ["roleTemplateIds"] = new JsonArray((privileged ? roles!.Roles.Order() : Enumerable.Empty<string>())
+                        .Select(r => (JsonNode)r).ToArray()),
+                    ["assignment"] = !privileged ? "none" : roles!.Direct && roles.Group ? "direct_and_group"
+                        : roles.Group ? "group" : "direct",
+                    ["methodKinds"] = failure is null ? MethodArray(run.Methods[user.Id]) : null,
+                };
+                // Without the field the activations were not told apart (no Entra ID P2 or unreadable activations).
+                if (run.EntraP2 == true && !run.ActivationsUnknown)
+                {
+                    evidence["temporaryRoleTemplateIds"] = new JsonArray((privileged ? roles!.Temporary.Order() : Enumerable.Empty<string>())
+                        .Select(r => (JsonNode)r).ToArray());
+                }
                 result.Add(failure is not null
                     ? Unavailable("M365-002", subject, observedAt, failure)
-                    : Collected("M365-002", subject, observedAt, new JsonObject
-                    {
-                        ["accountEnabled"] = user.AccountEnabled, ["userType"] = user.UserType,
-                        ["roleTemplateIds"] = new JsonArray((privileged ? roles.Roles.Order() : Enumerable.Empty<string>())
-                            .Select(r => (JsonNode)r).ToArray()),
-                        ["assignment"] = !privileged ? "none" : roles.Direct && roles.Group ? "direct_and_group"
-                            : roles.Group ? "group" : "direct",
-                        ["methodKinds"] = MethodArray(run.Methods[user.Id]),
-                    }));
+                    : Collected("M365-002", subject, observedAt, evidence));
             }
         }
 
@@ -850,6 +901,9 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
             var failure = rolesFailure ?? (run.ActivationsUnknown ? "partial_data" : null);
             var enabledAdmins = run.GlobalAdmins.Where(id => run.Users.TryGetValue(id, out var u) && u.AccountEnabled).Order().ToList();
             var disabledAdmins = run.GlobalAdmins.Where(id => run.Users.TryGetValue(id, out var u) && !u.AccountEnabled).Order().ToList();
+            // Roles of the catalog outside the policy, held by enabled users: shown, never counted (03 «Правило M365-005»).
+            var uncovered = run.RoleMembers.Where(m => run.Users.TryGetValue(m.Key, out var u) && u.AccountEnabled)
+                .SelectMany(m => m.Value).Where(r => !policy.PrivilegedRoleTemplateIds.Contains(r)).Distinct().Order().Take(200).ToList();
             result.Add(failure is not null
                 ? Unavailable("M365-005", tenantSubject, observedAt, failure)
                 : Collected("M365-005", tenantSubject, observedAt, new JsonObject
@@ -857,6 +911,7 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
                     ["globalAdminUserIds"] = new JsonArray(enabledAdmins.Select(i => (JsonNode)i.ToString()).ToArray()),
                     ["disabledGlobalAdminUserIds"] = new JsonArray(disabledAdmins.Select(i => (JsonNode)i.ToString()).ToArray()),
                     ["unresolvedGroupAssignments"] = run.UnresolvedGroups,
+                    ["uncoveredRoleTemplateIds"] = new JsonArray(uncovered.Select(r => (JsonNode)r).ToArray()),
                 }));
         }
         if (policy.ActiveCheckIds.Contains("M365-006"))
@@ -933,8 +988,24 @@ public sealed class M365Collector(GraphClient graph, ContractSchemas schemas, Co
     private static string UtcTimeConverterFormat(DateTimeOffset value) =>
         value.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFF'Z'", CultureInfo.InvariantCulture);
 
-    private static bool NonEmpty(JsonElement conditions, string name) =>
-        conditions.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array && value.GetArrayLength() > 0;
+    /// <summary>
+    /// A risk condition is set when it is a non-empty array or, like insiderRiskLevels, a flags string other than «none»;
+    /// any other shape is unknown (null), so the policy cannot look unconditional (F02).
+    /// </summary>
+    private static bool? RiskLevels(JsonElement conditions, string name)
+    {
+        if (!conditions.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return false;
+        }
+        return value.ValueKind switch
+        {
+            JsonValueKind.Array => value.GetArrayLength() > 0,
+            JsonValueKind.String => !string.IsNullOrWhiteSpace(value.GetString())
+                                    && !string.Equals(value.GetString(), "none", StringComparison.OrdinalIgnoreCase),
+            _ => null,
+        };
+    }
 
     private static List<string> Strings(JsonElement array) =>
         array.ValueKind == JsonValueKind.Array

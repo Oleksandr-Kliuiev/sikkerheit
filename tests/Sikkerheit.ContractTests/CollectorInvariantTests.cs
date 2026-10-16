@@ -1,5 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
+using Sikkerheit.Contracts;
 using Sikkerheit.ContractTests.Invariants;
 using Sikkerheit.ContractTests.Support;
 using Sikkerheit.IntegrationTests.Infrastructure;
@@ -189,7 +191,7 @@ public sealed class CollectorInvariantTests(PostgresFixture postgres) : IAsyncLi
     }
 
     [Fact]
-    [Invariant("INV-035", Decision = "0.3.1 keeps only the count of M365-005; F03 lists activations separately in M365-002 later")]
+    [Invariant("INV-035")]
     public async Task Inv035_pim_activation_does_not_change_the_global_administrator_count()
     {
         var tenant = _host.Tenant();
@@ -210,9 +212,58 @@ public sealed class CollectorInvariantTests(PostgresFixture postgres) : IAsyncLi
         Assert.Equal(2, admins.GetProperty("globalAdminUserIds").GetArrayLength());
         Assert.DoesNotContain(admins.GetProperty("globalAdminUserIds").EnumerateArray(), id => id.GetString() == activated.Id.ToString());
         Assert.Equal("pass", (await _host.AssessmentsAsync(org, "M365-005"))[0].Result);
-        // The activation is no standing administrator: it gets no M365-002 pair (03 «Правило M365-001 и M365-002»).
-        var subject = await _host.SubjectIdAsync(org, activated.Id.ToString());
-        Assert.Contains(observations, o => o.CheckId == "M365-001" && o.SubjectId == subject);
-        Assert.DoesNotContain(observations, o => o.CheckId == "M365-002" && o.SubjectId == subject);
+        // M365-002 assesses the activation as its own kind of assignment — INV-178.
+    }
+
+    [Fact]
+    [Invariant("INV-181")]
+    public async Task Inv181_unrecognized_security_defaults_or_conditions_give_partial_and_unknown()
+    {
+        // Security Defaults with separate protections instead of a boolean isEnabled (preview shape, H-SD1).
+        var (sd, _) = await ConnectedAsync(t =>
+        {
+            t.SecurityDefaults = false;
+            t.SecurityDefaultsBody = new JsonObject { ["protections"] = new JsonObject { ["requireMfa"] = "enabled" } };
+        });
+        Assert.Equal("partial", Module(await _host.LastRunAsync(sd), "security_defaults"));
+        var bySd = (await _host.AssessmentsAsync(sd, "M365-003"))[0];
+        Assert.Equal(("unknown", "partial_data"), (bySd.Result, bySd.ReasonCode));
+
+        // An MFA policy with a condition outside CA_CONDITIONS.
+        var (times, _) = await ConnectedAsync(t =>
+        {
+            t.SecurityDefaults = false;
+            var policy = ConditionalAccess.MfaPolicy("enabled");
+            policy["conditions"]!["times"] = new JsonObject { ["includedRanges"] = new JsonArray("08:00-16:00") };
+            t.ConditionalAccessPolicies.Add(policy);
+        });
+        Assert.Equal("partial", Module(await _host.LastRunAsync(times), "conditional_access"));
+        var byTimes = (await _host.AssessmentsAsync(times, "M365-003"))[0];
+        Assert.Equal(("unknown", "partial_data"), (byTimes.Result, byTimes.ReasonCode));
+
+        // insiderRiskLevels is a flags string in Graph: the policy is conditional, never the unconditional pass.
+        var (insider, _) = await ConnectedAsync(t =>
+        {
+            t.SecurityDefaults = false;
+            var policy = ConditionalAccess.MfaPolicy("enabled");
+            policy["conditions"]!["insiderRiskLevels"] = "elevated";
+            t.ConditionalAccessPolicies.Add(policy);
+        });
+        var run = await _host.LastRunAsync(insider);
+        var evidence = JsonDocument.Parse((await _host.ObservationsAsync(insider, run.Id)).Single(o => o.CheckId == "M365-003").Evidence!).RootElement;
+        Assert.Contains("insider_risk", evidence.GetProperty("mfaPolicies")[0].GetProperty("conditions").EnumerateArray().Select(c => c.GetString()));
+        Assert.NotEqual("pass", (await _host.AssessmentsAsync(insider, "M365-003"))[0].Result);
+    }
+
+    [Fact]
+    [Invariant("INV-182")]
+    public async Task Inv182_sign_in_activity_is_always_skipped_in_p1()
+    {
+        var (org, _) = await ConnectedAsync();
+        var run = await _host.LastRunAsync(org);
+        Assert.Equal("skipped", Module(run, "sign_in_activity"));
+        Assert.DoesNotContain(_host.Graph.Requests, r => r.Contains("signInActivity", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain("AuditLog.Read.All", Catalog.GraphPermissions);
+        Assert.DoesNotContain(await _host.ObservationsAsync(org, run.Id), o => o.CheckId == "M365-007");
     }
 }

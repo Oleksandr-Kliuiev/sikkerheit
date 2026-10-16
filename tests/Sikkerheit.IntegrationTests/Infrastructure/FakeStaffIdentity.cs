@@ -54,7 +54,16 @@ public sealed class FakeStaffIdentity : IStaffIdentityProvider
         return answer.Identity is { } identity ? Task.FromResult(identity) : throw new StaffSignInException(answer.Refusal!, "refused");
     }
 
-    public Task<StaffIdentity> RefreshAsync(Guid entraUserId, byte[] tokenCache, CancellationToken ct) =>
-        Refresh is { } refresh ? Task.FromResult(refresh(entraUserId))
+    /// <summary>The token caches the refreshes received, in order: each one redeems the refresh token of the previous.</summary>
+    public List<byte[]> RefreshedCaches { get; } = [];
+
+    public Task<StaffIdentity> RefreshAsync(Guid entraUserId, byte[] tokenCache, CancellationToken ct)
+    {
+        lock (RefreshedCaches)
+        {
+            RefreshedCaches.Add(tokenCache);
+        }
+        return Refresh is { } refresh ? Task.FromResult(refresh(entraUserId))
             : throw new StaffSignInException("refresh_failed", "no refresh configured");
+    }
 }

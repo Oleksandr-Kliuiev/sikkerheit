@@ -25,6 +25,9 @@ public sealed class FakeTenant
     public int UsersPageSize { get; set; } = 999;
     public HashSet<string> Forbidden { get; } = [];
 
+    /// <summary>An answer of identitySecurityDefaultsEnforcementPolicy in another shape than {"isEnabled": bool}.</summary>
+    public JsonObject? SecurityDefaultsBody { get; set; }
+
     /// <summary>Entra ID P2 (PIM): roleAssignmentScheduleInstances lists the activations below.</summary>
     public bool EntraP2 { get; set; }
 
@@ -228,7 +231,7 @@ public sealed class FakeGraph : HttpMessageHandler
         }
         if (path == "/policies/identitySecurityDefaultsEnforcementPolicy")
         {
-            return (200, new JsonObject { ["isEnabled"] = tenant.SecurityDefaults });
+            return (200, (JsonObject?)tenant.SecurityDefaultsBody?.DeepClone() ?? new JsonObject { ["isEnabled"] = tenant.SecurityDefaults });
         }
         if (path == "/identity/conditionalAccess/policies")
         {

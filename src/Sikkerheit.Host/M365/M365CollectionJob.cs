@@ -148,6 +148,12 @@ public sealed class M365CollectionJob(DbScopes scopes, M365Collector collector, 
         // A run left open far beyond the run timeout lost its job; it fails with run_timeout and frees the slot.
         var open = await scope.Db.CollectionRuns
             .SingleOrDefaultAsync(r => r.OrganizationId == org && (r.State == "queued" || r.State == "running"), ct);
+        // The run of this very job (its id is the job id): a repeated capture of the job continues it.
+        if (open is not null && open.Id == lease.JobId)
+        {
+            await scope.CommitAsync(ct);
+            return open.Id;
+        }
         if (open is not null && (open.StartedAt ?? open.QueuedAt) > now - AbandonedAfter)
         {
             await lease.CompleteAsync(scope, ct);
@@ -163,7 +169,7 @@ public sealed class M365CollectionJob(DbScopes scopes, M365Collector collector, 
         }
         var run = new CollectionRun
         {
-            OrganizationId = org, Id = Guid.CreateVersion7(), Trigger = "scheduled", State = "queued", QueuedAt = now,
+            OrganizationId = org, Id = lease.JobId, Trigger = "scheduled", State = "queued", QueuedAt = now,
             Capabilities = "[]",
         };
         scope.Db.CollectionRuns.Add(run);

@@ -45,6 +45,7 @@ public sealed class TeamsDigestJob(DbScopes scopes, IHttpClientFactory http, Tea
             var items = await CollectAsync(now - TimeSpan.FromDays(1), now, ct);
             if (options.Webhook is not { } webhook)
             {
+                // Nothing was accepted, so the period is not marked as sent (05 «Фоновые задания и планировщик»).
                 logger.LogWarning("Teams digest {Period} not sent: Teams:WebhookUrl is not configured ({Count} items)", period, items.Count);
             }
             else
@@ -52,8 +53,9 @@ public sealed class TeamsDigestJob(DbScopes scopes, IHttpClientFactory http, Tea
                 var client = http.CreateClient(HttpClientName);
                 using var response = await client.PostAsJsonAsync(webhook, Card(period, items, options.PortalUrl), ct);
                 response.EnsureSuccessStatusCode();
+                // Marked right after the webhook accepted the digest: a repeated job sends nothing (at least once).
+                await MarkSentAsync(period, now, ct);
             }
-            await MarkSentAsync(period, now, ct);
         }
         await using var scope = await scopes.PlatformAsync(ct);
         if (!await lease.HoldAsync(scope, ct))

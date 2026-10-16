@@ -365,7 +365,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Решение о риске: принятие, подавление или отзыв решения */
+        /**
+         * Решение о риске: принятие, подавление или отзыв решения
+         * @description Каждое решение, включая withdrawn, пишет неизменяемую запись risk_decision вместе с событием workflow_changed (05, «Автомат workflowState»).
+         */
         post: operations["decideFindingRisk"];
         delete?: never;
         options?: never;
@@ -400,7 +403,10 @@ export interface paths {
         /** Сформированные отчёты */
         get: operations["listReports"];
         put?: never;
-        /** Формирование отчёта за неделю */
+        /**
+         * Формирование отчёта за неделю
+         * @description Только завершённая неделя. Один отчёт на неделю и язык: повтор возвращает существующий, отчёт в failed ставится в генерацию заново, ready не меняется.
+         */
         post: operations["createReport"];
         delete?: never;
         options?: never;
@@ -531,7 +537,7 @@ export interface paths {
         put?: never;
         /**
          * Разбор конфликта идентичности устройства
-         * @description accept_new_fingerprint принимает последний несовпавший признак машины (замена платы); keep оставляет прежний, клон продолжает получать 409 identity_conflict. Без конфликта возвращает устройство без изменений (05, «Субъекты и идентичность устройства»).
+         * @description accept_new_fingerprint принимает последний несовпавший признак машины (замена платы); accept_new_key — последний отклонённый новый ключ устройства (очищенный TPM) и аннулирует сессии прежнего; keep оставляет прежнее, клон продолжает получать 409 identity_conflict. Решение другого вида или без конфликта возвращает устройство без изменений (05, «Субъекты и идентичность устройства»).
          */
         post: operations["resolveDeviceIdentity"];
         delete?: never;
@@ -811,7 +817,7 @@ export interface components {
             x: string;
             y: string;
         };
-        /** @description signature — подпись ключом publicKey строки "sikkerheit-enroll-v1\n<nonce>\n<registrationRequestId>\n<installationId>\n<machineFingerprint>\n<keyProtection>\n<JWK thumbprint RFC 7638>" в UTF-8. keyProtection — заявление агента, для решений доверия не используется. */
+        /** @description signature — подпись ключом publicKey строки "sikkerheit-enroll-v1\n<nonce>\n<registrationRequestId>\n<installationId>\n<machineFingerprint>\n<keyProtection>\n<JWK thumbprint RFC 7638>" в UTF-8. previousKeySignature — подпись той же строки текущим ключом устройства на сервере, когда агент меняет ключ, который у него ещё есть; без неё замена ключа идёт через разбор конфликта идентичности. keyProtection — заявление агента, для решений доверия не используется. */
         EnrollmentRequest: {
             /** Format: uuid */
             registrationRequestId: string;
@@ -826,6 +832,8 @@ export interface components {
             nonce: string;
             /** @description ECDSA P-256 SHA-256 в формате IEEE P1363 (r||s, 64 байта), base64url. */
             signature: string;
+            /** @description ECDSA P-256 SHA-256 в формате IEEE P1363 (r||s, 64 байта), base64url. */
+            previousKeySignature?: string;
         };
         Enrollment: {
             /** Format: uuid */
@@ -986,6 +994,7 @@ export interface components {
         };
         RetentionPurgeAuditDetails: {
             deleted: {
+                risk_decision: number;
                 finding_event: number;
                 assessment: number;
                 finding: number;
@@ -1039,7 +1048,7 @@ export interface components {
             /** @description Значение заголовка X-CSRF-Token для изменений. */
             csrfToken: string;
         };
-        /** @description Закрытая конфигурация policy_revision. WIN-011 обязательна в activeCheckIds; assessed без входных настроек, отсутствие WIN-011 и активная WIN-004 без WIN-003 дают 422 policy_inputs_missing. maxBatchAgeDays >= maxBufferDays + 1, minGlobalAdmins <= maxGlobalAdmins, пороги warning WIN-001 не ниже critical и WIN-004 warnDays <= criticalDays, иначе 422 validation_failed. У каждого обязательного поля-значения есть default; политика v1 по умолчанию — значения default этой схемы. */
+        /** @description Закрытая конфигурация policy_revision. WIN-011 обязательна в activeCheckIds; assessed без входных настроек или для отложенной M365-007, отсутствие WIN-011 и активная WIN-004 без WIN-003 дают 422 policy_inputs_missing. maxBatchAgeDays >= maxBufferDays + 1, minGlobalAdmins <= maxGlobalAdmins, пороги warning WIN-001 не ниже critical и WIN-004 warnDays <= criticalDays, иначе 422 validation_failed. У каждого обязательного поля-значения есть default; политика v1 по умолчанию — значения default этой схемы. */
         PolicyConfiguration: {
             /**
              * @default [
@@ -1519,7 +1528,10 @@ export interface components {
             startedAt: string | null;
             /** Format: date-time */
             completedAt: string | null;
-            /** @enum {string|null} */
+            /**
+             * @description run_timeout — 30 минут истекли до чтения пользователей, или запуск открыт дольше 6 часов и закрыт плановым заданием (05, «Подключение M365 и сбор»).
+             * @enum {string|null}
+             */
             failureCode: "consent_missing" | "tenant_mismatch" | "credential_error" | "cancelled" | "run_timeout" | "temporary_error" | null;
             capabilities: components["schemas"]["Capability"][];
         };
@@ -1637,7 +1649,7 @@ export interface components {
             /** Format: date-time */
             reviewAt?: string;
         } & unknown;
-        /** @description Только границы ISO-недели в timezone организации: periodStart — понедельник 00:00, periodEnd — следующий понедельник 00:00; иные границы — 422 validation_failed (05, «Отчёт и покрытие»). */
+        /** @description Только завершённая ISO-неделя в timezone организации: periodStart — понедельник 00:00, periodEnd — следующий понедельник 00:00 не позже текущего момента; иные границы, текущая и будущая неделя — 422 validation_failed (05, «Отчёт и покрытие»). */
         ReportCreate: {
             /** Format: date-time */
             periodStart: string;
@@ -1646,6 +1658,7 @@ export interface components {
             /** @enum {string} */
             format: "html";
         };
+        /** @description Отчёт ready неизменяем: снимок, записанный при генерации, не переписывается, а потерянный файл строится заново из снимка. Отчёт failed повторный createReport ставит в генерацию заново (05, «Отчёт и покрытие»). */
         Report: {
             /** Format: uuid */
             id: string;
@@ -1706,6 +1719,11 @@ export interface components {
             identityConflict: {
                 /** Format: date-time */
                 at: string;
+                /**
+                 * @description fingerprint — не совпал признак машины; key — новый ключ без подписи прежним.
+                 * @enum {string}
+                 */
+                kind: "fingerprint" | "key";
                 reportedDisplayName: string | null;
             } | null;
             /** @enum {string} */
@@ -1724,7 +1742,7 @@ export interface components {
         };
         DeviceIdentityResolution: {
             /** @enum {string} */
-            decision: "accept_new_fingerprint" | "keep";
+            decision: "accept_new_fingerprint" | "accept_new_key" | "keep";
         };
         WindowsRelease: {
             /** @enum {string} */

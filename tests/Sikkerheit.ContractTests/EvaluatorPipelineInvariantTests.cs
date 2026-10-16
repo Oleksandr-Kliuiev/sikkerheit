@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Sikkerheit.ContractTests.Invariants;
@@ -173,5 +175,80 @@ public sealed class EvaluatorPipelineInvariantTests(PostgresFixture postgres) : 
         Assert.False(partial.UsersComplete);
         var aliceSubject = await _host.SubjectIdAsync(org, alice.Id.ToString());
         Assert.Equal("open", Assert.Single(await _host.FindingsAsync(org, "M365-001"), f => f.SubjectId == aliceSubject).TechnicalState);
+    }
+
+    [Fact]
+    [Invariant("INV-178")]
+    public async Task Inv178_an_activated_role_without_mfa_is_a_critical_m365_002_finding()
+    {
+        var tenant = _host.Tenant();
+        tenant.SecurityDefaults = true;
+        tenant.EntraP2 = true;
+        var activated = tenant.AddUser("vakt");
+        tenant.Assignments.Add((activated.Id, ContractHost.GlobalAdministrator, false));
+        tenant.Activations.Add((activated.Id, ContractHost.GlobalAdministrator));
+        var org = await ConnectedAsync(tenant);
+
+        var subject = await _host.SubjectIdAsync(org, activated.Id.ToString());
+        var finding = Assert.Single(await _host.FindingsAsync(org, "M365-002"), f => f.SubjectId == subject);
+        Assert.Equal(("open", "critical"), (finding.TechnicalState, finding.Severity));
+        var run = await _host.LastRunAsync(org);
+        var observation = (await _host.ObservationsAsync(org, run.Id)).Single(o => o.CheckId == "M365-002" && o.SubjectId == subject);
+        var evidence = JsonDocument.Parse(observation.Evidence!).RootElement;
+        Assert.Equal([ContractHost.GlobalAdministrator], evidence.GetProperty("temporaryRoleTemplateIds").EnumerateArray().Select(r => r.GetString()));
+        Assert.Equal("m365-002.fail.temporary",
+            JsonDocument.Parse((await _host.AssessmentsAsync(org, "M365-002")).First(a => a.SubjectId == subject).BasisSnapshot)
+                .RootElement.GetProperty("explanation").GetString());
+        // The activation never counts as a global administrator (INV-035): the two standing ones pass M365-005.
+        Assert.Equal("pass", (await _host.AssessmentsAsync(org, "M365-005"))[0].Result);
+    }
+
+    [Fact]
+    [Invariant("INV-184")]
+    public async Task Inv184_recalculation_gives_unknown_without_an_observation_only_to_assessed_pairs()
+    {
+        var tenant = _host.Tenant();
+        tenant.SecurityDefaults = true;
+        var anna = tenant.AddUser("anna", methods: "fido2");
+        var org = await _host.OrganizationAsync();
+        // Revision 2 before the first collection leaves M365-006 out: nothing of it is ever observed.
+        var policy = await _host.PolicyAsync(org);
+        policy["activeCheckIds"] = new JsonArray(policy["activeCheckIds"]!.AsArray().Select(c => c!.GetValue<string>())
+            .Where(c => c != "M365-006").Select(c => (JsonNode)c).ToArray());
+        Assert.Equal(System.Net.HttpStatusCode.Created, (await _host.PolicyRevisionAsync(org, policy, 1)).Status);
+        await _host.ConnectAsync(org, tenant);
+        await _host.RunJobsAsync();
+        Assert.Empty(await _host.AssessmentsAsync(org, "M365-006"));
+
+        // Revision 3 brings M365-006 back in assessed mode: the tenant has no observation of it.
+        policy["activeCheckIds"]!.AsArray().Add("M365-006");
+        Assert.Equal(System.Net.HttpStatusCode.Created, (await _host.PolicyRevisionAsync(org, policy, 2)).Status);
+        await _host.RunJobsAsync();
+        var consent = Assert.Single(await _host.AssessmentsAsync(org, "M365-006"));
+        Assert.Equal(("unknown", "missing_observation", 3), (consent.Result, consent.ReasonCode, consent.EvaluatedPolicyVersion));
+        // Informational M365-007 is never collected and M365-002 has no projection for a user without a role: no assessment.
+        Assert.Empty(await _host.AssessmentsAsync(org, "M365-007"));
+        var annaSubject = await _host.SubjectIdAsync(org, anna.Id.ToString());
+        Assert.DoesNotContain(await _host.AssessmentsAsync(org, "M365-002"), a => a.SubjectId == annaSubject);
+    }
+
+    [Fact]
+    [Invariant("INV-193")]
+    public async Task Inv193_a_connected_tenant_before_its_first_collection_has_zero_coverage()
+    {
+        var tenant = _host.Tenant();
+        tenant.SecurityDefaults = true;
+        var org = await _host.OrganizationAsync();
+        async Task<JsonElement> CoverageAsync()
+        {
+            var page = await _host.Admin.GetAsync("/api/v1/organizations?limit=100", "OrganizationOverviewPage");
+            return page.Body.GetProperty("items").EnumerateArray()
+                .Single(i => i.GetProperty("organization").GetProperty("id").GetString() == org.ToString()).GetProperty("coverageAt");
+        }
+        // Not connected: there are no pairs, so «no data».
+        Assert.Equal(JsonValueKind.Null, (await CoverageAsync()).ValueKind);
+        // Connected, the first collection has not run yet: the required tenant pairs count without data.
+        await _host.ConnectAsync(org, tenant);
+        Assert.Equal(0.0, (await CoverageAsync()).GetDouble());
     }
 }

@@ -49,6 +49,11 @@ public sealed class PolicyRules
         {
             missing.Add("WIN-010 assessed needs expectedTenantId");
         }
+        // M365-007 is deferred: it is not collected, so «assessed» would give every user unknown/missing_observation (05).
+        foreach (var deferred in Catalog.DeferredIds.Where(id => Mode(checks, id) == "assessed"))
+        {
+            missing.Add(deferred + " is not collected yet and can only be informational");
+        }
         if (missing.Count > 0)
         {
             throw new ApiProblemException(ProblemCodes.PolicyInputsMissing, string.Join("; ", missing));

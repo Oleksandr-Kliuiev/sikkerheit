@@ -2,6 +2,8 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Sikkerheit.Contracts;
 using Sikkerheit.ContractTests.Invariants;
 using Sikkerheit.ContractTests.Support;
@@ -511,5 +513,152 @@ public sealed class PortalApiInvariantTests(PostgresFixture postgres) : IAsyncLi
         var audits = await _host.AuditAsync(org, "report.download");
         Assert.Equal(2, audits.Count);
         Assert.Equal([_host.Admin.EntraUserId, reader.EntraUserId], audits.Select(a => a.ActorId!.Value));
+    }
+
+    [Fact]
+    [Invariant("INV-177")]
+    public async Task Inv177_hourly_refresh_redeems_the_refresh_token_and_a_refusal_ends_the_session()
+    {
+        var options = new EntraOptions { TenantId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" };
+        string Access(Guid user, string amr, string roles) =>
+            $$"""{"tid":"{{options.TenantId}}","oid":"{{user}}","amr":{{amr}},"roles":{{roles}},"name":"Kari"}""";
+        // The refreshed tokens pass the same checks as at sign-in; each refresh returns a new token cache.
+        StaffIdentity Refreshed(Guid user, string amr, string roles, byte cache)
+        {
+            using var claims = JsonDocument.Parse(Access(user, amr, roles));
+            return StaffTokens.Verify(options, claims.RootElement, null, [cache]);
+        }
+        var refusals = new (string Case, Func<Guid, StaffIdentity> Refresh)[]
+        {
+            ("entra-refused", _ => throw new StaffSignInException("refresh_failed", "AADSTS700082 the refresh token has expired")),
+            ("without-mfa", user => Refreshed(user, """["pwd"]""", """["Admin"]""", 9)),
+            ("without-role", user => Refreshed(user, """["pwd","mfa"]""", "[]", 9)),
+        };
+        var day = 15;
+        foreach (var (name, refusal) in refusals)
+        {
+            _host.Factory.StaffIdentity.RefreshedCaches.Clear();
+            _host.Clock.SetLocal(ContractHost.Oslo, 2026, 10, day, 9);
+            _host.Factory.StaffIdentity.IssueTokens(name, options, Access(Guid.NewGuid(), """["pwd","mfa"]""", """["Admin"]"""));
+            using var browser = _host.Factory.CreateClient(new() { BaseAddress = new Uri("https://localhost"), HandleCookies = true, AllowAutoRedirect = false });
+            await SignInAsync(browser, name);
+            var me = async () => await StaffClient.Answer.ReadAsync(await browser.GetAsync("/api/v1/me", Ct), null);
+            _host.Factory.StaffIdentity.Refresh = user => Refreshed(user, """["pwd","mfa"]""", """["Admin"]""", 7);
+
+            // Within the hour the session is used as it is; after 60 minutes the refresh token is redeemed once.
+            _host.Clock.SetLocal(ContractHost.Oslo, 2026, 10, day, 9, 40);
+            Assert.Equal(HttpStatusCode.OK, (await me()).Status);
+            Assert.Empty(_host.Factory.StaffIdentity.RefreshedCaches);
+            _host.Clock.SetLocal(ContractHost.Oslo, 2026, 10, day, 10, 5);
+            Assert.Equal(HttpStatusCode.OK, (await me()).Status);
+            _host.Clock.SetLocal(ContractHost.Oslo, 2026, 10, day, 10, 50);
+            Assert.Equal(HttpStatusCode.OK, (await me()).Status);
+            Assert.Equal([[1, 2, 3]], _host.Factory.StaffIdentity.RefreshedCaches);
+
+            // The next refresh is refused: the session is gone, also for the following request.
+            _host.Factory.StaffIdentity.Refresh = refusal;
+            _host.Clock.SetLocal(ContractHost.Oslo, 2026, 10, day, 11, 6);
+            Problem(await me(), HttpStatusCode.Unauthorized, ProblemCodes.SessionRequired);
+            Assert.Equal([[1, 2, 3], [7]], _host.Factory.StaffIdentity.RefreshedCaches);
+            Problem(await me(), HttpStatusCode.Unauthorized, ProblemCodes.SessionRequired);
+            day++;
+        }
+    }
+
+    [Fact]
+    [Invariant("INV-188")]
+    public async Task Inv188_every_risk_decision_including_withdrawn_creates_one_risk_decision_row()
+    {
+        var org = await _host.OrganizationAsync();
+        var finding = await _host.InsertFindingAsync(org);
+        var path = $"/api/v1/organizations/{org}/findings/{finding}/risk-decisions";
+        var reviewAt = _host.Clock.GetUtcNow().AddDays(30);
+        var accepted = await _host.Admin.PostAsync(path, new { decision = "risk_accepted", reason = "Kunden godtar", reviewAt }, "Finding",
+            ifMatch: await _host.ETagAsync(org, finding));
+        var withdrawn = await _host.Admin.PostAsync(path, new { decision = "withdrawn" }, "Finding", ifMatch: accepted.ETag);
+        await _host.Admin.PostAsync(path, new { decision = "suppressed", reason = "Testkonto", reviewAt }, "Finding", ifMatch: withdrawn.ETag);
+
+        await using var scope = await _host.Scopes.OrganizationAsync(org, Ct);
+        var decisions = await scope.Db.RiskDecisions.AsNoTracking().Where(d => d.FindingId == finding).OrderBy(d => d.Id).ToListAsync(Ct);
+        Assert.Equal(["risk_accepted", "withdrawn", "suppressed"], decisions.Select(d => d.Decision));
+        var events = await scope.Db.FindingEvents.AsNoTracking().Where(e => e.FindingId == finding).ToDictionaryAsync(e => e.Id, Ct);
+        Assert.Equal(3, events.Count);
+        Assert.All(decisions, d => Assert.Equal(("workflow_changed", "manual_action"),
+            (events[d.FindingEventId].EventType, events[d.FindingEventId].Cause)));
+        Assert.Equal(3, decisions.Select(d => d.FindingEventId).Distinct().Count());
+        Assert.All(decisions, d => Assert.Equal(_host.Admin.EntraUserId, d.DecidedBy));
+    }
+
+    [Fact]
+    [Invariant("INV-190")]
+    public async Task Inv190_report_of_the_current_or_a_future_week_is_refused()
+    {
+        var org = await _host.OrganizationAsync();
+        var reports = $"/api/v1/organizations/{org}/reports";
+        // Wednesday 14 October: the week of 12 October is not over, the week of 19 October has not begun.
+        foreach (var (start, end) in new[]
+                 {
+                     ("2026-10-12T00:00:00+02:00", "2026-10-19T00:00:00+02:00"),
+                     ("2026-10-19T00:00:00+02:00", "2026-10-26T00:00:00+02:00"),
+                 })
+        {
+            Problem(await _host.Admin.PostAsync(reports, new { periodStart = start, periodEnd = end, format = "html" }), (HttpStatusCode)422,
+                ProblemCodes.ValidationFailed);
+        }
+        Assert.Empty((await _host.Admin.GetAsync(reports, "ReportPage")).Body.GetProperty("items").EnumerateArray());
+        var completed = await _host.Admin.PostAsync(reports,
+            new { periodStart = "2026-10-05T00:00:00+02:00", periodEnd = "2026-10-12T00:00:00+02:00", format = "html" }, "Report");
+        Assert.Equal(HttpStatusCode.Accepted, completed.Status);
+    }
+
+    [Fact]
+    [Invariant("INV-191")]
+    public async Task Inv191_repeated_report_request_regenerates_failed_and_returns_ready_unchanged()
+    {
+        var org = await _host.OrganizationAsync();
+        var id = await ReportAsync(org, runJobs: false);
+        // The generation failed for good: the report is failed and its job ended.
+        await using (var scope = await _host.Scopes.OrganizationAsync(org, Ct))
+        {
+            await using var failed = new NpgsqlCommand("""
+                update report set state = 'failed', failure_code = 'generation_error' where id = @id;
+                update job set state = 'failed', completed_at = @now, attempts = 10 where type = 'report_generate' and input_id = @input;
+                """, scope.Connection, scope.Transaction);
+            failed.Parameters.AddWithValue("id", Guid.Parse(id));
+            failed.Parameters.AddWithValue("input", id);
+            failed.Parameters.AddWithValue("now", _host.Clock.GetUtcNow());
+            await failed.ExecuteNonQueryAsync(Ct);
+            await scope.CommitAsync(Ct);
+        }
+        var again = await ReportAsync(org, runJobs: false);
+        Assert.Equal(id, again);
+        var page = $"/api/v1/organizations/{org}/reports";
+        var queued = (await _host.Admin.GetAsync(page, "ReportPage")).Body.GetProperty("items").EnumerateArray().Single();
+        Assert.Equal("queued", queued.GetProperty("state").GetString());
+        await _host.RunJobsAsync();
+        var ready = (await _host.Admin.GetAsync(page, "ReportPage")).Body.GetProperty("items").EnumerateArray().Single();
+        Assert.Equal((id, "ready"), (ready.GetProperty("id").GetString()!, ready.GetProperty("state").GetString()));
+
+        // A ready report is returned as it is: no new generation, no new row.
+        var repeat = await _host.Admin.PostAsync(page,
+            new { periodStart = "2026-10-05T00:00:00+02:00", periodEnd = "2026-10-12T00:00:00+02:00", format = "html" }, "Report");
+        Assert.Equal(ready.GetRawText(), repeat.Body.GetRawText());
+        await using var platform = await _host.Scopes.PlatformAsync(Ct);
+        var job = await platform.Db.Jobs.AsNoTracking().SingleAsync(j => j.Type == "report_generate" && j.InputId == id, Ct);
+        Assert.Equal("succeeded", job.State);
+    }
+
+    [Fact]
+    [Invariant("INV-196")]
+    public async Task Inv196_assessed_mode_for_the_deferred_check_is_refused()
+    {
+        var org = await _host.OrganizationAsync();
+        Problem(await PolicyAsync(org, c => c["checks"]!["M365-007"]!["assessmentMode"] = "assessed"), (HttpStatusCode)422,
+            ProblemCodes.PolicyInputsMissing);
+        Assert.Single((await _host.Admin.GetAsync($"/api/v1/organizations/{org}/policy-revisions", "PolicyRevisionPage"))
+            .Body.GetProperty("items").EnumerateArray());
+        // The informational mode of the same check is accepted.
+        Assert.Equal(HttpStatusCode.Created,
+            (await PolicyAsync(org, c => c["checks"]!["M365-007"]!["assessmentMode"] = "informational")).Status);
     }
 }

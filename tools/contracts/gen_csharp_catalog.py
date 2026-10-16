@@ -54,6 +54,7 @@ def render(c):
         lines.append(f'        new("{cid}", "{name}", "{phase}", "{mode}", "{source}", "{subject}"),')
     lines += ['    ];', '']
     lines.append(string_list('GraphPermissions', c.GRAPH_PERMISSIONS))
+    lines.append(string_list('DeferredIds', c.DEFERRED_IDS))
     lines.append(f'    public const string DirectorySyncRole = "{c.DIRECTORY_SYNC_ROLE}";')
     lines.append(string_list('CaConditions', c.CA_CONDITIONS))
     lines.append(string_list('CaGrantControls', c.CA_GRANT_CONTROLS))

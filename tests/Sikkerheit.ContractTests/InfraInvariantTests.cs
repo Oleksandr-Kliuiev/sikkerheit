@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Npgsql;
 using Sikkerheit.ContractTests.Invariants;
 using Sikkerheit.ContractTests.Support;
 using Sikkerheit.Host.Jobs;
@@ -234,5 +235,62 @@ public sealed class InfraInvariantTests(PostgresFixture postgres)
             Assert.Contains(typeof(Scheduler), hosted);
         }
         Assert.Contains(InvariantRegistry.IacInvariants(), id => id == "INV-085");
+    }
+
+    /// <summary>A new policy revision with the configuration of the latest one; returns its version.</summary>
+    private static async Task<int> RevisionAsync(StaffClient admin, Guid org)
+    {
+        var policies = $"/api/v1/organizations/{org}/policy-revisions";
+        var latest = (await admin.GetAsync(policies, "PolicyRevisionPage")).Body.GetProperty("items")[0];
+        var created = await admin.PostAsync(policies, new { configuration = latest.GetProperty("configuration") }, "PolicyRevision",
+            ifMatch: $"\"{latest.GetProperty("version").GetInt32()}\"");
+        return created.Body.GetProperty("version").GetInt32();
+    }
+
+    [Fact]
+    [Invariant("INV-195", Decision = "the epoch follows max(stored version, version counter): at the 9999 boundary the next "
+        + "epoch is 20000, so the lost revision 10000 is not issued again")]
+    public async Task Inv195_after_a_restore_policy_versions_continue_from_the_next_epoch()
+    {
+        Guid org = default, boundary = default;
+        var lost = new List<int>();
+        var (restored, t) = await HistoryAsync(async (factory, admin) =>
+        {
+            org = await OrganizationAsync(admin, "Policy AS");
+            Assert.Equal(2, await RevisionAsync(admin, org));
+            // An organization whose counter reached the end of an epoch before T.
+            boundary = await OrganizationAsync(admin, "Grense AS");
+            await using (var scope = await factory.Services.GetRequiredService<Host.Data.DbScopes>().OrganizationAsync(boundary, Ct))
+            {
+                await using var counter = new NpgsqlCommand("update organization set next_policy_version = 9999 where id = @org",
+                    scope.Connection, scope.Transaction);
+                counter.Parameters.AddWithValue("org", boundary);
+                await counter.ExecuteNonQueryAsync(Ct);
+                await scope.CommitAsync(Ct);
+            }
+            Assert.Equal(9999, await RevisionAsync(admin, boundary));
+        }, async (_, admin) =>
+        {
+            // Revisions after T are lost with the restore.
+            lost.Add(await RevisionAsync(admin, org));
+            lost.Add(await RevisionAsync(admin, org));
+            lost.Add(await RevisionAsync(admin, boundary));
+        }, (10, 10, 10));
+        Assert.Equal([3, 4, 10_000], lost);
+
+        var (factory, report) = await RestoreAsync(restored, t, 10, 20);
+        await using (factory)
+        {
+            Assert.Contains(new RestorePolicyEpoch(org, 2, 10_000, AlreadyAdvanced: false), report.PolicyEpochs);
+            Assert.Contains(new RestorePolicyEpoch(boundary, 9999, 20_000, AlreadyAdvanced: false), report.PolicyEpochs);
+            var admin = await StaffClient.SignInAsync(factory, "Admin");
+            Assert.Equal(10_000, await RevisionAsync(admin, org));
+            Assert.Equal(20_000, await RevisionAsync(admin, boundary));
+
+            // A repeated run for the same restore point does not move the epoch again.
+            var again = await factory.Services.GetRequiredService<RestoreReplay>().RunAsync(new RestoreOptions(t, Drill: false), Ct);
+            Assert.Contains(new RestorePolicyEpoch(org, 10_000, 10_001, AlreadyAdvanced: true), again.PolicyEpochs);
+            Assert.Equal(10_001, await RevisionAsync(admin, org));
+        }
     }
 }

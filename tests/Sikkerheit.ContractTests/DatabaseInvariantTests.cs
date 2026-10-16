@@ -162,4 +162,23 @@ public sealed class DatabaseInvariantTests(PostgresFixture postgres) : IAsyncLif
         Assert.False(Directory.Exists(Path.Combine(_host.Factory.FilesDirectory, "reports", b.ToString())));
         Assert.False(Directory.Exists(Path.Combine(_host.Factory.FilesDirectory, "reports", a.ToString())));
     }
+
+    [Fact]
+    [Invariant("INV-189")]
+    public async Task Inv189_the_application_role_cannot_rewrite_history()
+    {
+        var org = await _host.OrganizationAsync();
+        foreach (var table in new[] { "finding_event", "risk_decision", "audit_event" })
+        {
+            await using var scope = await _host.Scopes.OrganizationAsync(org, Ct);
+            await using var update = new NpgsqlCommand(
+                $"update {table} set organization_id = organization_id where organization_id = @org", scope.Connection, scope.Transaction);
+            update.Parameters.AddWithValue("org", org);
+            var error = await Assert.ThrowsAsync<PostgresException>(() => update.ExecuteNonQueryAsync(Ct));
+            Assert.Equal("42501", error.SqlState);
+        }
+        // Writing the history itself stays possible: the creation of the organization is audited.
+        await using var read = await _host.Scopes.OrganizationAsync(org, Ct);
+        Assert.NotEqual(0, await read.Db.AuditEvents.CountAsync(Ct));
+    }
 }

@@ -9,9 +9,10 @@ namespace Sikkerheit.Host.Assessment;
 /// the organization are evaluated again, 200 subjects per transaction. Every transaction holds the lease and the
 /// tenant_connection row — the serialization point with the final transaction of a collection run.
 /// </summary>
-public sealed class RecalculatePolicyJob(DbScopes scopes, TimeProvider clock) : IJobHandler
+public sealed class RecalculatePolicyJob(DbScopes scopes, TimeProvider clock, IConfiguration configuration) : IJobHandler
 {
-    public const int BatchSize = 200;
+    /// <summary>Subjects per transaction (05: 200); a test lowers it to see the lease checked between batches.</summary>
+    private readonly int _batchSize = Math.Clamp(configuration.GetValue("Jobs:RecalculateBatchSize", 200), 1, 200);
 
     public string Type => "recalculate_policy";
 
@@ -34,7 +35,7 @@ public sealed class RecalculatePolicyJob(DbScopes scopes, TimeProvider clock) : 
                     select * from subject
                     where organization_id = {org} and type = any({M365Evaluator.SubjectTypes}) and retired_at is null
                       and id > {after}
-                    order by id limit {BatchSize}
+                    order by id limit {_batchSize}
                     """).ToListAsync(ct);
             if (subjects.Count == 0)
             {
