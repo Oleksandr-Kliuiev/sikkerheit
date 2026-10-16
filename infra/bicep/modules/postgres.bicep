@@ -4,6 +4,8 @@ param serverName string
 param location string
 param tenantId string
 param skuName string
+@minValue(32)
+param storageSizeGb int = 32
 param subnetId string
 param dnsZoneId string
 @description('The migrations identity: Entra administrator of the server and owner of the schema.')
@@ -16,7 +18,7 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   sku: { name: skuName, tier: 'Burstable' }
   properties: {
     version: '17'
-    storage: { storageSizeGB: 32, autoGrow: 'Enabled' }
+    storage: { storageSizeGB: storageSizeGb, autoGrow: 'Enabled' }
     backup: { backupRetentionDays: 14, geoRedundantBackup: 'Disabled' }
     network: { delegatedSubnetResourceId: subnetId, privateDnsZoneArmResourceId: dnsZoneId, publicNetworkAccess: 'Disabled' }
     authConfig: { activeDirectoryAuth: 'Enabled', passwordAuth: 'Disabled', tenantId: tenantId }
