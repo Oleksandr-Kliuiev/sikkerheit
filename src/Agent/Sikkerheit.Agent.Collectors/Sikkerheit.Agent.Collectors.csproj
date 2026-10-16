@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Sikkerheit.Agent.Collectors</RootNamespace>
+    <!-- Windows APIs are called behind OperatingSystem.IsWindows() guards; the project also builds on macOS and Linux. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Sikkerheit.Contracts\Sikkerheit.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Management" VersionOverride="10.0.13" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sikkerheit.Agent.Tests" />
+  </ItemGroup>
+</Project>

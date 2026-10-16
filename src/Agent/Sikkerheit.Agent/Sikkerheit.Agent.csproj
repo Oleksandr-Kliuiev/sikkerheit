@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Sikkerheit.Agent</RootNamespace>
+    <AssemblyName>Sikkerheit.Agent</AssemblyName>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Sikkerheit.Agent.Collectors\Sikkerheit.Agent.Collectors.csproj" />
+  </ItemGroup>
+  <!-- The agent packages are not in Directory.Packages.props: its transitive pins would change the lock files of the service. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" VersionOverride="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" VersionOverride="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" VersionOverride="10.0.13" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" VersionOverride="10.0.13" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sikkerheit.Agent.Tests" />
+  </ItemGroup>
+</Project>

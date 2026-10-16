@@ -37,10 +37,29 @@ jobs:
         run: dotnet build Sikkerheit.slnx --no-restore -c Release
       - name: Unit tests
         run: dotnet test --project tests/Sikkerheit.UnitTests --no-build -c Release
+      - name: Agent tests (WP-09; the Windows layer is skipped here)
+        run: dotnet test --project tests/Sikkerheit.Agent.Tests --no-build -c Release
       - name: Integration tests (PostgreSQL in a container)
         run: dotnet test --project tests/Sikkerheit.IntegrationTests --no-build -c Release
       - name: Contract tests, a negative test for every record of the invariant registry (WP-01)
         run: dotnet test --project tests/Sikkerheit.ContractTests --no-build -c Release
+
+  agent-windows:
+    # Smoke tests of the Windows layer of the agent (DPAPI, CNG, readers of facts). Not SP-04: no TPM, domain or third-party antivirus.
+    # continue-on-error until the first real run on GitHub shows how the readers behave on the runner.
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore with lock files
+        run: dotnet restore tests/Sikkerheit.Agent.Tests --locked-mode
+      - name: Build the agent
+        run: dotnet build tests/Sikkerheit.Agent.Tests --no-restore -c Release
+      - name: Agent tests including WindowsSmokeTests
+        run: dotnet test --project tests/Sikkerheit.Agent.Tests --no-build -c Release
 
   infra:
     runs-on: ubuntu-latest

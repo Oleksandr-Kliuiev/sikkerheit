@@ -29,6 +29,12 @@ dotnet test --project tests/Sikkerheit.ContractTests
 ```
 
 ```bash
+dotnet test --project tests/Sikkerheit.Agent.Tests
+```
+
+Агент (`src/Agent`) собирается и тестируется на macOS и Linux; тесты Windows-слоя (`WindowsSmokeTests`) там пропускаются и работают в CI на `windows-latest`. Что проверяется только на Windows — [agent-windows-verification.md](agent-windows-verification.md).
+
+```bash
 cd src/Portal && npm ci && npm run lint && npm run typecheck && npm test
 ```
 
@@ -56,7 +62,7 @@ python3 -I tools/iac/check_arm.py
 
 - Тест помечается `[Invariant("INV-nnn")]`, класс — `[Enforcement("<enforcement>")]`; классы разложены по уровням: `PortalApiInvariantTests` (HTTP), `DatabaseInvariantTests` (RLS и области), `SchemaInvariantTests`, `CollectorInvariantTests` (поддельный Graph), `EvaluatorRuleInvariantTests` (правила и автомат проблем без базы) и `EvaluatorPipelineInvariantTests` (через запуск сбора), `WorkerInvariantTests` (задания и lease), `InfraInvariantTests` (восстановление, журнал безопасности, задания слотов).
 - `Invariants/RegistryCoverageTests` роняет сборку, если у записи P1 нет теста на её `enforcement`, если тест ссылается на неизвестную запись, запись P2 или запись другого уровня, а классы серверных уровней не работают с PostgreSQL. Запись `infra` может закрыть и IaC-проверка: её кортеж `INVARIANTS` в `tools/iac/check_arm.py` читается тестом.
-- Записи P2 (агент Windows) — по одному явно пропущенному тесту на запись с причиной: агент, API агента и правила устройств (WP-09…WP-12) ещё не построены.
+- Записи P2 (агент Windows) — по одному явно пропущенному тесту на запись с причиной: API агента и правила устройств (WP-10) ещё не построены. Записи уровня `agent` (INV-105…111, 113, 114, 116, 152…154) проверены в `tests/Sikkerheit.Agent.Tests` атрибутом `[Invariant]` того проекта; перенос отметок в реестр — отдельный шаг.
 - Реестр в пакете 0.3.0 местами старше решений, уже внесённых в код (F01, F03, F04, F10, F11, access token v1): такие тесты проверяют поведение по решению, а `Decision` атрибута называет его. Тексты 0.3.1 совпадают с этим поведением; новые записи 0.3.1 потребуют своих тестов — проверка покрытия перечислит их.
 - Чтобы добавить запись: тест в класс её уровня с атрибутом `[Invariant]`; общий сценарий — `Support/ContractHost.cs`. Инфраструктура интеграционных тестов (`ApiFactory`, `PostgresFixture`, поддельный Graph, `LogCapture`) подключена в проект ссылками на файлы.
 
@@ -96,6 +102,15 @@ Identity: в Azure (задан `SecurityLog:ContainerUri`) журнал безо
   - `Exports` — ZIP-экспорт с манифестом и SHA-256;
   - `Jobs` — очередь заданий (`JobQueue`, единственный владелец таблицы `job`), исполнитель с lease, планировщик; удаление организации и сроки хранения вызывают методы модулей-владельцев.
 - Каждый ответ API в интеграционных тестах сверяется со схемой OpenAPI, заголовки выдачи файлов — со схемами заголовков операции.
+
+## Устройство агента (P2, WP-09)
+
+Агент — отдельные проекты `src/Agent/Sikkerheit.Agent` (служба) и `src/Agent/Sikkerheit.Agent.Collectors` (сборщики); сервис их не использует, а они — только `Sikkerheit.Contracts` (схемы и каталог). Всё, что не зависит от Windows, проверяется тестами `tests/Sikkerheit.Agent.Tests`; Windows-слой лежит в папках `Windows/` и только компилируется на других ОС (`EnableWindowsTargeting`, защита `OperatingSystem.IsWindows()`).
+
+- `Sikkerheit.Agent.Collectors`: `ICollector` и `CollectorOutcome` (факт или причина недоступности), `Readers.cs` — интерфейсы читателей фактов Windows, `Collectors.cs` — сборщики WIN-001…011 и фиксированный набор `CollectorSet`, `Mapping/` — чистое отображение сырых значений в перечисления контракта (состояния WSC и Defender, классы членов группы администраторов), `Runtime/CollectorRunner` — один поток на сборщик (STA для COM), 30 с на сборщик и 120 с на сессию, счётчик оставленных потоков; `Windows/` — реализации читателей (реестр, WMI, COM, Win32, LSA) и `WindowsReaderFactory`.
+- `Sikkerheit.Agent`: `Protocol/` — base64url, отпечаток JWK по RFC 7638, подписываемые строки, признак машины; `Keys/` — интерфейсы ключа устройства и защиты секрета; `Windows/WindowsKeys.cs` — CNG (TPM, затем MSKSP), DPAPI, права каталога данных; `Storage/` — SQLite (`AgentDatabase`, `AgentStateStore`, `BatchBuffer`: лимиты по размеру и дням, перенумерация очереди); `Api/` — клиент HTTP и таблица действий по ответам (`ProblemPolicy` из каталога); `Config/` — строгий разбор конфигурации по схеме; `Scan/ScanBatchBuilder` — пакет и проверка каждого наблюдения схемой; `Runtime/AgentStateMachine` — таблица автомата как чистая функция, `AgentEngine` — шаги по состоянию (регистрация, сессия, check-in, отправка, сбор), `AgentWorker` — цикл службы; `Program.cs` — сборка службы.
+- Тесты: `Support/FakeServer` — сервер API агента в памяти (настоящие nonce с HMAC, проверка подписей, схемы OpenAPI, порядок отказов по `05`), программный ключ ECDSA P-256 вместо CNG, ручные часы, заглушки сборщиков с evidence из `examples/scan-batch.json`.
+- Настройки службы: раздел `Agent` (`appsettings.json` рядом с файлом службы или переменные `SIKKERHEIT_Agent__ServerUrl`, `…DataDirectory`, `…Proxy`); `ServerUrl` — только https. Ключ регистрации не настройка: его кладёт скрипт RMM файлом `enrollment.key` в каталог данных (`04`).
 
 ## Отличия от структуры `02`
 

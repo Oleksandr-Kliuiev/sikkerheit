@@ -113,6 +113,7 @@
 | Задания и планировщик | `Jobs/` (`JobQueue`, `JobRunner`, `Scheduler`) | `ReportPeriodTests`, интеграционные тесты заданий |
 | Журнал безопасности, аудит, файлы, идемпотентность | `Operations/` | через API-тесты, `InfraInvariantTests` |
 | Восстановление после PITR (RB-05) | `Operations/RestoreReplay.cs`, `RestoreReplayCommand.cs` (`dotnet Sikkerheit.Host.dll restore-replay --since <T>`) | `RestoreReplayTests`, `InfraInvariantTests`, `Operations/RestoreReplayCommandTests` |
+| Агент Windows (WP-09): служба, сборщики WIN-001…011, буфер, регистрация, сессия, check-in, автомат | `src/Agent/Sikkerheit.Agent` (`Runtime/AgentEngine*.cs`, `AgentStateMachine.cs`, `Storage/BatchBuffer.cs`, `Api/`, `Scan/`, `Protocol/`, `Windows/WindowsKeys.cs`), `src/Agent/Sikkerheit.Agent.Collectors` (`Collectors.cs`, `Mapping/`, `Windows/`, `Runtime/CollectorRunner.cs`) | `tests/Sikkerheit.Agent.Tests` (`AgentInvariantTests`, `StateMachineTests`, `CollectorInvariantTests`, `Support/FakeServer.cs`); проверка на Windows — `dev/agent-windows-verification.md` |
 | Негативные тесты реестра инвариантов (WP-01) | `tests/Sikkerheit.ContractTests`: классы по `enforcement`, `Invariants/` (атрибуты, реестр, проверка покрытия), `Support/ContractHost.cs` | `RegistryCoverageTests` |
 | Границы модулей | Владельцы таблиц и принятые владельцем исключения (сейчас нет) — `tests/Sikkerheit.UnitTests/Architecture/ModuleBoundaryTests.cs`; интерфейсы модулей и сквозные операции — `dev/module-boundaries.md` | `ModuleBoundaryTests` |
 | Problem, курсоры, заголовки, телеметрия | `Platform/` | `PortalHostingTests` |
@@ -121,7 +122,7 @@
 | Runbooks P1 (RB-01…RB-07, RB-14) | `runbooks/` (путь от `docs/`): указатель и шаблон протокола — `README.md` | — |
 | Локальная разработка | `tools/dev/` (база в Docker, демо-данные), `.claude/launch.json` | — |
 
-Отступления реализации от пакета и вопросы к 0.3.1 — `reviews/0.3.0-decisions.md`, раздел «Реализация P1».
+Отступления реализации от пакета и вопросы к 0.3.1 — `reviews/0.3.0-decisions.md`, разделы «Реализация P1» и «Реализация P2» (агент).
 
 ### Журналы и отчёты (вне пакета)
 
