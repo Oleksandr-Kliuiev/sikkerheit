@@ -54,7 +54,7 @@ class ScriptCase(unittest.TestCase):
                             "AZ_RULES": str(self.rules_file), "TMPDIR": str(self.tmp)})
         environment.update(env or {})
         return subprocess.run(["bash", str(self.root / "infra" / "scripts" / name), *args], env=environment,
-                              capture_output=True, text=True, timeout=120, check=False)
+                              capture_output=True, text=True, errors="replace", timeout=120, check=False)
 
     def az_calls(self):
         """The journal of az: one line per call, the arguments after «az»."""

@@ -94,7 +94,7 @@ resolve_database_storage() {
   current="$(az postgres flexible-server show --resource-group "$group" --name "$database_server" --query storage.storageSizeGb -o tsv)" \
     || { echo "Cannot read the disk size of $database_server: stopping before the deployment" >&2; return 1; }
   if [[ ! "$current" =~ ^[0-9]+$ ]]; then
-    echo "Unexpected disk size «$current» of $database_server: stopping before the deployment" >&2; return 1
+    echo "Unexpected disk size '${current}' of ${database_server}: stopping before the deployment" >&2; return 1
   fi
   echo $(( current > minimum ? current : minimum ))
 }

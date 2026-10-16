@@ -18,8 +18,9 @@ def app_settings(host=HOST):
     return f"Host={host}.postgres.database.azure.com;Database=sikkerheit;Username=x" if host else ""
 
 
-def rules(site="app-sikkerheit-prod-ab12c", connection=app_settings(), server_found=True, extra=()):
-    return [*extra,
+def rules(site="app-sikkerheit-prod-ab12c", connection=app_settings(), server_found=True, extra=(), disk=rule(
+        r"^postgres flexible-server show .*storageSizeGb", out="32")):
+    return [*extra, disk,
             rule(r"^account show --query tenantId", out="tenant-1"),
             rule(r"^account show --query name", out="Subscription"),
             rule(r"^ad signed-in-user show", out="me-1"),
@@ -45,6 +46,28 @@ class SetupTests(ScriptCase):
         self.assertNotEqual(result.returncode, 0, self.describe(result))
         self.assertEqual(self.deployments(), [], "the run deployed after a refusal\n" + self.describe(result))
 
+    def storage(self):
+        return [d for d in self.deployments() if "databaseStorageGb=" in d]
+
+    def test_grown_disk_is_never_shrunk(self):
+        result = self.setup_run(disk=rule(r"^postgres flexible-server show .*storageSizeGb", out="64"))
+        self.assertEqual(result.returncode, 0, self.describe(result))
+        self.assertEqual(len(self.storage()), 2)
+        for deployment in self.storage():
+            self.assertIn("databaseStorageGb=64 ", deployment + " ")
+
+    def test_first_install_gets_the_disk_of_the_template(self):
+        result = self.setup_run(site="", connection="")
+        self.assertEqual(result.returncode, 0, self.describe(result))
+        for deployment in self.storage():
+            self.assertIn("databaseStorageGb=32 ", deployment + " ")
+
+    def test_unreadable_disk_size_stops_before_the_deployment(self):
+        for disk in (rule(r"^postgres flexible-server show .*storageSizeGb", rc=1, err="throttled"),
+                     rule(r"^postgres flexible-server show .*storageSizeGb", out="")):
+            self.setUp()
+            self.assert_stopped_before_deployment(self.setup_run(disk=disk))
+
     def test_first_install_lets_bicep_create_the_server(self):
         result = self.setup_run(site="", connection="")
         self.assertEqual(result.returncode, 0, self.describe(result))
@@ -59,7 +82,7 @@ class SetupTests(ScriptCase):
         self.assertEqual(len(self.deployments()), 2)
         for deployment in self.deployments():
             self.assertIn("databaseServerName=" + HOST + " ", deployment + " ")
-        self.assertEqual(len(self.calls_matching("flexible-server show --resource-group " + GROUP + " --name " + HOST)), 1)
+        self.assertEqual(len(self.calls_matching("flexible-server show --resource-group " + GROUP + " --name " + HOST)), 2)  # existence check and disk size
 
     def test_repeated_install_with_the_same_server_in_the_variable(self):
         result = self.setup_run(env={"SIKKERHEIT_DATABASE_SERVER": HOST})
