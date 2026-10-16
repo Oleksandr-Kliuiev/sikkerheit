@@ -1,5 +1,6 @@
 // PostgreSQL 17 Flexible Server: private access only, Entra sign-in only (no passwords), PITR 14 days (06 «Ресурсы»).
-param name string
+// After a restore (RB-05) the server is the restored one: the template then applies these settings to it.
+param serverName string
 param location string
 param tenantId string
 param skuName string
@@ -10,7 +11,7 @@ param adminPrincipalId string
 param adminPrincipalName string
 
 resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
-  name: 'psql-${name}'
+  name: serverName
   location: location
   sku: { name: skuName, tier: 'Burstable' }
   properties: {
@@ -36,5 +37,6 @@ resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-0
   dependsOn: [ admin ]
 }
 
+output serverName string = server.name
 output host string = server.properties.fullyQualifiedDomainName
 output serverId string = server.id

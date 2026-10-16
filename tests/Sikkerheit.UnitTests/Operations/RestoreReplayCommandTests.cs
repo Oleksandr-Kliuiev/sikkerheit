@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Sikkerheit.Host.Operations;
 using Sikkerheit.Host.Organizations;
 using Sikkerheit.Host.Reports;
@@ -34,6 +36,52 @@ public sealed class RestoreReplayCommandTests
     {
         Assert.Null(RestoreReplayCommand.Parse(args, Now, out var error));
         Assert.StartsWith(message, error, StringComparison.Ordinal);
+    }
+
+    private static IConfiguration Settings(params (string Key, string Value)[] values) =>
+        new ConfigurationBuilder().AddInMemoryCollection(values.ToDictionary(v => v.Key, v => (string?)v.Value)).Build();
+
+    private static readonly (string, string) LogContainer = ("SecurityLog:ContainerUri", "https://stexample.blob.core.windows.net/security-log");
+    private static readonly (string, string) Account = ("Storage:BlobServiceUri", "https://stexample.blob.core.windows.net/");
+
+    [Fact]
+    public void In_azure_the_journal_is_read_with_the_restore_identity_and_a_drill_reads_the_files_with_it_too()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "sikkerheit-tests", Guid.NewGuid().ToString("N"));
+        var log = new FileSecurityLog(Path.Combine(directory, "log"));
+        var files = new LocalFileStore(Path.Combine(directory, "files"));
+        using var services = new ServiceCollection().AddSingleton<ISecurityLog>(log).AddSingleton<IFileStore>(files)
+            .BuildServiceProvider();
+
+        // Development and tests: the local stores of the service.
+        var local = RestoreReplayCommand.StoresOf(services, Settings(), drill: true, out var none);
+        Assert.Null(none);
+        Assert.Same(log, local!.SecurityLog);
+        Assert.Same(files, local.Files);
+
+        Assert.Null(RestoreReplayCommand.StoresOf(services, Settings(LogContainer, Account), drill: false, out var refusal));
+        Assert.StartsWith("Restore__ManagedIdentityClientId is not set", refusal, StringComparison.Ordinal);
+
+        var azure = Settings(LogContainer, Account, (RestoreReplayCommand.IdentitySetting, "77777777-7777-7777-7777-777777777777"));
+        var restore = RestoreReplayCommand.StoresOf(services, azure, drill: false, out _)!;
+        Assert.IsType<BlobSecurityLog>(restore.SecurityLog);
+        // A real restore moves files to quarantine: they stay with the store of the service and its slot identity.
+        Assert.Same(files, restore.Files);
+        var drill = RestoreReplayCommand.StoresOf(services, azure, drill: true, out _)!;
+        Assert.IsType<BlobSecurityLog>(drill.SecurityLog);
+        Assert.IsType<BlobFileStore>(drill.Files);
+    }
+
+    [Fact]
+    public async Task The_command_refuses_azure_without_the_restore_identity()
+    {
+        var configuration = Settings(("Jobs:Enabled", "false"), LogContainer, Account);
+        await using var services = new ServiceCollection().AddSingleton(configuration).AddSingleton(TimeProvider.System)
+            .AddLogging().BuildServiceProvider();
+        var errors = new StringWriter();
+        Assert.Equal(2, await RestoreReplayCommand.RunAsync(services, ["--since", "2026-10-01T08:00:00Z"], TextWriter.Null,
+            errors, TestContext.Current.CancellationToken));
+        Assert.Contains("Restore__ManagedIdentityClientId is not set", errors.ToString(), StringComparison.Ordinal);
     }
 
     [Theory]

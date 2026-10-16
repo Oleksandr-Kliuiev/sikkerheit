@@ -18,7 +18,7 @@ Operations выполняет; Security Owner принимает решение 
 
 ## Предусловия и доступы
 
-- `az login`; Owner или Contributor на подписке (учебное восстановление назначает роли — нужен Owner). Рабочая станция с `jq`; роль Admin в портале.
+- `az login`; Owner или Contributor на подписке. Рабочая станция с `jq`; роль Admin в портале. Owner (или User Access Administrator) нужен для временной роли на шаге 5, Owner и Application Administrator в Entra — для `setup.sh` после восстановления: он назначает роли и меняет регистрации приложений. Для учения хватает Contributor; ещё нужны `unzip`, `openssl` и сборка сервиса (Node, .NET SDK), если не передан готовый архив.
 - `<site>`, `<server>`, `<storage>`, `<prod-host>` — README, «Имена ресурсов».
 - Точка T (UTC, ISO 8601, раньше начала повреждения) утверждена Security Owner и записана в протокол. Самая ранняя доступная точка:
 
@@ -105,7 +105,7 @@ az webapp config appsettings set --resource-group rg-sikkerheit-prod --name <sit
 
 ### 3. Повторить журнал безопасности
 
-Команда запускается в контейнере production-слота и читает журнал безопасности и файлы Blob его identity. У этой identity право записи в хранилище (Storage Blob Data Contributor), а не только чтение, как требует `04` для команды восстановления; изменить записи журнала не даёт заблокированная неизменяемость. Сессия SSH (если CLI её не открывает — Azure portal → `<site>` → SSH):
+Команда запускается в контейнере production-слота. Журнал безопасности она читает identity восстановления `id-sikkerheit-prod-restore`: у неё только Storage Blob Data Reader на `security-log`, `reports` и `exports`, как требует `04` для команды восстановления, а её client id лежит в настройке слота `Restore__ManagedIdentityClientId`. Файлы отчётов и экспорта без строк команда переносит в карантин, а файлы удалённых организаций удаляет identity production-слота (Storage Blob Data Contributor): шагу 5 и повтору `organization.delete` нужна запись в Blob. С `--drill` и файлы читаются identity восстановления, поэтому учение перенести их не может. Сессия SSH (если CLI её не открывает — Azure portal → `<site>` → SSH):
 
 ```bash
 az webapp ssh --resource-group rg-sikkerheit-prod --name <site>
@@ -129,6 +129,32 @@ printenv ConnectionStrings__Sikkerheit
 az webapp restart --resource-group rg-sikkerheit-prod --name <site>
 ```
 
+Ожидается client id `id-sikkerheit-prod-restore`; без него команда завершится с кодом 2:
+
+```bash
+printenv Restore__ManagedIdentityClientId
+```
+
+Если переменная пуста, identity восстановления не назначена слоту: шаблон применён не полностью. Назначить её вручную (`setup.sh` во время восстановления не запускать: он включает задания), затем, когда приложение перезапустится, войти в сессию снова. Первая команда даёт `<restore-identity-id>`, `<restore-client-id>` и `<restore-principal-id>`; если identity нет, передать разработчику.
+
+```bash
+az identity show --resource-group rg-sikkerheit-prod --name id-sikkerheit-prod-restore --query "{id:id, clientId:clientId, principalId:principalId}" -o json
+```
+
+Ожидается Storage Blob Data Reader на контейнерах `security-log`, `reports` и `exports`; без этих ролей команда завершится с кодом 1 и ошибкой 403 — передать разработчику (роли назначает Owner):
+
+```bash
+az role assignment list --assignee <restore-principal-id> --all --query "[].{role:roleDefinitionName, scope:scope}" -o table
+```
+
+```bash
+az webapp identity assign --resource-group rg-sikkerheit-prod --name <site> --identities <restore-identity-id>
+```
+
+```bash
+az webapp config appsettings set --resource-group rg-sikkerheit-prod --name <site> --slot-settings Restore__ManagedIdentityClientId=<restore-client-id>
+```
+
 Endpoint managed identity доступен в сессии:
 
 ```bash
@@ -145,7 +171,7 @@ cd /home/site/wwwroot && dotnet Sikkerheit.Host.dll restore-replay --since <T> -
 echo $?
 ```
 
-Код 0 — выполнено и проверено; 1 — сбой или проверка не прошла (причина — в stderr и `verification.problems`); 2 — неверные аргументы или задания включены. Команда идемпотентна: после устранения причины её повторяют с тем же `--since`.
+Код 0 — выполнено и проверено; 1 — сбой или проверка не прошла (причина — в stderr и `verification.problems`); 2 — неверные аргументы, задания включены или нет `Restore__ManagedIdentityClientId`. Команда идемпотентна: после устранения причины её повторяют с тем же `--since`.
 
 Команда читает журнал с T − 5 минут по времени и применяет `organization.disable`, `organization.schedule_deletion` (срок не раньше now + 7 суток), `organization.cancel_deletion`, `organization.delete` (состоявшееся удаление повторяется сразу, находка F11) и `m365.disconnect`; каждая применённая запись пишет аудит `restore.replay_applied`. Записи P2 (`device.revoke`, `enrollment_key.revoke`) в P1 пропускаются с причиной `p2_not_implemented`.
 
@@ -263,7 +289,13 @@ az webapp config access-restriction set --resource-group rg-sikkerheit-prod --na
   az postgres flexible-server stop --resource-group rg-sikkerheit-prod --name <server>
   ```
 
-- Bicep (`psql-sikkerheit-prod-<5>` в `main.bicep`) и `infra/.state/prod.json` указывают на старый сервер: до их исправления не запускать `infra/scripts/setup.sh` и развёртывание Bicep — они вернут строки подключения к старому серверу. Выпуск кода (`deploy-app.sh`) настроек не меняет. Задачу разработчику записать в протокол.
+- В тот же день после шага 8 привести Bicep к новому серверу. Шаблон заново применит к нему свои настройки: PITR 14 суток, вход только Entra, администратор Entra, база `sikkerheit`. `infra/.state/prod.json` получит новые `databaseServerName` и `databaseHost`. Раньше шага 8 `setup.sh` не запускать: он возвращает настройки `main.bicep`, в том числе `Jobs__Enabled=true`. `<alert-email>` — адрес оповещений, заданный при установке.
+
+  ```bash
+  SIKKERHEIT_ALERT_EMAIL=<alert-email> SIKKERHEIT_DATABASE_SERVER=<new-server> infra/scripts/setup.sh prod
+  ```
+
+  Скрипт проверяет, что `<new-server>` есть в группе и что на нём уже работает production-слот (шаг 2), и передаёт его в параметр `databaseServerName` шаблона. Строки подключения обоих слотов остаются на `<new-fqdn>`. Без переменной `setup.sh` берёт сервер из строки подключения production-слота, поэтому и запуск с другой машины, где `infra/.state` старый, не вернёт сервис на старый сервер. Имя, которого нет в группе или которое расходится со строкой подключения (например, старый сервер), и сбой `az` останавливают скрипт до развёртывания. Выпуск кода (`deploy-app.sh`) строк подключения не меняет; test на время выпуска берёт адрес базы из строки подключения приложения.
 - P2: агенты, зарегистрированные после T, получают `device_unknown` и регистрируются заново; новый ключ регистрации раздаётся через RMM (RB-10).
 
 ## Проверка результата
@@ -276,127 +308,51 @@ az webapp config access-restriction set --resource-group rg-sikkerheit-prod --na
 
 ## Учебное восстановление
 
-До пилота M365 и затем раз в квартал (`06`). Резервная копия production восстанавливается в изолированную группу `rg-sikkerheit-drill` без входящего доступа и без сбора M365. Журнал безопасности и файлы production учебный экземпляр читает с ролью Storage Blob Data Reader, поэтому файлы только перечисляются (`--drill`). После измерения RTO группа удаляется. Сценарий пока не автоматизирован; что подтверждается впервые — README, «Что подтвердить в реальном окружении». Перенос файлов в карантин проверяется на test (AT-11): шаги 1–8 в `rg-sikkerheit-test` без `--drill`, у test нет слота и одна строка подключения.
+До пилота M365 и затем раз в квартал (`06`). Резервная копия production восстанавливается в изолированную группу `rg-sikkerheit-drill` без входящего доступа и без сбора M365; сценарий выполняет `infra/scripts/drill.sh`, в `rg-sikkerheit-prod` он только читает. Журнал безопасности и файлы production учебный экземпляр читает identity восстановления `id-sikkerheit-prod-restore` (только Storage Blob Data Reader), поэтому файлы только перечисляются (`--drill`), а ролей на хранилище production учение не назначает. После измерения RTO группа удаляется: в ней копия данных клиентов. Что подтверждается впервые — README, «Что подтвердить в реальном окружении». Перенос файлов в карантин проверяется на test (AT-11): шаги 1–8 в `rg-sikkerheit-test` без `--drill`, у test нет слота и одна строка подключения.
 
-RTO учения — от запуска `az postgres flexible-server restore` до прохождения проверки отчёта; подготовка сети и приложения в него не входит.
+RTO учения — от запуска PITR (Д3) до прохождения проверки отчёта (Д6). Группа, сеть и учебный экземпляр готовятся до PITR и в RTO не входят. Скрипт печатает время UTC каждого шага для протокола.
 
-Д1. Группа и сеть; `<location>` — регион production:
-
-```bash
-az group create --name rg-sikkerheit-drill --location <location> --tags app=sikkerheit environment=drill
-```
+Д1–Д4. Checkout тега версии, которая работает в production: скрипт собирает её так же, как `infra/scripts/deploy-app.sh`, или берёт готовый архив этой версии (`--package <архив>`). `<T>` — в UTC с `Z`, не раньше `earliestRestoreDate` (раздел «Предусловия и доступы»).
 
 ```bash
-az network vnet create --resource-group rg-sikkerheit-drill --name vnet-sikkerheit-drill --address-prefixes 10.41.0.0/16
+infra/scripts/drill.sh start --since <T>
 ```
+
+- Д1 — группа `rg-sikkerheit-drill` с тегом `environment=drill` и сеть из того же `infra/bicep/modules/network.bicep`, что в production: `vnet-sikkerheit-drill` с подсетями `app` и `database`, зона `sikkerheit-drill.private.postgres.database.azure.com`.
+- Д2 — учебный экземпляр `app-sikkerheit-drill-<yyyymmddhhmm>-<4>` на B1. Доступ закрывается сразу после создания; включены Always On и журнал контейнера в файловой системе.
+  - Identity: системная; identity миграций production — она создаёт роль `sikkerheit-drill` в восстановленной копии, как слот `staging` в production; identity восстановления.
+  - Настройки: окружение `Drill`, задания выключены, без `M365__*` и входа Entra (процесс стартует без производственных ключей Key Vault), хранилище и журнал безопасности production, `Restore__ManagedIdentityClientId`. Application Insights не подключается.
+- Д3 — PITR сервера, на котором сейчас работает production (он берётся из строки подключения production-слота), в `psql-sikkerheit-drill-<yyyymmddhhmm>`. Затем проверки шага 2: `Ready`, без публичного доступа, вход только Entra, администратор Entra — identity миграций. Если вход Entra или администратор не перенеслись, скрипт их возвращает.
+- Д4 — строки подключения к восстановленному серверу и выпуск. Миграции при старте создают роль `sikkerheit-drill`; `az webapp deploy` ждёт запуска.
+
+Д5. Команда восстановления — шаг 3 с `--drill`, вручную в SSH. `start` печатает точные команды: `az webapp ssh`, проверку `Jobs__Enabled` и `Restore__ManagedIdentityClientId`, запуск с `--report /home/LogFiles/restore-drill-<yyyymmddhhmm>.json` и `echo $?`.
+
+Д6. Проверка отчёта и RTO:
 
 ```bash
-az network vnet subnet create --resource-group rg-sikkerheit-drill --vnet-name vnet-sikkerheit-drill --name app --address-prefixes 10.41.1.0/24 --delegations Microsoft.Web/serverFarms
+infra/scripts/drill.sh check
 ```
+
+Скрипт скачивает журнал экземпляра (`az webapp log download`), сохраняет отчёт в `infra/.state/drill/` и печатает сводку шага 3. Учение не прошло, если:
+
+- отчёт не учебный (`drill` — не `true`) или точка в нём не `<T>`;
+- `verification.passed` — не `true`;
+- хотя бы один файл перенесён (`moved` — `true`);
+- RTO больше 4 часов.
+
+Остальное сверить с AT-11, часть P1: все ограничивающие действия после T применены; отменённое удаление не исполнено; ни одна организация не удаляется раньше 7 суток; номера ревизий не повторяются.
+
+Д7. Удаление группы, в том числе после неудачного `start`:
 
 ```bash
-az network vnet subnet create --resource-group rg-sikkerheit-drill --vnet-name vnet-sikkerheit-drill --name database --address-prefixes 10.41.2.0/24 --delegations Microsoft.DBforPostgreSQL/flexibleServers
+infra/scripts/drill.sh cleanup
 ```
 
-```bash
-az network private-dns zone create --resource-group rg-sikkerheit-drill --name sikkerheit-drill.private.postgres.database.azure.com
-```
-
-```bash
-az network private-dns link vnet create --resource-group rg-sikkerheit-drill --zone-name sikkerheit-drill.private.postgres.database.azure.com --name vnet-sikkerheit-drill --virtual-network vnet-sikkerheit-drill --registration-enabled false
-```
-
-Д2. PITR из production; группа другая, поэтому источник — resource ID сервера:
-
-```bash
-az postgres flexible-server show --resource-group rg-sikkerheit-prod --name <server> --query id -o tsv
-```
-
-```bash
-az postgres flexible-server restore --resource-group rg-sikkerheit-drill --name psql-sikkerheit-drill-<yyyymmdd> --source-server <server-resource-id> --restore-time <T> --vnet vnet-sikkerheit-drill --subnet database --private-dns-zone sikkerheit-drill.private.postgres.database.azure.com
-```
-
-Проверить сервер и администратора Entra, как на шаге 2, с `--resource-group rg-sikkerheit-drill`; `fqdn` — это `<drill-fqdn>`.
-
-Д3. Учебный экземпляр сервиса без входящего доступа; `<drill-site>` — глобально уникальное имя, например `app-sikkerheit-drill-<yyyymmdd>`. Данных в нём нет до Д7, а доступ закрывается сразу после создания.
-
-```bash
-az appservice plan create --resource-group rg-sikkerheit-drill --name asp-sikkerheit-drill --is-linux --sku B1
-```
-
-```bash
-az webapp create --resource-group rg-sikkerheit-drill --plan asp-sikkerheit-drill --name <drill-site> --runtime "DOTNETCORE:10.0" --startup-file "dotnet Sikkerheit.Host.dll" --https-only true --vnet vnet-sikkerheit-drill --subnet app
-```
-
-Если CLI не примет `--runtime`, взять значение из списка:
-
-```bash
-az webapp list-runtimes --os linux
-```
-
-```bash
-az webapp config access-restriction set --resource-group rg-sikkerheit-drill --name <drill-site> --default-action Deny
-```
-
-Д4. Две identity: системная — права учебного экземпляра, и identity миграций production — чтобы мигратор при старте создал роль `sikkerheit-drill` в восстановленной копии, как слот `staging` делает в production. Сети из учебной VNet до production-сервера нет. Первая команда даёт `<migrations-identity-id>` и `<migrations-client-id>`, вторая выводит `principalId` системной identity — это `<drill-principal-id>`.
-
-```bash
-az identity show --resource-group rg-sikkerheit-prod --name id-sikkerheit-prod-migrations --query "{id:id, clientId:clientId}" -o json
-```
-
-```bash
-az webapp identity assign --resource-group rg-sikkerheit-drill --name <drill-site> --identities [system] <migrations-identity-id>
-```
-
-Д5. Чтение журнала и файлов production — по одной команде на контейнеры `security-log`, `reports`, `exports` (`<storage-id>` — шаг 5):
-
-```bash
-az role assignment create --assignee-object-id <drill-principal-id> --assignee-principal-type ServicePrincipal --role "Storage Blob Data Reader" --scope <storage-id>/blobServices/default/containers/<container>
-```
-
-Д6. Настройки: без `M365__*` и без входа Entra (сбора нет), задания выключены, окружение `Drill` — процесс стартует без производственных ключей Key Vault; Application Insights не подключается, журнал учения смотрят через `az webapp log tail`:
-
-```bash
-az webapp config appsettings set --resource-group rg-sikkerheit-drill --name <drill-site> --settings ASPNETCORE_ENVIRONMENT=Drill Jobs__Enabled=false Database__EntraAuth=true Database__AppRole=sikkerheit_app Database__MigrateOnStart=true "ConnectionStrings__Sikkerheit=Host=<drill-fqdn>;Database=sikkerheit;Username=sikkerheit-drill;Ssl Mode=VerifyFull" "ConnectionStrings__SikkerheitOwner=Host=<drill-fqdn>;Database=sikkerheit;Username=id-sikkerheit-prod-migrations;Ssl Mode=VerifyFull" Database__OwnerIdentityClientId=<migrations-client-id> Database__AppPrincipals__0__Name=sikkerheit-drill Database__AppPrincipals__0__ObjectId=<drill-principal-id> Storage__BlobServiceUri=https://<storage>.blob.core.windows.net/ SecurityLog__ContainerUri=https://<storage>.blob.core.windows.net/security-log
-```
-
-Д7. Развернуть версию, работающую в production: архив собрать из checkout её тега так же, как `infra/scripts/deploy-app.sh` (сборка портала, `dotnet publish`, zip). В журнале запуска ожидается `Created database role for managed identity sikkerheit-drill`.
-
-```bash
-az webapp deploy --resource-group rg-sikkerheit-drill --name <drill-site> --src-path app.zip --type zip
-```
-
-```bash
-az webapp log tail --resource-group rg-sikkerheit-drill --name <drill-site>
-```
-
-Д8. Шаг 3 с `--resource-group rg-sikkerheit-drill --name <drill-site>` (`Jobs__Enabled` — `false`, строка подключения — `<drill-fqdn>`), команда — с `--drill`:
-
-```bash
-cd /home/site/wwwroot && dotnet Sikkerheit.Host.dll restore-replay --since <T> --drill --report /home/LogFiles/restore-drill-<yyyymmdd>.json
-```
-
-Скачать отчёт:
-
-```bash
-az webapp log download --resource-group rg-sikkerheit-drill --name <drill-site> --log-file restore-drill-logs-<yyyymmdd>.zip
-```
-
-Сверить с AT-11, часть P1: все ограничивающие действия после T применены; отменённое удаление не исполнено; ни одна организация не удаляется раньше 7 суток; номера ревизий не повторяются; файлы без строк только перечислены (`moved` — `false`); RTO не больше 4 часов.
-
-Д9. Снять роли учебной identity с production-хранилища (по одной команде на контейнер), затем удалить группу — в ней копия данных клиентов:
-
-```bash
-az role assignment delete --assignee-object-id <drill-principal-id> --role "Storage Blob Data Reader" --scope <storage-id>/blobServices/default/containers/<container>
-```
-
-```bash
-az group delete --name rg-sikkerheit-drill --yes
-```
+Скрипт удаляет только группу с тегом `environment=drill` и ждёт окончания удаления. Отчёт из `infra/.state/drill/` приложить к протоколу, затем удалить с рабочей станции.
 
 ## Запись в протокол
 
-Шаблон — [README](README.md), раздел «Протокол». Записать T и основание выбора; время начала и конца каждого из восьми шагов (для учения — Д1–Д9); имена старого и нового серверов; отчёт команды файлом и его сводку (`recordsRead`, применённые записи, `deletionsPostponed`, `policyEpochs`, `orphanFiles`, `verification`); перечень шага 7 и кто что повторил; RTO. Для учения — также снятие ролей и удаление группы.
+Шаблон — [README](README.md), раздел «Протокол». Записать T и основание выбора; время начала и конца каждого из восьми шагов (для учения — Д1–Д7, время печатает `drill.sh`); имена старого и нового серверов; отчёт команды файлом и его сводку (`recordsRead`, применённые записи, `deletionsPostponed`, `policyEpochs`, `orphanFiles`, `verification`); перечень шага 7 и кто что повторил; RTO. Для учения — также удаление группы (`drill.sh cleanup`).
 
 ## Связанные документы
 
@@ -405,4 +361,4 @@ az group delete --name rg-sikkerheit-drill --yes
 - [05-data-and-api.md](../../development-package/05-data-and-api.md) — «Жизненный цикл организации», «Фоновые задания и планировщик».
 - [07-delivery-plan-and-acceptance.md](../../development-package/07-delivery-plan-and-acceptance.md) — AT-09, AT-11.
 - [0.3.0-decisions.md](../reviews/0.3.0-decisions.md) — находки F10, F11; [dev/README.md](../dev/README.md) — «Восстановление после PITR» (устройство команды).
-- [infra/README.md](../../infra/README.md); [RB-04](RB-04-jobs-and-scheduler.md), [RB-06](RB-06-security-incident.md).
+- [infra/README.md](../../infra/README.md) — «Восстановление базы», «Учебное восстановление»; [RB-04](RB-04-jobs-and-scheduler.md), [RB-06](RB-06-security-incident.md).

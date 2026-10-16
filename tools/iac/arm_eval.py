@@ -2,8 +2,9 @@
 
 It expands copy loops, evaluates conditions and nested deployment parameters, and resolves reference() of a nested
 deployment to that deployment's outputs. Values that exist only at deployment time (reference() of a resource,
-uniqueString(), the subscription in a resource id) stay Unknown, or Partial inside strings; a function or form it does
-not support raises CannotEvaluate instead of a guess. Standard library only.
+uniqueString(), the subscription in a resource id) stay Unknown, or Partial inside strings; an Unknown from reference()
+keeps the referenced resource id and property path in its source, so a check can tell whose principalId it is. A
+function or form it does not support raises CannotEvaluate instead of a guess. Standard library only.
 """
 import copy
 import json
@@ -15,13 +16,13 @@ class CannotEvaluate(Exception):
 
 
 class Unknown:
-    """A value known only at deployment time; origin is the function that produced it."""
+    """A value known only at deployment time; origin is the function that produced it, source what reference() read."""
 
-    def __init__(self, origin):
-        self.origin = origin
+    def __init__(self, origin, source=''):
+        self.origin, self.source = origin, source
 
     def __repr__(self):
-        return f'<{self.origin}()>'
+        return f'<{self.origin}({self.source})>'
 
 
 class Partial:
@@ -242,7 +243,7 @@ def evaluate(node, scope):
 
 def member(value, key):
     if isinstance(value, Unknown):
-        return Unknown(value.origin)
+        return Unknown(value.origin, f'{value.source}.{key}' if value.source else '')
     if isinstance(value, Outputs):
         return value.get(key)
     if isinstance(value, dict) and isinstance(key, str):
@@ -333,6 +334,14 @@ def format_(pattern, *values):
     return text(parts)
 
 
+def empty(value):
+    if isinstance(value, (str, list, dict)) or value is None:
+        return not value
+    if isinstance(value, (Unknown, Partial)):
+        return Unknown('empty')
+    raise CannotEvaluate(f'empty() of {show(value)}')
+
+
 def length(value):
     if isinstance(value, (str, list, dict)):
         return len(value)
@@ -387,6 +396,7 @@ FUNCTIONS = {
     'createarray': lambda *values: list(values),
     'union': union,
     'format': format_,
+    'empty': empty,
     'length': length,
     'take': take_,
     'replace': replace,
@@ -478,7 +488,8 @@ class Scope:
             if name not in self.children:
                 self.children[name] = self.nested(self.deployments[name])
             return {'outputs': Outputs(self.children[name])}
-        return Unknown('reference')
+        target = values[0] if values else ''
+        return Unknown('reference', target if isinstance(target, str) else repr(target) if isinstance(target, Partial) else '')
 
     def nested(self, raw):
         """The scope of a nested deployment; its parameters are evaluated here, on first use."""
@@ -514,7 +525,8 @@ def missing_parameter(name):
     raise CannotEvaluate(f'parameter {name} has no value')
 
 
-def root_scope(template, environment):
+def root_scope(template, environment, overrides=None):
+    """The deployment of one environment; overrides gives other parameters values, as «--parameters» would."""
     scope = Scope(template)
     parameters = template.get('parameters') or {}
     definition = lookup(parameters, 'environmentName')
@@ -525,6 +537,8 @@ def root_scope(template, environment):
     for name, definition in parameters.items():
         if name.lower() == 'environmentname':
             scope.bindings[name] = lambda: environment
+        elif name in (overrides or {}):
+            scope.bindings[name] = lambda value=overrides[name]: value
         elif 'defaultValue' in definition:
             scope.bindings[name] = lambda raw=definition['defaultValue']: deep(raw, scope)
         else:
@@ -629,9 +643,10 @@ def raw_resources(template, parent=''):
 
 
 class Context:
-    def __init__(self, template, environment):
-        self.template, self.environment = template, environment
-        self.resources = list(walk(template, root_scope(template, environment)))
+    def __init__(self, template, environment, overrides=None):
+        self.template, self.environment, self.overrides = template, environment, overrides or {}
+        self.scope = root_scope(template, environment, overrides)
+        self.resources = list(walk(template, self.scope))
 
     def of(self, kind):
         return [resource for resource in self.resources if resource.type.lower() == kind.lower()]

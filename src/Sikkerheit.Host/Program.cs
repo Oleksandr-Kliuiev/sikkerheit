@@ -187,7 +187,7 @@ static IFileStore FileStore(IConfiguration configuration, IHostEnvironment envir
     var account = configuration["Storage:BlobServiceUri"];
     if (!string.IsNullOrEmpty(account))
     {
-        return new BlobFileStore(new Uri(account));
+        return new BlobFileStore(new Uri(account), new DefaultAzureCredential());
     }
     if (environment.IsProduction())
     {

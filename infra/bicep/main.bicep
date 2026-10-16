@@ -15,6 +15,8 @@ param monthlyBudget int = environmentName == 'prod' ? 200 : 50
 param budgetStartDate string = '${utcNow('yyyy-MM')}-01'
 @description('True once setup.sh has locked the security-log immutability policy: a locked policy accepts no PUT, only extend.')
 param securityLogLocked bool = false
+@description('PostgreSQL server of the environment. Empty: psql-sikkerheit-<env>-<5>, the server of the first install. After a restore (RB-05): the restored server, which setup.sh takes from the connection string of the app.')
+param databaseServerName string = ''
 
 var name = 'sikkerheit-${environmentName}'
 // Production deploys through a staging slot; test runs on B1, and Basic plans have no slots (06 «Ресурсы»).
@@ -37,10 +39,17 @@ resource migrations 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31
   location: location
 }
 
+// The restore command reads the security log with it, and in a drill the files too (04 «Журнал безопасности»: only
+// read). It is on the production slot, where RB-05 runs the command, and drill.sh attaches it to the drill instance.
+resource restore 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'id-${name}-restore'
+  location: location
+}
+
 module postgres 'modules/postgres.bicep' = {
   name: 'postgres'
   params: {
-    name: unique
+    serverName: empty(databaseServerName) ? 'psql-${unique}' : databaseServerName
     location: location
     tenantId: tenantId
     skuName: 'Standard_B1ms'
@@ -74,6 +83,8 @@ module app 'modules/app.bicep' = {
     migrationsIdentityId: migrations.id
     migrationsIdentityClientId: migrations.properties.clientId
     migrationsIdentityName: migrations.name
+    restoreIdentityId: restore.id
+    restoreIdentityClientId: restore.properties.clientId
     blobEndpoint: storage.outputs.blobEndpoint
     vaultName: vault.outputs.vaultName
     vaultUri: vault.outputs.vaultUri
@@ -91,6 +102,7 @@ module access 'modules/access.bicep' = {
     vaultName: vault.outputs.vaultName
     dataProtectionKeyName: vault.outputs.dataProtectionKeyName
     principalIds: stagingSlot ? [ app.outputs.productionPrincipalId, app.outputs.stagingPrincipalId ] : [ app.outputs.productionPrincipalId ]
+    restorePrincipalId: restore.properties.principalId
   }
 }
 
@@ -115,4 +127,5 @@ output productionPrincipalId string = app.outputs.productionPrincipalId
 output stagingPrincipalId string = app.outputs.stagingPrincipalId
 output vaultName string = vault.outputs.vaultName
 output storageAccountName string = storage.outputs.accountName
+output databaseServerName string = postgres.outputs.serverName
 output databaseHost string = postgres.outputs.host

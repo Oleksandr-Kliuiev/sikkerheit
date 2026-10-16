@@ -1,5 +1,5 @@
 using Azure;
-using Azure.Identity;
+using Azure.Core;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 
@@ -114,10 +114,13 @@ public sealed class LocalFileStore(string root) : IFileStore
     }
 }
 
-/// <summary>Azure: private containers of the storage account by managed identity (no account keys, no public links).</summary>
-public sealed class BlobFileStore(Uri accountUri) : IFileStore
+/// <summary>
+/// Azure: private containers of the storage account by managed identity (no account keys, no public links): the
+/// identity of the slot for the service, the restore identity for a restore drill (RestoreReplayCommand).
+/// </summary>
+public sealed class BlobFileStore(Uri accountUri, TokenCredential credential) : IFileStore
 {
-    private readonly BlobServiceClient _service = new(accountUri, new DefaultAzureCredential());
+    private readonly BlobServiceClient _service = new(accountUri, credential);
 
     private BlobContainerClient Container(string container) => FileContainers.All.Contains(container)
         ? _service.GetBlobContainerClient(container)
