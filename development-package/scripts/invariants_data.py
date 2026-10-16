@@ -1,7 +1,7 @@
 """Registry of invariants that JSON Schema does not express (source of specs/invariants.json).
 
-IDs are assigned in list order: P1, then P2. New records go to the end of their block before a release;
-after a release IDs stay stable and new records are appended to the end of the last block.
+IDs are assigned in block order (BLOCKS): P1 and P2 of 0.3.0, then the blocks added by later versions. A released
+record keeps its ID; a new record goes to the block of the version that adds it, after every earlier block.
 """
 
 DOCS = {'02': '02-architecture-and-stack.md', '03': '03-check-catalog.md', '04': '04-security-and-privacy.md',
@@ -45,6 +45,8 @@ AGENT_FSM = ('05', 'Конечный автомат агента')
 PORTAL = ('05', 'API портала')
 REPORT = ('05', 'Отчёт и покрытие')
 RESTORE = ('06', 'Резервное копирование и восстановление')
+RETENTION = ('04', 'Сроки хранения')
+RMM = ('06', 'Распространение агента через RMM')
 
 
 def http(status, code):
@@ -78,7 +80,8 @@ P1 = [
     # Staff sign-in, roles and isolation.
     ('Запрос портала без действующей сессии отклоняется.', ROLES, 'portal_api',
      'GET /api/v1/organizations без cookie.', http(401, 'session_required'), 'AT-02'),
-    ('Токен входа без признака MFA (amr без mfa), из другого tenant или без app role не создаёт сессию.',
+    ('Токен входа без признака MFA (amr без mfa в access token v1 собственного API), из другого tenant или без app '
+     'role не создаёт сессию.',
      ROLES, 'portal_api', 'Вход учётной записью без MFA.', http(401, 'session_required'), 'AT-02'),
     ('Мутация портала без X-CSRF-Token или с токеном другой сессии отклоняется.', ROLES, 'portal_api',
      'PATCH finding без заголовка X-CSRF-Token.', http(403, 'csrf_failed'), 'AT-02'),
@@ -93,7 +96,8 @@ P1 = [
     ('Без установленной области запрос к клиентской таблице возвращает 0 строк.', TENANCY, 'db_rls',
      'SELECT из finding на новом соединении без app.set_scope.', {'rows': 0}, 'AT-01'),
     ('Изменения клиентских таблиц (INSERT, UPDATE, DELETE) возможны только в области одной организации: в области '
-     'чтения all и для строк чужой организации они затрагивают 0 строк.', TENANCY, 'db_rls',
+     'чтения all и для строк чужой организации они затрагивают 0 строк или отклоняются ошибкой PostgreSQL, данные '
+     'не меняются.', TENANCY, 'db_rls',
      'DELETE FROM finding в области чтения all.', {'rows': 0}, 'AT-01'),
     ('Область чтения all открывается только в транзакции READ ONLY и только операциями и системными компонентами '
      'из перечня 02.', TENANCY, 'db_rls', 'UPDATE в транзакции планировщика с областью all.', {'rows': 0},
@@ -152,7 +156,7 @@ P1 = [
      'Глобальный администратор назначен группе с ролью, 403 на её членов.', result(A, 'unknown', 'partial_data'),
      'AT-04'),
     ('Проверка, зависящая от модуля без лицензии, даёт license_missing: в режиме informational — result=null с '
-     'этой причиной.', SEMANTICS, 'evaluator', 'M365-007 в tenant без Entra ID P1.',
+     'этой причиной.', SEMANTICS, 'evaluator', 'M365-007 после её ввода в tenant без Entra ID P1.',
      result(I, None, 'license_missing'), 'AT-05'),
     # Microsoft 365 rules.
     ('M365-001: включённый member-пользователь без метода из MFA_METHOD_KINDS — fail; password, email и '
@@ -171,7 +175,7 @@ P1 = [
     ('M365-002: пользователь, у которого снята последняя привилегированная роль, — not_applicable; finding '
      'закрывается событием resolved/applicability_change.', MFA_RULE, 'evaluator', 'Роль Global Administrator снята.',
      result(A, 'not_applicable', 'policy_not_applicable'), 'AT-06'),
-    ('Временная активация роли в PIM не создаёт пару M365-002 и не меняет счёт M365-005.', ADMINS_RULE,
+    ('Временная активация роли Global Administrator в PIM не меняет счёт M365-005.', ADMINS_RULE,
      'collector', 'Активация роли во время ночного сбора.', effect('none'), 'AT-05'),
     ('M365-003: единственная политика CA с MFA в режиме report-only при выключенных Security Defaults и per-user MFA '
      '— fail, а не pass.', ENFORCEMENT_RULE, 'evaluator', 'Пример examples/m365-collection.json.', result(A, 'fail'),
@@ -186,8 +190,8 @@ P1 = [
     ('M365-003: authentication strength без requirementsSatisfied = mfa или исключённые пользователи вне '
      'excludedUserIds не дают pass.', ENFORCEMENT_RULE, 'evaluator', 'Из политики исключена группа из 30 '
      'пользователей.', result(A, 'unknown', 'enforcement_unconfirmed'), 'AT-05'),
-    ('M365-003: per-user MFA enabled или enforced у всех включённых member-пользователей вне исключений даёт pass '
-     'и в tenant с Entra ID P1.', ENFORCEMENT_RULE, 'evaluator',
+    ('M365-003: per-user MFA enforced у всех включённых member-пользователей вне исключений даёт pass и в tenant с '
+     'Entra ID P1.', ENFORCEMENT_RULE, 'evaluator',
      'Business Premium без политики CA с MFA, per-user MFA enforced у всех.', result(A, 'pass'), 'AT-05'),
     ('M365-003: в tenant без Conditional Access и без Security Defaults хотя бы один включённый member-пользователь с '
      'per-user MFA disabled даёт fail critical; если модуль per_user_mfa выключен — unknown/enforcement_unconfirmed.',
@@ -206,8 +210,8 @@ P1 = [
     ('M365-006: собственная политика согласия клиента вне allowedPermissionGrantPolicies — unknown/unmapped_state.',
      CONSENT_RULE, 'evaluator', 'Собственная политика согласия клиента.', result(A, 'unknown', 'unmapped_state'),
      'AT-05'),
-    ('M365-007 в режиме assessed: lastSuccessfulSignInAt и createdAt равны null — fail, потому что учётная запись '
-     'создана до июня 2018 года и с декабря 2023 года не входила.', INACTIVE_RULE, 'evaluator',
+    ('M365-007 после её ввода в режиме assessed: lastSuccessfulSignInAt и createdAt равны null — fail, потому что '
+     'учётная запись создана до июня 2018 года и с декабря 2023 года не входила.', INACTIVE_RULE, 'evaluator',
      'Учётная запись 2016 года без входа.', result(A, 'fail'), 'AT-05'),
     ('Наблюдение, которого нет в запуске для активной проверки и известного субъекта, даёт '
      'unknown/missing_observation.', SEMANTICS, 'evaluator', 'Запуск без методов одного пользователя.',
@@ -303,9 +307,11 @@ P1 = [
      'учебное восстановление их только перечисляет.', RESTORE, 'infra', 'Отчёт создан после точки restore.',
      effect('none'), 'AT-11'),
     ('Отмена удаления, записанная в журнал после планирования, после restore возвращает организацию в disabled; '
-     'любое удаление после restore выполняется не раньше чем через 7 суток.', RESTORE, 'infra',
+     'запланированное удаление после restore выполняется не раньше чем через 7 суток, а повтор состоявшегося '
+     'удаления (organization.delete) — сразу.', RESTORE, 'infra',
      'Удаление запланировано до точки restore, отменено после неё, срок уже прошёл.', effect('none'), 'AT-11'),
-    ('Записи журнала безопасности нельзя изменить или удалить до конца срока неизменяемости.', SECURITY_LOG,
+    ('Записи журнала безопасности нельзя изменить или удалить до конца срока неизменяемости, хотя identity сервиса '
+     'пишет ролью Storage Blob Data Contributor: запрет даёт заблокированная политика контейнера.', SECURITY_LOG,
      'infra', 'Удаление blob identity приложения.', effect('none'), 'AT-11'),
     ('Периодическое задание без организации уникально по (type, periodKey): индекс NULLS NOT DISTINCT не даёт '
      'второй сводки Teams.', SCHEDULER, 'worker', 'Два экземпляра при переключении слотов планируют teams_digest '
@@ -346,8 +352,9 @@ P2 = [
     ('Регистрация с installationId существующего устройства и другим признаком машины не меняет ключ '
      'устройства и выставляет identity_conflict.', REGISTRATION, 'agent_api', 'Клон VM с тем же installationId.',
      http(409, 'identity_conflict'), 'AT-12'),
-    ('Повторная регистрация с тем же installationId и признаком машины заменяет публичный ключ с сохранением '
-     'deviceId и истории.', REGISTRATION, 'agent_api', 'TPM очищен, агент регистрируется заново.',
+    ('Новый ключ устройства с тем же installationId и признаком машины заменяет прежний с сохранением deviceId и '
+     'истории, только если запрос подписан прежним ключом (previousKeySignature) или Admin принял ключ решением '
+     'accept_new_key.', REGISTRATION, 'agent_api', 'Агент меняет ключ и подписывает запрос прежним ключом.',
      audit('device.key_replaced'), 'AT-12'),
     ('createAgentSession для неизвестного deviceId отвечает device_unknown.', REGISTRATION, 'agent_api',
      'Устройство отсутствует в восстановленной базе.', http(401, 'device_unknown'), 'AT-11'),
@@ -368,7 +375,8 @@ P2 = [
     ('device_unknown переводит агент к повторной регистрации сохранённым ключом организации без участия техника.',
      AGENT_FSM, 'agent', 'Сервер не знает устройство после restore.', state('Unenrolled'), 'AT-11'),
     ('Повторный challenge_invalid при доступном локальном ключе ведёт к регистрации заново с тем же installationId '
-     'не чаще раза в сутки; при совпадающем признаке машины сервер заменяет публичный ключ.', AGENT_FSM, 'agent',
+     'не чаще раза в сутки; если сервер помнит другой ключ, регистрация получает identity_conflict вида key, и ключ '
+     'принимает Admin.', AGENT_FSM, 'agent',
      'Восстановление базы на точку до прежней замены ключа.', state('Unenrolled'), 'AT-11'),
     ('enrollment_key_invalid переводит агент в EnrollmentBlocked: попытка регистрации не чаще раза в сутки до '
      'нового ключа через RMM.', AGENT_FSM, 'agent', 'Ключ организации отозван.', state('EnrollmentBlocked'),
@@ -541,10 +549,95 @@ P2 = [
      'Политика с SYS-001 assessed.', result(I, None), 'AT-14'),
 ]
 
+# Added in 0.3.1: P1 records after the P2 block, so that released IDs keep their numbers.
+P1_031 = [
+    ('Обновление сессии раз в 60 минут погашает refresh token сотрудника в Entra ID; отказ Entra, отсутствие mfa в '
+     'amr или ролей удаляют сессию.', ROLES, 'portal_api', 'Учётная запись отключена в Entra во время сессии.',
+     http(401, 'session_required'), 'AT-02'),
+    ('M365-002: временная активация роли PIM учитывается отдельным видом назначения (temporaryRoleTemplateIds); '
+     'администратор, активировавший роль без метода MFA, получает fail critical.', MFA_RULE, 'evaluator',
+     'Активация Global Administrator пользователем только с паролем.', result(A, 'fail'), 'AT-05'),
+    ('M365-005 перечисляет роли вне privilegedRoleTemplateIds в uncoveredRoleTemplateIds; на результат M365-005 и '
+     'M365-002 они не влияют.', ADMINS_RULE, 'evaluator',
+     'Пользователь с ролью Global Reader при двух включённых глобальных администраторах.', result(A, 'pass'), 'AT-05'),
+    ('M365-003: per-user MFA enabled у части пользователей при отсутствии disabled даёт unknown/'
+     'enforcement_unconfirmed: до подтверждения в SP-01 enabled не считается принуждением.', ENFORCEMENT_RULE,
+     'evaluator', 'perUserMfa = {required: 3, notRequired: 0, unknown: 0, enabled: 2}.',
+     result(A, 'unknown', 'enforcement_unconfirmed'), 'AT-05'),
+    ('M365-003: ответ Security Defaults без логического isEnabled или политика CA с MFA и условием вне CA_CONDITIONS '
+     'дают модулю partial и unknown/partial_data, а не pass.', ENFORCEMENT_RULE, 'collector',
+     'Политика CA на всех с условием times.', result(A, 'unknown', 'partial_data'), 'AT-04'),
+    ('Модуль sign_in_activity в P1 всегда skipped: M365-007 отложена, право AuditLog.Read.All не запрашивается.',
+     INACTIVE_RULE, 'collector', 'Запуск сбора в tenant с Entra ID P1.', {'capabilityStatus': 'skipped'}, 'AT-04'),
+    ('Плановое задание сбора не присоединяется к незавершённому запуску: запуск, открытый дольше 6 часов, '
+     'закрывается failed/run_timeout без записи наблюдений, и начинается ровно один новый.', COLLECTION, 'worker',
+     'Процесс упал во время сбора, запуск в running 7 часов.', effect('single'), 'AT-04'),
+    ('При пересчёте политики пара без наблюдения получает unknown/missing_observation только в режиме assessed; '
+     'informational-пара без наблюдения и M365-002 без проекции оценки не получают.', CURRENT, 'evaluator',
+     'Новая ревизия переводит M365-004 в assessed до первого сбора.', result(A, 'unknown', 'missing_observation'),
+     'AT-06'),
+    ('Каждая транзакция порции recalculate_policy проверяет lease задания: после потери lease прежний владелец не '
+     'пишет следующую порцию.', SCHEDULER, 'worker', 'Lease истёк между второй и третьей порцией.', effect('none'),
+     'AT-10'),
+    ('Сводка Teams за период отмечается в teams_digest после принятия webhook: повтор задания с отметкой ничего не '
+     'отправляет.', SCHEDULER, 'worker', 'Задание teams_digest захвачено повторно после отправки.', effect('single'),
+     'AT-10'),
+    ('Недоверенные строки в сводке Teams передаются только элементами TextRun Adaptive Card: разметка Markdown не '
+     'обрабатывается, адреса из данных не строятся.', UNTRUSTED, 'worker',
+     'Имя организации «[x](https://example.invalid)».', effect('none'), 'AT-07'),
+    ('Каждое решение decideFindingRisk, включая withdrawn, создаёт ровно одну неизменяемую запись risk_decision со '
+     'ссылкой на событие workflow_changed.', WORKFLOW, 'portal_api',
+     'Смена risk_accepted на suppressed без записи прежнего основания.', effect('single'), 'AT-08'),
+    ('Роль приложения не изменяет историю: UPDATE finding_event, risk_decision и audit_event отклоняется.', TENANCY,
+     'db_rls', 'UPDATE finding_event SET cause от роли приложения.', {'rows': 0}, 'AT-01'),
+    ('createReport за текущую или будущую неделю отклоняется: отчёт строится только за завершённую неделю.', REPORT,
+     'portal_api', 'periodEnd — следующий понедельник.', http(422, 'validation_failed'), 'AT-07'),
+    ('Повторный createReport за ту же неделю и язык ставит failed в генерацию заново, а для ready возвращает '
+     'существующий отчёт без изменений.', REPORT, 'portal_api', 'Повтор после готового отчёта.',
+     {'replay': {'http': 202, 'duplicate': True}}, 'AT-07'),
+    ('Отчёт ready не переписывается: UPDATE строки отклоняет триггер, показатели закрытой недели берутся только из '
+     'снимка, потерянный файл строится из него заново.', REPORT, 'worker',
+     'Смена ролей и политики после генерации отчёта.', effect('none'), 'AT-07'),
+    ('Подключённый tenant до первого сбора не выпадает из покрытия: его обязательные пары считаются без данных, и '
+     'coverageAt равен 0, а не «нет данных».', REPORT, 'evaluator', 'Подключение активно, сбора ещё не было.',
+     effect('none'), 'AT-07'),
+    ('weekly_report не создаёт отчёт за неделю, закончившуюся до создания организации, и догоняет не больше 4 '
+     'пропущенных недель.', JOBS, 'worker', 'Организация создана в среду, сервис был выключен 6 недель.',
+     effect('none'), 'AT-07'),
+    ('После restore версии политики продолжаются со следующей эпохи — наименьшего кратного 10 000, большего '
+     'максимальной сохранённой версии: номер потерянной ревизии не повторяется.', RESTORE, 'infra',
+     'После точки restore потеряно 140 ревизий политики.', effect('none'), 'AT-11'),
+    ('До ввода M365-007 режим assessed для неё отклоняется: проверка не собирается, и пара дала бы каждому '
+     'пользователю unknown/missing_observation.', POLICY, 'portal_api', 'createPolicyRevision с M365-007 assessed.',
+     http(422, 'policy_inputs_missing'), 'AT-06'),
+]
+
+# Added in 0.3.1 for P2.
+P2_031 = [
+    ('Новый ключ устройства без подписи прежним ключом не заменяет ключ: 409 identity_conflict вида key, ключ '
+     'оригинала прежний.', REGISTRATION, 'agent_api', 'Клон с копией диска, ключом организации и новым ключом.',
+     http(409, 'identity_conflict'), 'AT-12'),
+    ('Замена ключа устройства удаляет все его сессии: токен, выданный прежнему ключу, отклоняется со следующего '
+     'запроса.', SESSION, 'agent_api', 'submitScan со старым токеном после accept_new_key.',
+     http(401, 'session_invalid'), 'AT-12'),
+    ('revoked_installation не удаляется по сроку, пока у организации есть активный ключ регистрации.', RETENTION,
+     'worker', 'Отзыв 25 месяцев назад, ключ регистрации организации активен.', effect('none'), 'AT-09'),
+    ('Полнота пакета считается по активным проверкам агента (source=agent): пакет со всеми WIN-проверками полный и '
+     'при активных M365-проверках, а пара без наблюдения получает unknown/missing_observation.', INTAKE,
+     'evaluator', 'Пакет без WIN-009 при политике со всеми проверками.', result(A, 'unknown', 'missing_observation'),
+     'AT-13'),
+    ('Скрипт RMM устанавливает только утверждённый MSI: кроме подписи и издателя проверяются версия и SHA-256, '
+     'закреплённые в задании.', RMM, 'infra', 'Старая подписанная версия с известной уязвимостью.', effect('none'),
+     'AT-16'),
+]
+
+# Release order of the blocks; the order fixes the IDs (see the module docstring).
+BLOCKS = [('P1', P1), ('P2', P2), ('P1', P1_031), ('P2', P2_031)]
+
 
 def build_invariants():
     records = []
-    for phase, rows in (('P1', P1), ('P2', P2)):
+    for phase, rows in BLOCKS:
         for rule, (doc, section), enforcement, negative, expected, acceptance in rows:
             records.append({'id': f'INV-{len(records) + 1:03}', 'rule': rule,
                             'sourceDoc': {'file': DOCS[doc], 'section': section}, 'phase': phase,

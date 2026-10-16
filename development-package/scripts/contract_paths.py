@@ -278,7 +278,9 @@ def _finding_paths():
                                          ORG + finding_id + [IF_MATCH]))},
         o + '/findings/{findingId}/risk-decisions': {'post': _add_etag(operation(
             'decideFindingRisk', 'Решение о риске: принятие, подавление или отзыв решения', 'P1', 'portal_mutation',
-            200, 'Finding', 'RiskDecision', ADMIN_ROLES, ORG + finding_id + [IF_MATCH]))},
+            200, 'Finding', 'RiskDecision', ADMIN_ROLES, ORG + finding_id + [IF_MATCH], description=(
+                'Каждое решение, включая withdrawn, пишет неизменяемую запись risk_decision вместе с событием '
+                'workflow_changed (05, «Автомат workflowState»).')))},
         o + '/findings/{findingId}/events': {'get': operation(
             'listFindingEvents', 'История проблемы', 'P1', 'portal', 200, 'FindingEventPage', roles=READ_ROLES,
             parameters=ORG + finding_id + PAGE)},
@@ -286,7 +288,9 @@ def _finding_paths():
             'get': operation('listReports', 'Сформированные отчёты', 'P1', 'portal', 200, 'ReportPage',
                              roles=READ_ROLES, parameters=ORG + PAGE),
             'post': operation('createReport', 'Формирование отчёта за неделю', 'P1', 'portal_mutation', 202,
-                              'Report', 'ReportCreate', WORK_ROLES, ORG)},
+                              'Report', 'ReportCreate', WORK_ROLES, ORG, description=(
+                                  'Только завершённая неделя. Один отчёт на неделю и язык: повтор возвращает '
+                                  'существующий, отчёт в failed ставится в генерацию заново, ready не меняется.'))},
         o + '/reports/{reportId}/download': {'get': _download(
             operation('downloadReport', 'Выдача HTML-отчёта', 'P1', 'portal', 200, roles=READ_ROLES,
                       parameters=ORG + report_id),
@@ -328,9 +332,11 @@ def _device_paths():
         o + '/devices/{deviceId}/identity-resolutions': {'post': operation(
             'resolveDeviceIdentity', 'Разбор конфликта идентичности устройства', 'P2', 'portal_mutation', 200,
             'Device', 'DeviceIdentityResolution', ADMIN_ROLES, ORG + device_id, description=(
-                'accept_new_fingerprint принимает последний несовпавший признак машины (замена платы); keep '
-                'оставляет прежний, клон продолжает получать 409 identity_conflict. Без конфликта возвращает '
-                'устройство без изменений (05, «Субъекты и идентичность устройства»).'))},
+                'accept_new_fingerprint принимает последний несовпавший признак машины (замена платы); '
+                'accept_new_key — последний отклонённый новый ключ устройства (очищенный TPM) и аннулирует сессии '
+                'прежнего; keep оставляет прежнее, клон продолжает получать 409 identity_conflict. Решение другого '
+                'вида или без конфликта возвращает устройство без изменений (05, «Субъекты и идентичность '
+                'устройства»).'))},
         o + '/devices/{deviceId}/scan-requests': {'post': operation(
             'requestDeviceScan', 'Повторная проверка фиксированного набора без произвольной команды', 'P2',
             'portal_mutation', 202, 'ScanRequest', 'ScanRequestCreate', WORK_ROLES, ORG + device_id,

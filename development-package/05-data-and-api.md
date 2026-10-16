@@ -6,36 +6,38 @@
 
 | Сущность | Ключевые данные | Ограничение |
 | --- | --- | --- |
-| organization | id, name, timezone, reportLanguage (nb, nn, en), status (active, disabled, deletion_scheduled), deletionDueAt, createdAt | Клиентский контекст. `timezone` — зона IANA, обязательна при создании; неизвестная зона — 422 `validation_failed`. `deletionDueAt` заполнено только в `deletion_scheduled`. Удалённая организация оставляет tombstone (id, deletedAt) и в API не отдаётся |
+| organization | id, name, timezone, reportLanguage (nb, nn, en), status (active, disabled, deletion_scheduled), deletionDueAt, nextPolicyVersion, createdAt | Клиентский контекст. `timezone` — зона IANA, обязательна при создании; неизвестная зона — 422 `validation_failed`. `deletionDueAt` заполнено только в `deletion_scheduled`. Удалённая организация оставляет tombstone (id, deletedAt) и в API не отдаётся |
 | staff_user | entraUserId, displayName, roles, lastSignInAt, active | Платформенная таблица: сотрудники, входившие в портал; роли берутся из app roles токена при входе и обновлении сессии. `active` — вход за последние 30 дней и последнее обновление сессии не отклонено Entra. Ответственным можно назначить только активного сотрудника с ролью Admin или Technician |
-| policy_revision | organizationId, version, effectiveFrom, createdAt, createdBy, configuration | Неизменяема; хранится, пока на неё ссылаются сохраняемые записи, но не меньше 12 месяцев. Структура — подраздел «Политика клиента» |
+| policy_revision | organizationId, version, effectiveFrom, createdAt, createdBy, configuration | Неизменяема; хранится, пока на неё ссылаются сохраняемые записи, но не меньше 12 месяцев. Номер следующей версии хранит организация; после восстановления базы он переходит на следующую эпоху (`06`, «Резервное копирование и восстановление»). Структура — подраздел «Политика клиента» |
 | tenant_connection | organizationId, status (not_connected, consent_pending, active, disconnected), entraTenantId, tenantDisplayName, primaryDomain, pendingTenantId, pendingExpiresAt, entraP1, connectedAt, connectedBy, disconnectedAt, lastCollectedAt, lastCollectionState | Одна на организацию. `entraTenantId` уникален среди подключений `active` всех организаций (частичный уникальный индекс). Автомат — раздел «Подключение M365 и сбор» |
 | idempotency_record | organizationId, operationId, key, requestHash, responseStatus, resultId, createdAt, expiresAt | Повтор операций портала с `idempotencyKey`: тот же ключ и `requestHash` в течение 24 часов возвращают прежний результат, тот же ключ с другим телом — 409 `idempotency_conflict`. Удаляется через 7 суток |
 | collection_run | organizationId, id, trigger (scheduled, manual), state (queued, running, completed, partial, failed), queuedAt, startedAt, completedAt, failureCode, capabilities, usersComplete | Не больше одного запуска в `queued` или `running` на организацию (частичный уникальный индекс) |
 | subject | organizationId, id, type (tenant, user, device, volume), key, displayName, deviceId, firstSeenAt, lastSeenAt, retiredAt | Unique(organizationId, type, key). Ключ — подраздел «Субъекты и идентичность устройства». `displayName` — UPN пользователя или имя ПК, недоверенная строка |
-| device | organizationId, id, displayName, status (active, revoked), installationId, machineFingerprintHash, publicKeyJwk, keyThumbprint, keyProtection, identityState, identityConflictAt, conflictFingerprintHash, conflictDisplayName, clockStatus, enrollmentKeyId, enrolledAt, lastSeenAt, lastFullScanAt, lastAcceptedSequence, projectionSequence, projectionCompletedAt, agentVersion, configSchemaVersion, telemetry, rebootEpisodeSince, rebootEpisodeBootAt | P2. `installationId` уникален среди неудалённых устройств организации, включая отозванные; `keyThumbprint` уникален глобально. Строка устройства — точка сериализации приёма пакетов и заданий по субъектам устройства (`SELECT … FOR UPDATE`). `telemetry` — счётчики последнего check-in. Признак `dormant` в API вычисляется: последний check-in старше 14 суток |
+| device | organizationId, id, displayName, status (active, revoked), installationId, machineFingerprintHash, publicKeyJwk, keyThumbprint, keyProtection, identityState, identityConflictAt, conflictKind (fingerprint, key), conflictFingerprintHash, conflictPublicKeyJwk, conflictDisplayName, clockStatus, enrollmentKeyId, enrolledAt, lastSeenAt, lastFullScanAt, lastAcceptedSequence, projectionSequence, projectionCompletedAt, agentVersion, configSchemaVersion, telemetry, rebootEpisodeSince, rebootEpisodeBootAt | P2. `installationId` уникален среди неудалённых устройств организации, включая отозванные; `keyThumbprint` уникален глобально. Строка устройства — точка сериализации приёма пакетов и заданий по субъектам устройства (`SELECT … FOR UPDATE`). `telemetry` — счётчики последнего check-in. Признак `dormant` в API вычисляется: последний check-in старше 14 суток |
 | device_presence | organizationId, deviceId, day | P2. Unique(deviceId, day): сутки UTC, в которые был check-in или принятый пакет. Основа знаменателя покрытия Windows за период и NFR-02 |
 | revoked_installation | organizationId, installationId, keyThumbprint, deviceId, revokedAt, source (revoke, restore_replay) | P2. Unique(organizationId, installationId). Создаётся при каждом отзыве устройства, а при повторе журнала безопасности — и тогда, когда строки устройства в восстановленной базе нет. `enrollAgent` отклоняет такой `installationId` |
 | enrollment_key | organizationId, id, keyHash, keyPrefix, label, createdAt, createdBy, revokedAt, lastUsedAt | P2. Хранится SHA-256 ключа; активных (без `revokedAt`) не больше двух на организацию — для ротации |
 | enrollment | organizationId, id, registrationRequestId, enrollmentKeyId, deviceId, requestHash, response, createdAt | P2. Unique(organizationId, registrationRequestId); основа идемпотентного повтора регистрации в течение 24 часов |
 | agent_challenge | nonceHash, purpose (enroll, session), deviceId, expiresAt, usedAt | P2, платформенная: только погашенные nonce, unique(nonceHash); строка удаляется через сутки после `expiresAt`. Выдача nonce в базу не пишет (подраздел «Регистрация и сессия») |
-| agent_session | tokenHash, organizationId, deviceId, expiresAt | P2, платформенная: SHA-256 сессионного токена на 60 минут |
+| agent_session | tokenHash, organizationId, deviceId, expiresAt | P2, платформенная: SHA-256 сессионного токена на 60 минут. При замене ключа устройства все его сессии удаляются |
 | scan_batch | organizationId, deviceId, id, scanId, sequence, policyVersion, startedAt, completedAt, sentAt (заголовок принятой попытки), receivedAt, payloadHash, clockInconsistent, full | P2. Unique(deviceId, scanId), unique(deviceId, sequence). Тело пакета не хранится: сохраняются наблюдения |
 | scan_request | organizationId, id, deviceId, requestedBy, createdAt, expiresAt, state (requested, delivered, completed, expired) | P2. Не больше одного незавершённого запроса на устройство |
 | observation | organizationId, id, subjectId, checkId, source (agent, graph, server), scanBatchId, collectionRunId, inputObservationId, observedAt, receivedAt, collectionStatus, evidence, reasonCode | Evidence — только по закрытой схеме проверки: агента, M365 или серверной (`evidenceSchema` проверок SYS-* в `specs/check-catalog.json`). У `agent` заполнен `scanBatchId`, у `graph` — `collectionRunId`, у `server` — ни одно из них; `inputObservationId` у SYS-002 и SYS-003 ссылается на наблюдение WIN-011, по которому они вычислены |
 | assessment | organizationId, id, observationId, subjectId, checkId, ruleId, ruleVersion, sourcePolicyVersion, evaluatedPolicyVersion, assessmentScope (historical, current), assessmentMode, result, severity, reasonCode, evaluatedAt, basisSnapshot, evidenceAvailability | Исходное измерение пересчётом не переписывается. Свежесть вычисляется при чтении и при формировании отчёта |
 | finding | organizationId, id, subjectId, checkId, technicalState, workflowState, severity, assigneeId, dueAt, workflowReason, reviewAt, workflowDecidedBy, revision, openedAt, resolvedAt | Unique(organizationId, subjectId, checkId). Создаётся только для режима `assessed` |
-| finding_event | organizationId, findingId, id, eventType, cause, assessmentId, actorId, fromWorkflowState, toWorkflowState, occurredAt | Неизменяемы. Допустимые сочетания — подраздел «Допустимые сочетания eventType и cause»; `actorId` не null тогда и только тогда, когда `cause=manual_action` |
-| report | organizationId, id, periodStart, periodEnd, timezone, language, format, state, failureCode, blobKey, policyVersions | Опубликованный отчёт не пересчитывается |
+| finding_event | organizationId, findingId, id, eventType, cause, assessmentId, actorId, fromWorkflowState, toWorkflowState, occurredAt | Неизменяемы: UPDATE у роли приложения отозван. Допустимые сочетания — подраздел «Допустимые сочетания eventType и cause»; `actorId` не null тогда и только тогда, когда `cause=manual_action` |
+| risk_decision | organizationId, id, findingId, decision (risk_accepted, suppressed, withdrawn), reason, reviewAt, decidedBy, decidedAt, findingEventId | Неизменяемая запись каждого решения `decideFindingRisk`, созданная в одной транзакции с его событием `workflow_changed`/`manual_action`; UPDATE у роли приложения отозван. Подраздел «Автомат workflowState» |
+| report | organizationId, id, periodStart, periodEnd, timezone, language, format, state, failureCode, blobKey, policyVersions, snapshot | Unique(organizationId, periodStart, language). При переходе в `ready` записывается неизменяемый снимок, и строку `ready` изменить нельзя: UPDATE отклоняет триггер базы. Опубликованный отчёт не пересчитывается. Подраздел «Отчёт и покрытие» |
 | organization_export | organizationId, id, state (queued, ready, failed, expired), blobKey, createdAt, expiresAt, requestedBy | Файл хранится 7 дней и выдаётся только через сервис |
-| audit_event | organizationId, id, occurredAt, actorType (staff, device, system), actorId, action, targetType, targetId, outcome, correlationId, details | Клиентская таблица под RLS. `details` — закрытая структура для трёх действий (`organization.lifecycle_change`, `finding.assignment_change`, `retention.purge_summary`), для остальных null |
+| audit_event | organizationId, id, occurredAt, actorType (staff, device, system), actorId, action, targetType, targetId, outcome, correlationId, details | Клиентская таблица под RLS; UPDATE у роли приложения отозван. `details` — закрытая структура для трёх действий (`organization.lifecycle_change`, `finding.assignment_change`, `retention.purge_summary`), для остальных null |
 | job | id, type, organizationId, inputId, periodKey, state, leaseOwner, leaseToken, leaseUntil, attempts, nextAttemptAt | Платформенная таблица. Unique(type, organizationId, coalesce(inputId, periodKey)) NULLS NOT DISTINCT: задания без организации тоже уникальны. Раздел «Фоновые задания и планировщик» |
+| teams_digest | periodKey, sentAt | Платформенная: отметка отправленной ежедневной сводки Teams за дату Europe/Oslo (первичный ключ — `periodKey`); хранится 90 дней |
 | windows_release | product (client), branchBuild, ubr, kb, releaseAt, kind (security_monthly, security_oob, nonsecurity_oob, preview, hotpatch), securityMonth, autoOffered, state (draft, verified), source, importedBy | P2, платформенная: каталог выпусков Windows для SYS-003. Unique(product, branchBuild, ubr). Правило — `03`, «Правило SYS-003 и каталог выпусков» |
 | windows_release_month | securityMonth, state (draft, verified), verifiedAt, verifiedBy, noNewReleases | P2, платформенная: сверка месяца каталога. `verifiedThroughMonth` — последний месяц, до которого сверены все месяцы подряд |
 
 Сотрудник в модели и API определяется `entraUserId` — object id в Entra tenant компании. Это значения `createdBy`, `requestedBy`, `connectedBy`, `assigneeId`, `workflowDecidedBy`, `finding_event.actorId` и `audit_event.actorId` при `actorType=staff`; при `actorType=device` `actorId` — `deviceId`, при `system` — null.
 
-Ссылки между клиентскими сущностями — составные внешние ключи (`organizationId`, id). Каскада от наблюдений к истории нет: `finding_event` и `assessment` переживают удаление наблюдений по сроку. Индексы: проблемы по организации, состоянию и severity; оценки по субъекту, проверке и `observedAt`; задания по состоянию и `nextAttemptAt`. Сроки хранения — `04`, раздел «Сроки хранения»: `retention_purge` удаляет данные в порядке `finding_event` → `assessment` → `finding` → `observation` → `collection_run` → `scan_batch` → `scan_request` → `subject` → `device_presence` → `device` → `revoked_installation`.
+Ссылки между клиентскими сущностями — составные внешние ключи (`organizationId`, id). Каскада от наблюдений к истории нет: `finding_event` и `assessment` переживают удаление наблюдений по сроку. Индексы: проблемы по организации, состоянию и severity; оценки по субъекту, проверке и `observedAt`; задания по состоянию и `nextAttemptAt`. Сроки хранения — `04`, раздел «Сроки хранения»: `retention_purge` удаляет данные в порядке `risk_decision` → `finding_event` → `assessment` → `finding` → `observation` → `collection_run` → `scan_batch` → `scan_request` → `subject` → `device_presence` → `device` → `revoked_installation`.
 
 `basisSnapshot` неизменяем и содержит checkId, ruleId, ruleVersion, evaluatedPolicyVersion, result, severity, reasonCode, observedAt и минимальные поля для explanation; у SYS-003 — также `verifiedThroughMonth` каталога, ожидаемый месяц и число пропущенных месяцев. Через 90 дней evidence удаляется, остаётся `basisSnapshot`, `evidenceAvailability=expired`, `observationId=NULL`.
 
@@ -70,7 +72,7 @@
 | WIN-011, SYS-001, SYS-002 | `{}` | WIN-011 и SYS-001 — всегда informational |
 | SYS-003 | `graceDays` 14, `criticalBehindMonths` 2 | — |
 
-`createPolicyRevision` возвращает 422 `policy_inputs_missing` в трёх случаях: режим `assessed` без входных настроек; `activeCheckIds` без WIN-011; активна WIN-004 без WIN-003. Сочетания `maxBatchAgeDays` < `maxBufferDays` + 1, `minGlobalAdmins` > `maxGlobalAdmins`, порог warning WIN-001 ниже порога critical (`warnFreePercent` < `criticalFreePercent` или `warnFreeBytes` < `criticalFreeBytes`) и `warnDays` > `criticalDays` у WIN-004 дают 422 `validation_failed`. Значения вне диапазонов схемы — 422 `schema_violation`.
+`createPolicyRevision` возвращает 422 `policy_inputs_missing` в четырёх случаях: режим `assessed` без входных настроек; режим `assessed` для отложенной M365-007, которая не собирается (`03`, «Правило M365-007»); `activeCheckIds` без WIN-011; активна WIN-004 без WIN-003. Сочетания `maxBatchAgeDays` < `maxBufferDays` + 1, `minGlobalAdmins` > `maxGlobalAdmins`, порог warning WIN-001 ниже порога critical (`warnFreePercent` < `criticalFreePercent` или `warnFreeBytes` < `criticalFreeBytes`) и `warnDays` > `criticalDays` у WIN-004 дают 422 `validation_failed`. Значения вне диапазонов схемы — 422 `schema_violation`.
 
 Политика v1 создаётся вместе с организацией; её значения — `default` схемы, режимы равны `defaultAssessmentMode` каталога. Новая ревизия создаётся только с `If-Match`, равным текущей версии; ревизии неизменяемы. Каждая новая ревизия ставит задание `recalculate_policy`.
 
@@ -101,12 +103,13 @@
 - `installationId` — UUID, который агент создаёт при первом запуске и хранит в каталоге данных.
 - `machineFingerprint` — HMAC-SHA256 в hex нижнего регистра. Ключ — 16 байт `installationId` в порядке RFC 4122. Сообщение — UTF-8 строка `Win32_ComputerSystemProduct.UUID` в нижнем регистре в виде 8-4-4-4-12 (пустая строка, если значения нет или оно состоит только из нулей или только из F), байт `0x00` и UTF-8 строка `MachineGuid` из `HKLM\SOFTWARE\Microsoft\Cryptography` в нижнем регистре без фигурных скобок. Сервер хранит SHA-256 строки признака; сырые идентификаторы не передаются. Канонизация меняется только новой версией признака с переходным периодом, в который сервер принимает обе версии.
 - Тестовый вектор для контрактных тестов агента и сервиса: `installationId` `6f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f`, UUID `4C4C4544-0042-3510-8058-B4C04F4E3732`, MachineGuid `{8C1F7A2E-3B4D-4E5F-9A6B-7C8D9E0F1A2B}` дают признак `150364374d6891dc5194327d8c0500ed000a876f0d7da212e8f1b67ae6a39bd9`.
-- Признак передаётся при регистрации, в check-in и в пакетах. Несовпадение даёт 409 `identity_conflict`: сервер выставляет `identityState=identity_conflict` и сохраняет время, хеш несовпавшего признака и имя ПК из запроса как недоверенную строку, чтобы техник опознал ПК. Устройство с совпадающим признаком продолжает работу.
-- `identityState` возвращается в `ok` сам, если 7 суток не было несовпадений, или операцией Admin `resolveDeviceIdentity`: `accept_new_fingerprint` принимает последний несовпавший признак (замена материнской платы) с сохранением `deviceId` и истории, `keep` оставляет прежний. Оба решения пишут аудит `device.identity_resolved`.
+- Признак передаётся при регистрации, в check-in и в пакетах. Несовпадение даёт 409 `identity_conflict`: сервер выставляет `identityState=identity_conflict`, `conflictKind=fingerprint` и сохраняет время, хеш несовпавшего признака и имя ПК из запроса как недоверенную строку, чтобы техник опознал ПК. Устройство с совпадающим признаком продолжает работу.
+- Новый ключ устройства без подписи прежним ключом — тоже конфликт идентичности (`conflictKind=key`): `installationId` и признак машины копируются вместе с образом диска и владения устройством не доказывают. Сервер отвечает 409 `identity_conflict`, сохраняет новый публичный ключ и имя ПК, а прежний ключ продолжает работать.
+- `identityState` возвращается в `ok` сам, если 7 суток не было несовпадений, или операцией Admin `resolveDeviceIdentity`: `accept_new_fingerprint` принимает последний несовпавший признак (замена материнской платы), `accept_new_key` — последний отклонённый новый ключ (очищенный TPM), оба с сохранением `deviceId` и истории; `keep` оставляет прежнее. Решения пишут аудит `device.identity_resolved`, а `accept_new_key` — также `device.key_replaced`.
 - Агент не входит в golden image. Клон ПК разбирается по RB-11: на клоне агент удаляется вместе с каталогом данных через RMM и ставится заново (новый `installationId`, новое устройство). Оригинал не отзывается: клон и оригинал делят один `deviceId`.
 - Клон с тем же SMBIOS UUID, MachineGuid и программным ключом признаком не отличается. Такие ПК по очереди получают `sequence_conflict`, и повторяющийся `device.sequence_resync` поднимает оповещение (`06`, «Наблюдаемость и оповещения»): законный откат ПК из checkpoint даёт один resync, а пара клонов — resync почти каждые сутки.
 
-Повторная регистрация с тем же `installationId` и совпадающим признаком машины заменяет публичный ключ, сохраняя `deviceId` и историю (аудит `device.key_replaced`); если отпечаток ключа прежний, ответ 201 приходит без аудита замены. Так агент восстанавливается после потери ключа, например при очистке TPM. Отозванное устройство повторно не регистрируется: его `installationId` записан в `revoked_installation`, и нужна переустановка с новым `installationId`, которая создаёт новое устройство.
+Повторная регистрация с тем же `installationId`, совпадающим признаком машины и прежним отпечатком ключа отвечает 201 без новых эффектов. Новый ключ заменяет прежний с сохранением `deviceId` и истории (аудит `device.key_replaced`), только если запрос подписан и прежним ключом (`previousKeySignature`) или Admin принял его решением `accept_new_key`. Подпись прежним ключом — путь для плановой смены ключа, который у агента ещё есть (например, перехода с программного ключа на TPM); агент P2 сам ключ не меняет и создаёт новый только при потере прежнего, поэтому на практике замена идёт через `accept_new_key`. При любой замене все сессии устройства удаляются: токен, выданный прежнему ключу, отклоняется со следующего запроса. Так агент восстанавливается после потери ключа (очищен TPM), а клон с копией диска и новым ключом идентичность оригинала не перехватывает. Отозванное устройство повторно не регистрируется: его `installationId` записан в `revoked_installation`, и нужна переустановка с новым `installationId`, которая создаёт новое устройство.
 
 `sequence` пакетов монотонен для устройства; `lastAcceptedSequence` — наибольший принятый, пропуски допустимы. После 409 `sequence_conflict` (например, ПК восстановлен из checkpoint) агент получает в конфигурации `lastAcceptedSequence` и `lastAcceptedCompletedAt` (это `completedAt` пакета текущей проекции), удаляет из буфера пакеты с `completedAt` не позже `lastAcceptedCompletedAt` (они уже были приняты до снимка) и перенумеровывает остальные с `lastAcceptedSequence + 1` с новыми `scanId`. Это единственное исключение из правила неизменности пакета; сервер пишет аудит `device.sequence_resync`.
 
@@ -130,7 +133,7 @@
 | disabled, deletion_scheduled | Чтение; из изменений — только `changeOrganizationLifecycle`, `createOrganizationExport` и `disconnectTenant`, остальные — 409 `lifecycle_transition_forbidden` | 403 `organization_inactive` | Только `organization_export`, `retention_purge` и `organization_delete` |
 | удалена | 404 `not_found` | `createAgentSession` — 401 `device_unknown`, регистрация — 401 `enrollment_key_invalid` | — |
 
-После восстановления базы удаление любой организации выполняется не раньше чем через 7 суток (`06`, «Резервное копирование и восстановление»). После удаления согласие приложения Graph в tenant клиента остаётся, пока его не удалит администратор клиента; процедура — RB-03. Срок между планированием удаления и удалением (30 суток) и порядок утверждения — вопрос 6 в `08`.
+После восстановления базы запланированное удаление выполняется не раньше чем через 7 суток, а удаление, которое уже состоялось до сбоя (запись `organization.delete` в журнале безопасности), повторяется сразу (`06`, «Резервное копирование и восстановление»). После удаления согласие приложения Graph в tenant клиента остаётся, пока его не удалит администратор клиента; процедура — RB-03. Срок между планированием удаления и удалением (30 суток) и порядок утверждения — вопрос 6 в `08`.
 
 ## Подключение M365 и сбор
 
@@ -166,7 +169,7 @@
 
 Изменения подключения в организации не в статусе `active` дают 409 `lifecycle_transition_forbidden`, кроме `disconnectTenant` (раздел «Жизненный цикл организации»).
 
-Запуск сбора (`collection_run`): `queued` → `running` → `completed`, `partial` или `failed`. `requestCollection` (Admin, Technician) при подключении не в статусе `active` — 409 `connection_state_conflict`; при незавершённом запуске возвращается он же. Модули и порядок вызовов — `02`, «Сбор данных Microsoft 365»; статусы модулей — `03`, «Возможности подключения».
+Запуск сбора (`collection_run`): `queued` → `running` → `completed`, `partial` или `failed`. `requestCollection` (Admin, Technician) при подключении не в статусе `active` — 409 `connection_state_conflict`; при незавершённом запуске возвращается он же. Плановое задание к незавершённому запуску не присоединяется: если запуск открыт меньше 6 часов, задание завершается без сбора, а запуск старше 6 часов (процесс упал во время сбора) оно закрывает `failed`/`run_timeout` без записи наблюдений и начинает новый. Модули и порядок вызовов — `02`, «Сбор данных Microsoft 365»; статусы модулей — `03`, «Возможности подключения».
 
 - `completed` — все модули `available`, `license_missing` или `skipped`.
 - `partial` — модули `tenant` и `users` получены, а хотя бы один модуль `partial`, `permission_missing` или `temporary_error`. Сюда же относится запуск, упёршийся в таймаут после чтения пользователей: незавершённые модули получают `temporary_error`.
@@ -175,14 +178,14 @@
   - `tenant_mismatch` — `/organization` вернул другой id;
   - `credential_error` — сбой подписи Key Vault или сертификата приложения;
   - `cancelled` — во время запуска подключение отключено, tenant сменился или организация перестала быть `active`;
-  - `run_timeout` — таймаут до чтения пользователей;
+  - `run_timeout` — таймаут запуска (30 минут) до чтения пользователей или запуск, открытый дольше 6 часов и закрытый плановым заданием;
   - `temporary_error` — остальные сбои.
 
   Failed-запуск наблюдений не пишет, поднимает оповещение и попадает в ежедневную сводку.
 
 Наблюдения запуска:
 
-- M365-001 и M365-007 — по каждому пользователю. Методы запрашиваются для включённых member-пользователей вне `excludedUserIds` и без роли синхронизации, а также для всех администраторов (`02`); у остальных `methodKinds` равен null, и правило даёт not_applicable.
+- M365-001 — по каждому пользователю. Методы запрашиваются для включённых member-пользователей вне `excludedUserIds` и без роли синхронизации, а также для всех администраторов (`02`); у остальных `methodKinds` равен null, и правило даёт not_applicable. M365-007 отложена и наблюдений не имеет (`03`, «Правило M365-007»).
 - M365-002 — по каждому пользователю с активной привилегированной ролью и по каждому, у кого в предыдущем полном сборе такая роль была (у него `roleTemplateIds` пуст).
 - M365-003…M365-006 — по tenant.
 
@@ -242,7 +245,8 @@
 
 - `risk_accepted` и `suppressed` допустимы только при `technicalState=open` (иначе 409 `workflow_transition_forbidden`) и при `reviewAt` в (now, now + 365 сут] (иначе 422 `validation_failed`).
 - `withdrawn` возвращает `new` и допустим только из `risk_accepted` или `suppressed`; при нём `reason` необязателен, а `reviewAt` запрещён.
-- Каждое решение пишет `workflow_changed`/`manual_action` с `actorId` и заполняет `workflowDecidedBy`; `reason` сохраняется как `Finding.workflowReason`.
+- Каждое решение пишет `workflow_changed`/`manual_action` с `actorId`, заполняет `workflowDecidedBy` и в той же транзакции создаёт неизменяемую запись `risk_decision`: решение, причина, срок, исполнитель, время и ссылка на событие. `reason` сохраняется как `Finding.workflowReason`; при `withdrawn` оно очищается, а переданная причина остаётся в записи.
+- Записи решений создаёт только `decideFindingRisk`; истечение `reviewAt` и сброс workflow при `reopened` видны по событиям. По записям решений восстанавливаются все прежние основания и сроки, в том числе после смены `risk_accepted` на `suppressed` и отзыва: они есть в экспорте организации и в снимке отчёта. API отдаёт текущее решение (`Finding.workflowReason`, `reviewAt`, `workflowDecidedBy`) и события перехода.
 
 Ответ обеих операций — Finding с новым ETag. Оплаченный ESU Windows 10 оформляется решением `risk_accepted` по SYS-002 с `reviewAt` не позже окончания ESU.
 
@@ -268,8 +272,8 @@
    - для M365 — наблюдение последнего завершённого (`completed` или `partial`) запуска, в котором есть этот субъект. Наблюдение `unavailable` тоже становится проекцией и даёт unknown с причиной; прежний результат остаётся в истории и учитывается в `coveragePeriod` своего периода.
 
    Проекция оценивается по действующей политике (`evaluatedPolicyVersion`, `assessmentScope=current`).
-3. Проверка, которую требует новая политика, но которой нет в источнике, даёт unknown/`missing_observation`.
-4. Новая ревизия политики пересчитывает текущие проекции с `cause=policy_change`, смена `ruleVersion` — с `rule_change`. `recalculate_policy` обрабатывает субъекты организации пакетами по 200 в отдельных транзакциях; эффекты идемпотентны.
+3. Проверка, которой нет в источнике, даёт unknown/`missing_observation` только в режиме `assessed`. При пересчёте политики пара без наблюдения в режиме informational оценки не получает, а M365-002 пересчитывается только у пользователей, о которых сообщил сборщик (у них есть проекция). В запуске сбора M365 активные проверки tenant без наблюдения получают `missing_observation` в любом режиме; informational — с `result=null`.
+4. Новая ревизия политики пересчитывает текущие проекции с `cause=policy_change`, смена `ruleVersion` — с `rule_change`. `recalculate_policy` обрабатывает субъекты организации пакетами по 200 в отдельных транзакциях. Каждая транзакция порции первой проверяет lease задания (строка `job` с прежним `leaseToken` в `running`, под блокировкой); без lease порция откатывается, а уже записанные порции остаются. Пары, уже пересчитанные по той же ревизии, правилу и наблюдению, повтор пропускает, поэтому эффекты идемпотентны.
 5. Пакет агента заменяет проекцию устройства, если у него нет признака часов и его `completedAt` не раньше `completedAt` пакета текущей проекции (`projectionCompletedAt`). Иначе пакет пополняет только историю (`assessmentScope=historical`), событий не создаёт и эпизод WIN-007 не меняет. Так перенумерованные старые пакеты ПК, восстановленного из checkpoint, не откатывают проекцию.
 6. История, от которой зависит правило (эпизод WIN-007), ведётся в порядке приёма пакетов и задним числом не меняется.
 7. Серверные проверки: SYS-002 и SYS-003 вычисляются по последнему collected наблюдению WIN-011 устройства в окне свежести WIN-011 среди пакетов, которые могли менять проекцию (без признака часов и не старше проекции по `completedAt`), даже если в последнем пакете WIN-011 `unavailable`; SYS-001 — по `lastFullScanAt`. Их наблюдения `source=server` создаются при приёме пакета, заданием `patch_level_sweep` и после ввода месяца каталога выпусков в действие (`03`, «Поддержка ОС и уровень патчей»).
@@ -281,13 +285,14 @@
 Типы и расписание заданий — `02`, раздел «Фоновые задания». Состояния задания: `queued` → `running` → `succeeded` или `failed`.
 
 - **Захват.** Задание захватывается через `FOR UPDATE SKIP LOCKED` с lease 5 минут. Захват увеличивает `leaseToken` и `attempts`; долгое задание продлевает lease.
-- **Завершение.** Завершение и бизнес-эффект — одна транзакция с условием `id = ? AND leaseToken = ?`; при 0 обновлённых строк транзакция откатывается. Задание с истёкшим lease захватывается заново, а прежний владелец эффекта не получает.
+- **Завершение.** Завершение и бизнес-эффект — одна транзакция с условием `id = ? AND leaseToken = ?`; при 0 обновлённых строк транзакция откатывается. Задание с истёкшим lease захватывается заново, а прежний владелец эффекта не получает. Задание, которое пишет эффект несколькими транзакциями (порции `recalculate_policy`), проверяет lease в каждой из них.
+- **Внешняя отправка.** Сообщение в Teams транзакция базы откатить не может. Отметка периода в `teams_digest` пишется сразу после того, как webhook принял сводку, и до завершения задания; повтор задания с отметкой ничего не отправляет. Сбой между принятием webhook и отметкой даёт одно повторное сообщение, а не пропуск сводки: доставка — «хотя бы один раз», а не «ровно один».
 - **Область.** Обработка выполняется в области организации `job.organizationId` (`02`, «Разделение клиентов») и явно проверяет принадлежность входных сущностей организации. Задания без организации (`teams_digest`, `release_catalog_check`, `release_import`) работают только с платформенными таблицами или в области чтения всех организаций по закрытому перечню `02`.
 - **Сериализация с приёмом.** Задания, меняющие проблемы субъектов устройства (`recalculate_policy`, `freshness_sweep`, `review_expiry`, `patch_level_sweep`), берут блокировку строки устройства, как приём пакета; для субъектов M365 точка сериализации — строка `tenant_connection`.
-- **Ключ периода.** У периодических заданий `periodKey` — дата или час периода по времени организации. Уникальность (`type`, `organizationId`, `periodKey`) с `NULLS NOT DISTINCT` делает создание идемпотентным при нескольких экземплярах сервиса, в том числе для заданий без организации (`teams_digest`, `release_catalog_check`). Внеплановый `patch_level_sweep` после сверки месяца получает `periodKey` — сверенный месяц, поэтому не сливается с ежедневным за ту же дату.
+- **Ключ периода.** У периодических заданий `periodKey` — дата или час периода по времени организации; у `weekly_report` — завершённая ISO-неделя (`2026-W41`) по времени организации. Пропущенные недели догоняются не глубже 4 недель и не раньше недели, в которую создана организация. Уникальность (`type`, `organizationId`, `periodKey`) с `NULLS NOT DISTINCT` делает создание идемпотентным при нескольких экземплярах сервиса, в том числе для заданий без организации (`teams_digest`, `release_catalog_check`). Внеплановый `patch_level_sweep` после сверки месяца получает `periodKey` — сверенный месяц, поэтому не сливается с ежедневным за ту же дату.
 - **Слоты.** Задания выполняет только production-слот: в слоте staging они выключены настройкой слота (`02`, «Развёртывание и окружения»).
 - **Ошибки.** Повтор через 1, 5, 15 и 60 минут, затем раз в час; после 10 попыток — `failed` и оповещение (RB-04).
-- **Один запуск сбора.** `m365_collect` одной организации не выполняется параллельно: запрос объединяется с незавершённым запуском (частичный уникальный индекс `collection_run`).
+- **Один запуск сбора.** `m365_collect` одной организации не выполняется параллельно (частичный уникальный индекс `collection_run`): `requestCollection` возвращает незавершённый запуск, а плановое задание к нему не присоединяется и закрывает только запуск, открытый дольше 6 часов (раздел «Подключение M365 и сбор»).
 - **Хранение.** Завершённые задания хранятся 30 дней, failed — 90.
 
 ## API агента
@@ -327,7 +332,7 @@ API агента (P2) обслуживается на hostname агента то
 6. Nonce неизвестен, истёк, использован или не `enroll`; подпись не проверяется ключом `publicKey` — 401 `challenge_invalid`.
 7. `installationId` есть в `revoked_installation` организации или устройство с ним отозвано — 401 `device_revoked`.
 8. Устройство с этим `installationId` есть, а признак машины не совпадает — 409 `identity_conflict`; ключ не меняется, сведения о конфликте сохраняются.
-9. Устройство есть и признак совпадает: отпечаток ключа прежний — 201 с `reenrolled=true` без новых эффектов; иначе публичный ключ заменяется (`device.key_replaced`), `reenrolled=true`.
+9. Устройство есть и признак совпадает: отпечаток ключа равен сохранённому (в том числе принятому решением `accept_new_key`) — 201 с `reenrolled=true` без новых эффектов. Новый ключ с `previousKeySignature`, которая проверяется сохранённым ключом устройства, заменяет прежний (`device.key_replaced`, `reenrolled=true`), и все сессии устройства удаляются. Новый ключ без такой подписи — 409 `identity_conflict` с `conflictKind=key`: ключ не меняется, новый публичный ключ сохраняется для разбора.
 10. Иначе создаются устройство и субъект `device`.
 
 Шаги 7–10 выполняются под транзакционной advisory-блокировкой по (`organizationId`, `installationId`), поэтому два одновременных запроса одной установки не создают двух устройств. Nonce погашается, запись `enrollment` создаётся, `enrollment_key.lastUsedAt` обновляется в той же транзакции.
@@ -365,7 +370,7 @@ API агента (P2) обслуживается на hostname агента то
     - commit.
 13. Ответ 200 ScanReceipt отправляется после commit.
 
-Полный сбор — пакет, в котором есть наблюдение для каждой проверки из `activeCheckIds` своей `policyVersion` (любой `collectionStatus`), без признака часов. Агент не отправляет частичных пакетов; повторную проверку он выполняет как полный сбор. Отсутствующая ожидаемая пара даёт unknown/`missing_observation`. `scanRequestId` чужого устройства или истёкшего запроса игнорируется с записью диагностики.
+Полный сбор — пакет, в котором есть наблюдение для каждой проверки агента (`source=agent`, WIN-*) из `activeCheckIds` своей `policyVersion` (любой `collectionStatus`), без признака часов; проверки M365 и серверные SYS-* в пакет не входят. Агент не отправляет частичных пакетов; повторную проверку он выполняет как полный сбор. Отсутствующая ожидаемая пара даёт unknown/`missing_observation`. `scanRequestId` чужого устройства или истёкшего запроса игнорируется с записью диагностики.
 
 Агент проверяет каждое наблюдение встроенной схемой до отправки и заменяет не прошедшее проверку (в том числе неизвестное значение перечисления) на `unavailable/unsupported` с записью в свой журнал. Поэтому одно недопустимое значение не отбрасывает пакет целиком. Отказы 422 сервер считает по устройствам и кодам, а агент передаёт число удалённых пакетов `rejectedBatchCount` в check-in (`06`, «Наблюдаемость и оповещения»).
 
@@ -398,7 +403,7 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 | agent_version_unsupported | 422 | submitScan | agentVersion ниже minimumAgentVersion | stop_until_upgrade |
 | idempotency_conflict | 409 | enrollAgent, submitScan, портальные операции с idempotencyKey | Тот же ключ идемпотентности с другим содержимым | enrollAgent: reenroll; submitScan: drop_batch |
 | sequence_conflict | 409 | submitScan | sequence не больше lastAcceptedSequence при новом scanId | resync_sequence |
-| identity_conflict | 409 | enrollAgent, agentCheckIn, submitScan | Признак машины не совпадает с устройством | identity_stop |
+| identity_conflict | 409 | enrollAgent, agentCheckIn, submitScan | Признак машины не совпадает с устройством; в enrollAgent также — новый ключ устройства без подписи прежним | identity_stop |
 | organization_inactive | 403 | enrollAgent, createAgentSession, agentCheckIn, submitScan | Организация disabled или deletion_scheduled | suspend_until_active |
 | enrollment_key_invalid | 401 | enrollAgent | Ключ регистрации неизвестен или отозван | await_enrollment_key |
 | challenge_invalid | 401 | enrollAgent, createAgentSession | Nonce неизвестен, истёк, использован, другого purpose или deviceId; подпись не проверяется | new_challenge |
@@ -420,7 +425,7 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 | tenant_conflict | 409 | startTenantConsent, verifyTenantConnection | Tenant подключён к другой организации или отличается от действующего подключения | — |
 | consent_not_granted | 422 | verifyTenantConnection | Токен для ожидаемого tenant не выдан (consent нет) или /organization вернул другой id | — |
 | resource_not_ready | 409 | downloadReport, downloadOrganizationExport | Файл не в состоянии ready | — |
-| validation_failed | 422 | Портал | Значение по схеме верно, но нарушает правило: timezone, неделя отчёта, reviewAt, assigneeId, сочетания политики, третий активный ключ регистрации, запись каталога выпусков против сверенной, сверка пустого месяца без `noNewReleases` | — |
+| validation_failed | 422 | Портал | Значение по схеме верно, но нарушает правило: timezone, неделя отчёта (не ISO-неделя или не завершена), reviewAt, assigneeId, сочетания политики, третий активный ключ регистрации, запись каталога выпусков против сверенной, сверка пустого месяца без `noNewReleases` | — |
 | policy_inputs_missing | 422 | createPolicyRevision | assessed без входных настроек; нет WIN-011; WIN-004 без WIN-003 | — |
 
 Действия агента:
@@ -428,7 +433,7 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 - `retry_after` — пауза по `Retry-After`; `retry_backoff` — экспоненциальная пауза от 1 минуты до 1 часа с джиттером. После паузы агент возвращается в состояние, из которого вошёл в Backoff, и повторяет запрос.
 - `drop_batch` — удалить пакет из буфера, записать это в журнал агента и увеличить `rejectedBatchCount`.
 - `refresh_configuration` — получить конфигурацию через check-in; `resync_sequence` — получить конфигурацию и перенумеровать очередь по подразделу «Субъекты и идентичность устройства»; `renew_session` — получить новую сессию. Эти действия и `drop_batch` состояние агента не меняют.
-- `new_challenge` — один повтор с новым nonce. Второй отказ подряд при доступном локальном ключе ведёт к регистрации заново с тем же `installationId` не чаще раза в сутки (сервер заменит публичный ключ, например после восстановления базы на точку до прежней замены); без локального ключа агент создаёт новый ключ и регистрируется заново.
+- `new_challenge` — один повтор с новым nonce. Второй отказ подряд при доступном локальном ключе ведёт к регистрации заново с тем же `installationId` не чаще раза в сутки; без локального ключа агент создаёт новый ключ и регистрируется заново. Если сервер помнит другой ключ (например, после восстановления базы на точку до прежней замены), регистрация получает `identity_conflict` вида `key`, и действующий ключ принимает Admin (`accept_new_key`).
 - `reenroll` — регистрация заново сохранённым ключом организации с новым `registrationRequestId`.
 - `skip_request` — пропустить запрос; плановые запросы повторяются по расписанию: check-in — через `checkInIntervalHours`, регистрация — раз в сутки и при запуске службы.
 - Остальные действия переводят агент в состояние по подразделу «Конечный автомат агента».
@@ -480,10 +485,10 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 | listFindings | GET `{org}/findings` | A, T, R | Фильтры `technicalState`, `freshness`, `severity`, `checkId`, `workflowState` (несколько значений через запятую); `Accept-Language` | 200 FindingPage |
 | getFinding | GET `{org}/findings/{findingId}` | A, T, R | `Accept-Language` | 200 Finding + ETag |
 | patchFinding | PATCH `{org}/findings/{findingId}` | A, T | `If-Match` обязателен; `Accept-Language` | 200 Finding + ETag |
-| decideFindingRisk | POST `{org}/findings/{findingId}/risk-decisions` | A | `If-Match` обязателен; `Accept-Language` | 200 Finding + ETag |
+| decideFindingRisk | POST `{org}/findings/{findingId}/risk-decisions` | A | `If-Match` обязателен; `Accept-Language`; запись `risk_decision` | 200 Finding + ETag |
 | listFindingEvents | GET `{org}/findings/{findingId}/events` | A, T, R | cursor | 200 FindingEventPage |
 | listReports | GET `{org}/reports` | A, T, R | cursor | 200 ReportPage |
-| createReport | POST `{org}/reports` | A, T | Один отчёт на неделю и язык; повтор возвращает существующий | 202 Report |
+| createReport | POST `{org}/reports` | A, T | Только завершённая неделя; один отчёт на неделю и язык: повтор возвращает существующий, `failed` ставит в генерацию заново, `ready` не меняет | 202 Report |
 | downloadReport | GET `{org}/reports/{reportId}/download` | A, T, R | Аудит каждого чтения | 200 только `text/html` |
 | createEnrollmentKey | POST `{org}/enrollment-keys` | A | Секрет показывается один раз; не больше двух активных ключей | 201 EnrollmentKey |
 | listEnrollmentKeys | GET `{org}/enrollment-keys` | A | cursor, без секрета; число устройств по ключу | 200 EnrollmentKeySummaryPage |
@@ -491,7 +496,7 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 | listDevices | GET `{org}/devices` | A, T, R | cursor; фильтры `enrollmentKeyId`, `status` | 200 DevicePage |
 | updateDevice | PATCH `{org}/devices/{deviceId}` | A | Только `displayName`; аудит | 200 Device |
 | revokeDevice | POST `{org}/devices/{deviceId}/revoke` | A | Идемпотентно; сначала журнал безопасности, затем `revoked_installation` | 204 |
-| resolveDeviceIdentity | POST `{org}/devices/{deviceId}/identity-resolutions` | A | `accept_new_fingerprint` или `keep`; без конфликта — устройство без изменений; аудит | 200 Device |
+| resolveDeviceIdentity | POST `{org}/devices/{deviceId}/identity-resolutions` | A | `accept_new_fingerprint`, `accept_new_key` или `keep`; без конфликта этого вида — устройство без изменений; аудит | 200 Device |
 | requestDeviceScan | POST `{org}/devices/{deviceId}/scan-requests` | A, T | `idempotencyKey`, срок 24 ч, один незавершённый запрос на устройство | 202 ScanRequest |
 | listWindowsReleases | GET `/api/v1/windows-releases` | A, T, R | cursor; фильтры `securityMonth`, `state`; платформенные данные | 200 WindowsReleasePage |
 | importWindowsReleases | POST `/api/v1/windows-releases/imports` | A | Записи месяца из MSRC CVRF или ручной ввод в состоянии draft; совпадающие со сверенными пропускаются, противоречащие им — 422 `validation_failed` | 202 WindowsReleaseMonth |
@@ -528,11 +533,19 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 
 - нет перевода текста правила — `state=failed`, `failureCode=translation_missing`;
 - иной сбой генерации — `failureCode=generation_error`;
-- переход в `failed` поднимает оповещение и попадает в сводку Teams;
+- переход в `failed` поднимает оповещение и попадает в сводку Teams; повторный `createReport` за ту же неделю и язык ставит такой отчёт в генерацию заново (`failed` → `queued`), а отчёт `ready` не меняет;
 - резервный язык не используется до ответа на вопрос 9 в `08`;
 - новая `ruleVersion` вводится в действие только с текстами на nb, nn и en.
 
-Период — ISO-неделя с понедельника 00:00 по понедельник 00:00 в timezone организации; UTC-границы хранятся. `createReport` принимает только такие границы, иное — 422 `validation_failed`. Свежесть и `coverageAt` в отчёте считаются на `periodEnd`. Задание `weekly_report` создаёт отчёт автоматически в понедельник 06:00. В P1–P2 отчёт выдаётся сотрудникам через портал, клиенту его передаёт техник.
+Период — ISO-неделя с понедельника 00:00 по понедельник 00:00 в timezone организации; UTC-границы хранятся. `createReport` принимает только такие границы и только завершённую неделю (`periodEnd` не позже текущего момента); иные границы, текущая и будущая неделя — 422 `validation_failed`. Свежесть и `coverageAt` в отчёте считаются на `periodEnd`. Задание `weekly_report` создаёт отчёт за завершённую неделю автоматически в понедельник 06:00 и догоняет пропущенные недели, не глубже 4 и не раньше недели создания организации. В P1–P2 отчёт выдаётся сотрудникам через портал, клиенту его передаёт техник.
+
+**Снимок отчёта.** При генерации сервис один раз записывает неизменяемый снимок (`report.snapshot`), и HTML строится только из него:
+
+- версии политики, действовавшие в периоде, состояние подключения Microsoft 365 на момент генерации и последний запуск сбора до конца периода. Метрики считаются на `periodEnd`, а состояние подключения при догоне пропущенной недели относится к моменту после конца периода;
+- состав пар покрытия: субъект, проверка, категория (обязательная, informational, not_applicable), результат, severity, причина, `observedAt`, свежесть на `periodEnd`, определённость в периоде и активность субъекта на конец периода; счётчики и метрики покрытия;
+- события периода, проблемы, открытые на конец периода, решения о риске и недоступные данные.
+
+Поэтому смена ролей, исключений и политики, возврат субъекта и удаление evidence после генерации не меняют показатели закрытой недели. Строку `ready` изменить нельзя: UPDATE отклоняет триггер базы, а отдельной исправленной редакции отчёта в P1 нет. Если файл в Blob потерян, при выдаче он строится заново из снимка; заголовки и рекомендации берутся при этом из текстов текущей версии правил.
 
 Содержание отдельно для Microsoft 365 и Windows:
 
@@ -547,14 +560,15 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 - **Устройства** без свежего полного сбора (SYS-001) с `lastSeenAt` и отдельно — не выходившие на связь в периоде.
 - **Покрытие** — `coveragePeriod`, `coverageAt` на `periodEnd`, доля stale и compliance; дата измерения и источник.
 
-Отчёт за период старше 90 дней строится из `basisSnapshot` и `finding_event`, а истёкшие подробности помечаются «подробности удалены по сроку хранения».
+Отчёт, который впервые формируется за период старше 90 дней, строится из `basisSnapshot` и `finding_event`, а истёкшие подробности помечаются «подробности удалены по сроку хранения». Уже сформированный отчёт выдаётся из своего снимка.
 
 Определения:
 
 - **Обязательная проверка** — проверка с режимом `assessed` в действующей ревизии политики; собираемая проверка, кроме того, должна входить в `activeCheckIds`.
 - **Применимая пара** — пара (субъект, проверка), у которой текущая оценка не not_applicable. Для M365-002 субъекты — только пользователи с привилегированной ролью.
-- **Активный субъект.** Пользователь — присутствует в последнем полном списке `/users` и не выведен из учёта. Устройство на момент t — `status=active`, `enrolledAt` ≤ t и последний check-in не старше 14 суток (не dormant); в периоде — устройство с хотя бы одними сутками в `device_presence` внутри периода, то есть с подтверждённой доступностью. Остальные устройства показываются отдельным счётчиком «не выходили на связь». Tenant — подключение `active`.
+- **Активный субъект.** Пользователь — присутствует в последнем полном списке `/users` и не выведен из учёта. Устройство на момент t — `status=active`, `enrolledAt` ≤ t и последний check-in не старше 14 суток (не dormant); в периоде — устройство с хотя бы одними сутками в `device_presence` внутри периода, то есть с подтверждённой доступностью. Остальные устройства показываются отдельным счётчиком «не выходили на связь». Tenant — подключение `active`; подключённый tenant до первого сбора тоже активен: его обязательные проверки дают пары без данных, и покрытие равно 0, а не «нет данных». У организации без подключения пар M365 нет, и покрытие — «нет данных».
 - **Определённая оценка** — `result` pass или fail.
+- **Покрытие для NFR-03** — `coveragePeriod`, из знаменателя которого исключены пары, у которых за период нет определённой оценки, а последняя оценка — unknown с причиной `license_missing` или `enforcement_unconfirmed` (ограничение tenant клиента или неподтверждённая семантика источника). Его считают по строкам снимка отчёта для критериев пилота (`01`, NFR-03); сам отчёт показывает `coveragePeriod` без исключений, а такие пары — с причиной в «Недоступных данных».
 - **«Не настроено политикой»** — пары в режиме informational из-за отсутствующих входных настроек (WIN-010 без `expectedTenantId`, WIN-003 без одобренных продуктов).
 
 Метрики:
@@ -578,7 +592,7 @@ Informational исключаются из числителя и знаменат
 
 Знаменатель — 8 пар: M365-001 у U1…U4, M365-002 у U3 и три проверки tenant. Числитель `coverageAt` — 6 свежих определённых оценок, без двух unknown. `coverageAt` = 6/8 = 75,0%. Если все оценки таблицы получены в отчётной неделе, `coveragePeriod` = 7/8 = 87,5%: у M365-006 есть определённая оценка в периоде (pass во вторник), у M365-001 пользователя U4 — нет. Compliance = 3/6 = 50%. Счётчики:
 
-- informational — 6: M365-004 у tenant и M365-007 у U1…U4 и G (informational-оценка всегда `result=null` и not_applicable не бывает);
+- informational — 1: M365-004 у tenant (informational-оценка всегда `result=null` и not_applicable не бывает; M365-007 отложена и оценок не имеет, informational-пара без оценки не считается);
 - not_applicable — 1: M365-001 у G;
 - unknown — 2, stale — 0.
 
@@ -598,10 +612,10 @@ JSON Schema и OpenAPI задают структуру; закрытые evidenc
 - действие аудита;
 - повтор без второго эффекта;
 - состояние автомата агента;
-- 0 строк для RLS;
+- для RLS и прав базы — 0 строк: чтение без области возвращает 0 строк, а изменение чужой организации, в области чтения all или таблицы истории затрагивает 0 строк либо отклоняется ошибкой PostgreSQL (`WITH CHECK`, `READ ONLY`, отозванное право); данные не меняются;
 - статус модуля M365;
 - эффект задания (`none` или `single`).
 
-Fixture записи с оценкой задаёт режим проверки в политике явно. Число записей реестра не доказывает полноту правил; её подтверждают автоматические негативные тесты WP-01.
+Fixture записи с оценкой задаёт режим проверки в политике явно. Число записей реестра не доказывает полноту правил; её подтверждают автоматические негативные тесты, которые пишет WP, реализующий правило, на инфраструктуре WP-01.
 
 Каждое новое текстовое правило в `01`, `03`, `04` или `05`, которое не выражается схемой, получает запись в реестре; реестр подчинён этим документам, и расхождение с ними — дефект пакета. Встроенная проверка пакета поддерживает только используемое подмножество JSON Schema и не заменяет стандартные валидаторы; полная стандартная проверка, генерация клиентов C# и TypeScript и CI — первый результат WP-01.

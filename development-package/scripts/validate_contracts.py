@@ -4,7 +4,7 @@ import json
 import re
 
 from contract_catalog import (ACCEPT_LANGUAGE_MAX, ADMIN_ROLES, AUDIT_DETAILS, AUDIT_READS, CROSS_ORG_OPERATIONS,
-                              DOWNLOAD_OPERATIONS, GRAPH_MODULES, LANGUAGES, LOCALIZED_OPERATIONS, PROBLEM_CODES,
+                              DEFERRED_IDS, DEFERRED_MODULES, DOWNLOAD_OPERATIONS, GRAPH_MODULES, LANGUAGES, LOCALIZED_OPERATIONS, PROBLEM_CODES,
                               PROBLEM_HTTP, REASON_CODES, RETENTION_PURGE_ORDER, ROLES)
 from schema_check import SchemaError, is_valid, read_json, resolve_ref, unsupported_keywords, validate
 
@@ -155,7 +155,7 @@ COMPLETE_STATUSES = {'available', 'license_missing', 'skipped'}
 
 def graph_semantic_errors(run):
     """Server-side rules for a collection run: every module exactly once, state derived from module statuses,
-    tenant and users available, unique (checkId, subject.key)."""
+    tenant and users available, unique (checkId, subject.key), deferred modules skipped without observations."""
     errors = []
     modules = [m.get('module') for m in run.get('modules', [])]
     if sorted(modules) != sorted(GRAPH_MODULES):
@@ -169,6 +169,9 @@ def graph_semantic_errors(run):
     keys = [(o.get('checkId'), o.get('subject', {}).get('key')) for o in run.get('observations', [])]
     if len(keys) != len(set(keys)):
         errors.append('duplicate (checkId, subject.key) in a collection run')
+    if any(status.get(module) != 'skipped' for module in DEFERRED_MODULES) or \
+            any(check in DEFERRED_IDS for check, _ in keys):
+        errors.append('deferred checks are not collected: their modules are skipped and have no observations')
     return errors
 
 
@@ -208,8 +211,9 @@ def check_examples(report, ctx):
             report.fail('contract', f'examples/m365-collection.json: {error}')
         for error in graph_semantic_errors(run):
             report.fail('contract', f'examples/m365-collection.json: {error}')
-        report.check(sorted({o['checkId'] for o in run['observations']}) == sorted(ctx['graph_ids']), 'contract',
-                     'examples/m365-collection.json must cover every M365 check')
+        collected = sorted(c for c in ctx['graph_ids'] if c not in DEFERRED_IDS)
+        report.check(sorted({o['checkId'] for o in run['observations']}) == collected, 'contract',
+                     'examples/m365-collection.json must cover every collected M365 check')
         enforcement = [o['evidence'] for o in run['observations'] if o['checkId'] == 'M365-003']
         report.check(bool(enforcement) and enforcement[0]['securityDefaults'] == 'disabled'
                      and [p['state'] for p in enforcement[0]['mfaPolicies']] == ['enabledForReportingButNotEnforced']
@@ -297,6 +301,9 @@ def _graph_negatives(run):
         lambda r: r['modules'][4].update(status='partial'),
         lambda r: r['modules'][0].update(status='temporary_error') or r.update(state='partial'),
         lambda r: r['observations'].append(copy.deepcopy(first('M365-003')(r))),
+        lambda r: r['observations'].append({**copy.deepcopy(first('M365-001')(r)), 'checkId': 'M365-007', 'evidence': {
+            'accountEnabled': True, 'userType': 'Member', 'directorySyncAccount': False,
+            'lastSuccessfulSignInAt': None, 'createdAt': None}}),
     ]
     return [_variant(run, mutate) for mutate in mutations]
 

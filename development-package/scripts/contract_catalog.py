@@ -5,7 +5,7 @@ checks, Graph permissions, Problem.code with agent actions, Assessment.reasonCod
 agent states and portal role sets. Counts are never hard-coded elsewhere.
 """
 
-CATALOG_VERSION = '0.3.0'
+CATALOG_VERSION = '0.3.1'
 
 # checkId, name, phase, defaultAssessmentMode, source, subjectType
 CHECKS = [
@@ -41,12 +41,33 @@ VOLUME_IDS = [c[0] for c in CHECKS if c[5] == 'volume' and c[4] == 'agent']
 GRAPH_SUBJECTS = {c[0]: c[5] for c in CHECKS if c[4] == 'graph'}
 ALWAYS_INFORMATIONAL = ['WIN-011', 'SYS-001']
 
-# Application permissions of the multi-tenant Graph app (04 «Права Graph»); read-only, all P1 modules.
+# Application permissions of the multi-tenant Graph app (04 «Права Graph»): read-only, the first consent of P1.
+# AuditLog.Read.All (sign_in_activity, M365-007) is deferred: it comes only with a new rule version and re-consent.
 GRAPH_PERMISSIONS = ['Organization.Read.All', 'User.Read.All', 'UserAuthenticationMethod.Read.All',
-                     'RoleManagement.Read.Directory', 'GroupMember.ReadBasic.All', 'Policy.Read.All',
-                     'AuditLog.Read.All']
+                     'RoleManagement.Read.Directory', 'GroupMember.Read.All', 'Policy.Read.All']
 # Role template of the Entra Connect synchronization account: M365-001 and M365-007 are not applicable to it.
 DIRECTORY_SYNC_ROLE = 'd29b2b05-8046-44ba-8758-1e26182fcf32'
+# Built-in Microsoft Entra role templates counted as privileged by M365-002 (03, «Правило M365-001 и M365-002»).
+PRIVILEGED_ROLE_TEMPLATES = [
+    '62e90394-69f5-4237-9190-012177145e10',  # Global Administrator
+    'e8611ab8-c189-46e8-94e1-60213ab1f814',  # Privileged Role Administrator
+    '7be44c8a-adaf-4e2a-84d6-ab2649e08a13',  # Privileged Authentication Administrator
+    '194ae4cb-b126-40b2-bd5b-6091b380977d',  # Security Administrator
+    'b1be1c3e-b65d-4f19-8427-f6fa0d97feb9',  # Conditional Access Administrator
+    '29232cdf-9323-42fd-ade2-1d097af3e4de',  # Exchange Administrator
+    'f28a1f50-f6e7-4571-818b-6a12f2af6b6c',  # SharePoint Administrator
+    'fe930be7-5e62-47db-91af-98c3a49a38b1',  # User Administrator
+    'c4e39bd9-1100-46d3-8c65-fb160da0071f',  # Authentication Administrator
+    '9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3',  # Application Administrator
+    '158c047a-c907-4556-b7ef-446551a6b5f7',  # Cloud Application Administrator
+    '3a2c62db-5318-420d-8d74-23affee5d9d5',  # Intune Administrator
+    '729827e3-9c14-49f7-bb1b-9608f156bbb8',  # Helpdesk Administrator
+    'b0f54661-2d74-4c50-afa3-1ec803f12efe',  # Billing Administrator
+    '0526716b-113d-4c15-b2c8-68e3c22b9f80',  # Authentication Policy Administrator
+    '966707d0-3269-4727-9be2-8c3a10f19b9d',  # Password Administrator
+    '9360feb5-f418-4baa-8175-e2a00bac4301',  # Directory Writers
+    'e00e864a-17c5-4a4b-9c06-f5b95a8d5bd8',  # Partner Tier2 Support
+]
 # Conditions of a Conditional Access policy that make its MFA requirement conditional (03 «Правило M365-003»).
 CA_CONDITIONS = ['user_risk', 'sign_in_risk', 'insider_risk', 'locations_trusted_excluded', 'locations_other',
                  'platforms', 'devices', 'authentication_flows', 'client_applications']
@@ -62,6 +83,10 @@ MFA_METHOD_KINDS = ['microsoft_authenticator', 'fido2', 'windows_hello_for_busin
 # Modules of an M365 collection run and their capability statuses (03 «Возможности подключения»).
 GRAPH_MODULES = ['tenant', 'licenses', 'users', 'auth_methods', 'roles', 'security_defaults',
                  'conditional_access', 'authorization_policy', 'sign_in_activity', 'per_user_mfa']
+# Checks of the catalog that are not collected yet and their modules (03 «Правило M365-007»): the module is always
+# skipped and a run has no observations of the check. M365-007 waits for AuditLog.Read.All and re-consent.
+DEFERRED_IDS = ['M365-007']
+DEFERRED_MODULES = ['sign_in_activity']
 # skipped: the module is not needed in this run (per_user_mfa when Security Defaults or Conditional Access decide).
 CAPABILITY_STATUSES = ['available', 'skipped', 'permission_missing', 'license_missing', 'partial',
                        'temporary_error']
@@ -135,7 +160,8 @@ PROBLEM_HTTP = {code: status for code, status, _ in PROBLEM_CODES}
 # Codes that invariants.json does not need to cover (generic transport throttling).
 UNCOVERED_CODES = ['rate_limited', 'temporarily_unavailable']
 
-# Collection reasons: the agent sends the first four; the M365 collector sets all except collector_timeout.
+# Collection reasons: the agent sends the first four; the M365 collector sets only GRAPH_COLLECTOR_REASONS,
+# never unsupported or collector_timeout (03 «Семантика результата»).
 AGENT_COLLECTOR_REASONS = ['permission_denied', 'unsupported', 'collector_timeout', 'temporary_error']
 GRAPH_COLLECTOR_REASONS = ['permission_denied', 'temporary_error', 'license_missing', 'partial_data']
 COLLECTION_REASONS = AGENT_COLLECTOR_REASONS + ['license_missing', 'partial_data']
@@ -182,8 +208,8 @@ CROSS_ORG_OPERATIONS = ['listOrganizations', 'createOrganization', 'listFindings
 # Actions of changeOrganizationLifecycle (OrganizationLifecycleChange.action and audit details).
 LIFECYCLE_ACTIONS = ['disable', 'enable', 'schedule_deletion', 'cancel_deletion']
 # Deletion order of retention_purge (04 «Сроки хранения», 05); keys of RetentionPurgeAuditDetails.deleted.
-RETENTION_PURGE_ORDER = ['finding_event', 'assessment', 'finding', 'observation', 'collection_run', 'scan_batch',
-                         'scan_request', 'subject', 'device_presence', 'device', 'revoked_installation']
+RETENTION_PURGE_ORDER = ['risk_decision', 'finding_event', 'assessment', 'finding', 'observation', 'collection_run',
+                         'scan_batch', 'scan_request', 'subject', 'device_presence', 'device', 'revoked_installation']
 # AuditEvent.action -> schema of AuditEvent.details; details is null for every other action.
 AUDIT_DETAILS = {'organization.lifecycle_change': 'OrganizationLifecycleAuditDetails',
                  'finding.assignment_change': 'FindingAssignmentAuditDetails',

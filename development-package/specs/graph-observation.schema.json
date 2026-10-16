@@ -492,7 +492,21 @@
                 },
                 "minItems": 0,
                 "maxItems": 50,
-                "description": "Активные привилегированные роли без временных активаций PIM; пустой список — роль снята.",
+                "description": "Активные роли из privilegedRoleTemplateIds, включая временные активации PIM; пустой список — роль снята.",
+                "uniqueItems": true
+              },
+              "temporaryRoleTemplateIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 36,
+                  "format": "uuid",
+                  "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                },
+                "minItems": 0,
+                "maxItems": 50,
+                "description": "Роли из roleTemplateIds, которые действуют только как активация PIM (assignmentType Activated при Entra ID P2). Нет поля — активации не отделялись.",
                 "uniqueItems": true
               },
               "assignment": {
@@ -716,6 +730,10 @@
                   "unknown": {
                     "type": "integer",
                     "minimum": 0
+                  },
+                  "enabled": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 },
                 "required": [
@@ -723,7 +741,7 @@
                   "notRequired",
                   "unknown"
                 ],
-                "description": "Счётчики per-user MFA включённых member-пользователей вне excludedUserIds: required — enabled или enforced, notRequired — disabled. null — модуль per_user_mfa не выполнялся."
+                "description": "Счётчики per-user MFA включённых member-пользователей вне excludedUserIds и без роли синхронизации: required — enforced, notRequired — disabled, enabled — enabled (до подтверждения в SP-01 не принуждение), unknown — отсутствующее или нераспознанное состояние, а без поля enabled — и enabled. null — модуль per_user_mfa не выполнялся."
               }
             },
             "required": [
@@ -918,6 +936,20 @@
               "unresolvedGroupAssignments": {
                 "type": "integer",
                 "minimum": 0
+              },
+              "uncoveredRoleTemplateIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 36,
+                  "format": "uuid",
+                  "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                },
+                "minItems": 0,
+                "maxItems": 200,
+                "description": "Роли каталога вне privilegedRoleTemplateIds, назначенные включённым пользователям; на результат не влияют.",
+                "uniqueItems": true
               }
             },
             "required": [

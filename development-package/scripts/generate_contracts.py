@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import copy  # noqa: E402
 import json  # noqa: E402
 
-from contract_catalog import AGENT_IDS, CATALOG_VERSION, CHECKS, GRAPH_IDS, GRAPH_MODULES, VOLUME_IDS  # noqa: E402
+from contract_catalog import (AGENT_IDS, CATALOG_VERSION, CHECKS, DEFERRED_IDS, DEFERRED_MODULES, GRAPH_IDS,  # noqa: E402
+                              GRAPH_MODULES, VOLUME_IDS)
 from contract_paths import PORTAL_HOST, SECURITY, build_paths  # noqa: E402
 from contract_schemas import (SERVER_EVIDENCE, api_schemas, batch_schema, graph_collection_schema,  # noqa: E402
                               graph_observation_schema, observation_schema)
@@ -55,7 +56,8 @@ SYNTHETIC_GRAPH = [
     ('M365-001', 1, {'accountEnabled': True, 'userType': 'Member', 'directorySyncAccount': False,
                      'methodKinds': ['password', 'microsoft_authenticator']}),
     ('M365-002', 1, {'accountEnabled': True, 'userType': 'Member', 'roleTemplateIds': [GLOBAL_ADMIN],
-                     'assignment': 'direct', 'methodKinds': ['password', 'microsoft_authenticator']}),
+                     'temporaryRoleTemplateIds': [], 'assignment': 'direct',
+                     'methodKinds': ['password', 'microsoft_authenticator']}),
     # Reference case: only a report-only CA policy requires MFA, per-user MFA is off -> M365-003 fail, not pass.
     ('M365-003', None, {'securityDefaults': 'disabled', 'conditionalAccess': 'available', 'mfaPolicies': [
         {'policyId': '44444444-0000-4000-8000-000000000001', 'state': 'enabledForReportingButNotEnforced',
@@ -64,15 +66,15 @@ SYNTHETIC_GRAPH = [
          'grantOperator': 'AND', 'grantControls': ['mfa'], 'authStrengthRequiresMfa': None}],
         'perUserMfa': {'required': 0, 'notRequired': 2, 'unknown': 0}}),
     ('M365-004', None, {'securityDefaults': 'disabled', 'conditionalAccess': 'available', 'legacyBlockPolicies': []}),
+    # Global Reader is outside privilegedRoleTemplateIds of policy v1: listed, not assessed by M365-002.
     ('M365-005', None, {'globalAdminUserIds': [USERS[1][0]], 'disabledGlobalAdminUserIds': [],
-                        'unresolvedGroupAssignments': 0}),
+                        'unresolvedGroupAssignments': 0,
+                        'uncoveredRoleTemplateIds': ['f2ef992c-3afb-46b9-b7cf-a126ee74c451']}),
     ('M365-006', None, {'permissionGrantPolicies': ['ManagePermissionGrantsForSelf.microsoft-user-default-legacy']}),
-    ('M365-007', 0, {'accountEnabled': True, 'userType': 'Member', 'directorySyncAccount': False,
-                     'lastSuccessfulSignInAt': '2026-10-10T07:12:00Z', 'createdAt': '2024-03-01T09:00:00Z'}),
-    ('M365-007', 1, {'accountEnabled': True, 'userType': 'Member', 'directorySyncAccount': False,
-                     'lastSuccessfulSignInAt': None, 'createdAt': '2025-01-15T09:00:00Z'}),
 ]
-assert sorted({c for c, _, _ in SYNTHETIC_GRAPH}) == GRAPH_IDS, 'Graph example must cover all M365 checks'
+# A P1 run: every collected check, none of the deferred ones; their modules are skipped (03 «Правило M365-007»).
+assert sorted({c for c, _, _ in SYNTHETIC_GRAPH}) == [c for c in GRAPH_IDS if c not in DEFERRED_IDS], \
+    'Graph example must cover exactly the collected M365 checks'
 
 
 def save(path, value):
@@ -119,7 +121,8 @@ def graph_example():
     return {'schemaVersion': '1.0', 'collectionRunId': '55555555-5555-4555-8555-555555555555',
             'tenantId': TENANT, 'startedAt': '2026-10-12T03:00:00Z', 'completedAt': '2026-10-12T03:05:00Z',
             'state': 'completed', 'entraP1': True, 'usersComplete': True,
-            'modules': [{'module': module, 'status': 'available'} for module in GRAPH_MODULES],
+            'modules': [{'module': module, 'status': 'skipped' if module in DEFERRED_MODULES else 'available'}
+                        for module in GRAPH_MODULES],
             'observations': observations}
 
 

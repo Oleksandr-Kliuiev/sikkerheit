@@ -2,7 +2,7 @@
 
 Каталог определяет измеряемые факты, условия вывода и границы интерпретации. Пороговые значения ниже — параметры политики v1, которую сервер создаёт вместе с организацией; любое изменение даёт новую неизменяемую ревизию политики и запись в аудите. `checkId` хранится в наблюдении и совпадает с машинным каталогом `specs/check-catalog.json`.
 
-Каталог содержит 21 проверку. Семь проверок Microsoft 365 (M365-*) выполняются в P1. Одиннадцать проверок агента Windows (WIN-*) и три серверные проверки (SYS-*) — в P2. Для каждой проверки каталог задаёт:
+Каталог содержит 21 проверку. Семь проверок Microsoft 365 (M365-*) относятся к P1; M365-007 отложена вместе с правом `AuditLog.Read.All` (правило M365-007 ниже), поэтому в P1 собираются шесть. Одиннадцать проверок агента Windows (WIN-*) и три серверные проверки (SYS-*) — в P2. Для каждой проверки каталог задаёт:
 
 - `defaultAssessmentMode` — `assessed` или `informational`;
 - `source` — `graph`, `agent` или `server`;
@@ -18,13 +18,14 @@
 - M365 — `specs/graph-observation.schema.json`;
 - серверных проверок SYS-* — `evidenceSchema` в `specs/check-catalog.json`.
 
-Причины недоступности описывают только сбор. Агент передаёт `permission_denied`, `unsupported`, `collector_timeout` или `temporary_error`. Сборщик M365 выставляет:
+Причины недоступности описывают только сбор. Агент передаёт `permission_denied`, `unsupported`, `collector_timeout` или `temporary_error`. Сборщик M365 выставляет только четыре причины (`GRAPH_COLLECTOR_REASONS` каталога, перечисление `reasonCode` схемы `specs/graph-observation.schema.json`):
 
 - `permission_denied` — 403 на запрос;
-- `unsupported` — функции нет в tenant;
 - `temporary_error` — сбой или исчерпаны повторы;
 - `license_missing` — модулю нужна лицензия, которой нет по `subscribedSkus`;
-- `partial_data` — неполные страницы или нет обязательного свойства.
+- `partial_data` — неполные страницы, нет обязательного свойства или наблюдение не прошло схему.
+
+`unsupported` и `collector_timeout` сборщик M365 не выставляет: функция, которой нет в tenant, проявляется как `license_missing` или 403, а таймаут запуска — как `temporary_error`.
 
 Сборщик не решает, применима ли проверка: это делает сервер по действующей ревизии политики и фактам того же источника.
 
@@ -58,22 +59,23 @@ Informational-оценка всегда имеет `result=null`, `severity=null
 | ID | Проверка и данные | Объект | Режим по умолчанию | Условие оценки | Severity при fail | Права и ограничения |
 | --- | --- | --- | --- | --- | --- | --- |
 | M365-001 | Регистрация MFA пользователя: `accountEnabled`, `userType`, признак учётной записи синхронизации, `methodKinds` | user | assessed | По правилу M365-001 ниже; входные настройки не нужны | warning | `User.Read.All`, `UserAuthenticationMethod.Read.All`; без лицензии P1. Регистрация метода не доказывает обязательность MFA |
-| M365-002 | Регистрация MFA администратора: роли, способ назначения, `methodKinds` | user | assessed | По правилу M365-002 ниже; список ролей не пуст по схеме | critical; гость с ролью — warning | `RoleManagement.Read.Directory`, `GroupMember.ReadBasic.All`; активные назначения без временных активаций PIM |
+| M365-002 | Регистрация MFA администратора: роли, способ назначения, временные активации PIM, `methodKinds` | user | assessed | По правилу M365-002 ниже; список ролей не пуст по схеме | critical; гость с ролью — warning | `RoleManagement.Read.Directory`, `GroupMember.Read.All`; активные назначения, включая временные активации PIM |
 | M365-003 | Принуждение к MFA: Security Defaults, политики CA с MFA, per-user MFA | tenant | assessed | По правилу M365-003 ниже | critical | `Policy.Read.All`; Conditional Access требует Entra ID P1; per-user MFA — только Graph beta |
 | M365-004 | Блокировка устаревшей аутентификации: Security Defaults и политики CA | tenant | informational | Инвентаризация; правило для assessed — ниже | warning | `Policy.Read.All` |
 | M365-005 | Число включённых глобальных администраторов | tenant | assessed | fail вне [`minGlobalAdmins`, `maxGlobalAdmins`] (2…4) | warning | Активные назначения, прямые или через группу; отключённые учётные записи не считаются |
 | M365-006 | Согласие пользователей на приложения: `permissionGrantPolicies` | tenant | assessed | По правилу M365-006 ниже | warning | `Policy.Read.All` |
-| M365-007 | Неактивные учётные записи: последний успешный вход | user | informational | Инвентаризация; для assessed — `inactiveDays` (90) | warning | `AuditLog.Read.All`; требует Entra ID P1; лимит `signInActivity` — 10 запросов в минуту |
+| M365-007 | Неактивные учётные записи: последний успешный вход | user | informational | Инвентаризация; для assessed — `inactiveDays` (90) | warning | Отложена: `AuditLog.Read.All` не входит в первый consent. Требует Entra ID P1; лимит `signInActivity` — 10 запросов в минуту |
 
 Все запросы — Graph v1.0, кроме модуля `per_user_mfa` (раздел «Возможности подключения»). Приложение имеет только права чтения и ничего не меняет в tenant. Объём сохраняемых данных ограничен allowlist-схемой: номера телефонов, адреса и названия методов не сохраняются. Наблюдение, не прошедшее схему, сохраняется как unavailable/`partial_data`, а его модуль получает `partial`. Строки из Graph с недопустимыми символами (управляющие, `<`, `>`) нормализуются заменой символа на U+FFFD, а не отклоняются.
 
-Причина `partial_data` возникает двумя путями: модуль получил неполные данные, или правило M365-005 не смогло прочитать членов группы с ролью. Причины `permission_denied`, `temporary_error`, `license_missing` и `partial_data` переносятся в наблюдения из статусов модулей по таблице «Проверка → модули» ниже.
+Причина `partial_data` возникает тремя путями: модуль получил неполные данные, ответ неизвестной формы (правило M365-003 ниже), или правило M365-005 не смогло прочитать членов группы с ролью. Причины `permission_denied`, `temporary_error`, `license_missing` и `partial_data` переносятся в наблюдения из статусов модулей по таблице «Проверка → модули» ниже.
 
 Чего проверки не видят:
 
 - доступ сотрудников компании в tenant клиента через GDAP: он не отражается в назначениях ролей клиента (проверяет SP-01);
 - назначения eligible в PIM до активации;
-- регистрацию методов гостя в его домашнем tenant.
+- регистрацию методов гостя в его домашнем tenant;
+- администраторов ролей вне `privilegedRoleTemplateIds`: M365-002 их не оценивает, но шаблоны таких ролей перечисляет M365-005 (`uncoveredRoleTemplateIds`), чтобы Admin решил, добавить ли роль в политику.
 
 Explanation называет эти ограничения там, где они влияют на вывод.
 
@@ -107,7 +109,7 @@ M365-001 — объект: каждый пользователь tenant.
 M365-002 — объект: пользователь, у которого есть или была в предыдущем полном сборе активная роль из `privilegedRoleTemplateIds`.
 
 - **Источник ролей.** Назначение прямое или через группу с назначаемыми ролями. Такие группы требуют Entra ID P1 и не бывают вложенными, поэтому члены читаются одним запросом `transitiveMembers`. Если членов группы прочитать не удалось, модуль `roles` получает `partial`: прямые администраторы оцениваются, M365-005 даёт unknown/`partial_data`.
-- **Что учитывается.** Назначения с областью административной единицы считаются: MFA нужна и ограниченному администратору. Временные активации PIM (назначения вида `Activated` при Entra ID P2) не учитываются, чтобы активация во время ночного сбора не давала ложных «новых» и «исправленных» проблем. Назначения eligible до активации не видны.
+- **Что учитывается.** Назначения с областью административной единицы считаются: MFA нужна и ограниченному администратору. Активные временные назначения PIM учитываются отдельным видом назначения: при Entra ID P2 сборщик сверяет назначения с `roleAssignmentScheduleInstances`, и роли, которые у пользователя действуют только как активация (`assignmentType=Activated`), перечисляются в `temporaryRoleTemplateIds`, а explanation называет активацию. Администратор, активировавший роль без метода MFA, получает fail, как и постоянный: именно в это время у него есть привилегии. Когда активация заканчивается, пара получает not_applicable и в отчёте попадает в «стали неприменимыми», а не в «исправлено». Назначения eligible до активации не видны.
 - **Сбор методов.** Методы администраторов читаются всегда, даже если они в `excludedUserIds`: учётные записи аварийного доступа тоже должны иметь метод MFA, лучше FIDO2.
 - **Результат** по порядку:
   1. Ролей больше нет (`roleTemplateIds` пуст) — not_applicable/`policy_not_applicable`; finding закрывается событием `resolved`/`applicability_change` и в отчёте попадает в «стали неприменимыми», а не в «исправлено».
@@ -155,7 +157,7 @@ Evidence:
   - оператор grant (`AND` или `OR`) и набор grant controls;
   - даёт ли authentication strength требование MFA (`requirementsSatisfied = mfa`);
   - число исключённых пользователей вне `excludedUserIds` (прямо, через группы и роли) и число исключений, членов которых прочитать не удалось;
-- `perUserMfa` — счётчики per-user MFA включённых member-пользователей вне исключений или null.
+- `perUserMfa` — счётчики состояния per-user MFA включённых member-пользователей вне `excludedUserIds` и без роли синхронизации: `required` — enforced, `notRequired` — disabled, `enabled` — enabled, `unknown` — отсутствующее или нераспознанное состояние. Счётчик `enabled` необязателен: если его нет, состояние enabled учтено в `unknown`. null — модуль `per_user_mfa` не выполнялся.
 
 **Безусловная политика** — политика, у которой выполнено всё перечисленное:
 
@@ -173,18 +175,27 @@ Evidence:
 | --- | --- | --- |
 | 1 | `securityDefaults=enabled` | pass; explanation: Security Defaults требуют MFA «при необходимости», а не при каждом входе |
 | 2 | `conditionalAccess=available` и есть безусловная политика | pass; explanation называет политику и исключения |
-| 3 | `perUserMfa` не null, у всех пользователей per-user MFA в состоянии enabled или enforced (`notRequired` = 0, `unknown` = 0) | pass |
-| 4 | `conditionalAccess=available` и есть политики в state `enabled`, требующие MFA, но ни одна не безусловна | unknown/`enforcement_unconfirmed`: охват объединением или условиями политик не доказывается |
-| 5 | `perUserMfa` null — модуль `per_user_mfa` выключен по итогам H-MFA1 | unknown/`enforcement_unconfirmed`; рекомендация — включить Security Defaults или политику CA |
-| 6 | Иначе: Security Defaults выключены, безусловной политики нет, а per-user MFA у части пользователей не включён | fail critical |
+| 3 | `perUserMfa` не null, у всех пользователей per-user MFA в состоянии enforced (`notRequired` = 0, `unknown` = 0, `enabled` = 0 или нет) | pass |
+| 4 | `perUserMfa` не null, `notRequired` = 0, `enabled` + `unknown` > 0: у части пользователей состояние enabled или не распознано | unknown/`enforcement_unconfirmed`: enabled до подтверждения в SP-01 принуждением не считается |
+| 5 | `conditionalAccess=available` и есть политики в state `enabled`, требующие MFA, но ни одна не безусловна | unknown/`enforcement_unconfirmed`: охват объединением или условиями политик не доказывается |
+| 6 | `perUserMfa` null — модуль `per_user_mfa` выключен по итогам H-MFA1 | unknown/`enforcement_unconfirmed`; рекомендация — включить Security Defaults или политику CA |
+| 7 | Иначе: Security Defaults выключены, безусловной политики нет, а per-user MFA у части пользователей disabled | fail critical |
 
 Политики в состоянии report-only (`enabledForReportingButNotEnforced`) и disabled MFA не требуют. Поэтому единственная report-only политика при выключенных Security Defaults и per-user MFA даёт fail, а не pass — это эталонный отрицательный случай (пример `examples/m365-collection.json`, AT-05).
 
 Модули `security_defaults` и, при Entra ID P1, `conditional_access` обязательны: их сбой (`temporary_error`, `permission_missing`) делает наблюдение M365-003 unavailable с той же причиной. Сбой не превращается в `disabled` и не даёт ложный fail.
 
-Per-user MFA читается только в Graph beta (`/beta/users/{id}/authentication/requirements`, право `Policy.Read.All`) и только когда шаги 1–2 не дают pass. Гипотеза H-MFA1 в SP-01: endpoint работает стабильно на трёх tenant. Если она не подтвердится, модуль `per_user_mfa` выключается (статус `skipped`), и шаг 5 даёт unknown.
+Неизвестная форма ответа даёт unknown, а не pass. Неизвестной формой считаются:
 
-Гипотеза H-SD1 в SP-01: Microsoft вводит отдельное включение защит Security Defaults (preview). Нужно выяснить, как Graph это показывает. Если `isEnabled=true` перестанет означать включённую MFA для всех, шаг 1 в новой версии правила проверяет конкретную защиту, а до этого explanation оговаривает это ограничение.
+- ответ Security Defaults без логического свойства `isEnabled`;
+- политика CA с grant control `mfa`, authentication strength или block, у которой state не `enabled`, `enabledForReportingButNotEnforced` или `disabled`;
+- такая же политика с заданным условием вне перечня `CA_CONDITIONS`, в том числе `servicePrincipalRiskLevels`, `times` и `deviceStates`.
+
+Такой ответ не нормализуется с потерей смысла: модуль получает `partial`, наблюдения M365-003 и M365-004 — unavailable/`partial_data`, и M365-003 даёт unknown/`partial_data`. Положительная ветвь правила включается только для проверенной формы ответа; новое условие или новая защита попадают в перечень новой версией правила.
+
+Per-user MFA читается только в Graph beta (`/beta/users/{id}/authentication/requirements`, право `Policy.Read.All`) и только когда шаги 1–2 не дают pass. Состояния `enabled` и `enforced` хранятся раздельно: pass даёт только enforced. В состоянии enabled MFA требуется лишь после регистрации метода, и обход в отдельных сценариях не исключён, поэтому до проверки в SP-01 оно даёт unknown/`enforcement_unconfirmed` (шаг 4). Гипотеза H-MFA1 в SP-01: endpoint работает стабильно на трёх tenant, а ответ различает disabled, enabled до регистрации метода и enforced при контролируемых входах. Если SP-01 подтвердит, что enabled означает принуждение, новая версия правила засчитывает его; если endpoint нестабилен, модуль `per_user_mfa` выключается (статус `skipped`), и шаг 6 даёт unknown.
+
+Гипотеза H-SD1 в SP-01: Microsoft вводит отдельное включение защит Security Defaults (preview). Нужно выяснить, как Graph это показывает. Пока форма ответа не проверена, ответ с отдельными защитами вместо логического `isEnabled` даёт unknown/`partial_data`; если `isEnabled=true` перестанет означать включённую MFA для всех, шаг 1 в новой версии правила проверяет конкретную защиту.
 
 ### Правило M365-004
 
@@ -210,7 +221,8 @@ Evidence:
 
 - `globalAdminUserIds` — включённые пользователи с активным назначением Global Administrator, прямым или через группу, без временных активаций PIM;
 - `disabledGlobalAdminUserIds` — отключённые учётные записи с этой ролью;
-- `unresolvedGroupAssignments` — группы с ролью, членов которых прочитать не удалось.
+- `unresolvedGroupAssignments` — группы с ролью, членов которых прочитать не удалось;
+- `uncoveredRoleTemplateIds` — необязательное поле: шаблоны ролей каталога вне `privilegedRoleTemplateIds` политики, назначенные включённым пользователям. На результат оно не влияет, explanation перечисляет такие роли и предлагает Admin проверить, не добавить ли их в политику M365-002.
 
 Сервисные principal в число не входят.
 
@@ -243,6 +255,8 @@ Evidence — записи `ManagePermissionGrantsForSelf.*` из `defaultUserRol
 
 ### Правило M365-007
 
+M365-007 отложена: право `AuditLog.Read.All` в первый consent не входит, модуль `sign_in_activity` всегда получает `skipped`, и наблюдений M365-007 сборщик не пишет. В режиме informational (по умолчанию) оценок M365-007 нет, а перевод в assessed даёт каждому пользователю unknown/`missing_observation`. Проверка вводится новой версией правил с повторным consent всех клиентов (`04`, «Права Graph»; RB-03); правило ниже действует с этой версии.
+
 Informational по умолчанию: число дней с последнего успешного входа (`lastSuccessfulSignInAt` из `signInActivity`). Поле заполняется Microsoft с 1 декабря 2023 года; null означает, что успешного входа с этой даты не было. Применимость — как у M365-001. Без Entra ID P1 модуль получает `license_missing`, и оценка — `result=null` с этой причиной.
 
 Если политика переводит проверку в `assessed`, fail warning даёт любое из условий:
@@ -270,11 +284,11 @@ Informational по умолчанию: число дней с последнег
 | licenses | `/subscribedSkus` | `Organization.Read.All` | — |
 | users | `/users` со списком полей | `User.Read.All` | — |
 | auth_methods | `/users/{id}/authentication/methods` в JSON batch | `UserAuthenticationMethod.Read.All` | — |
-| roles | `/roleManagement/directory/roleAssignments`, `/groups/{id}/transitiveMembers`; при P2 — `roleAssignmentScheduleInstances` | `RoleManagement.Read.Directory`, `GroupMember.ReadBasic.All` | — |
+| roles | `/roleManagement/directory/roleAssignments`, `/groups/{id}/transitiveMembers`; при Entra ID P2 — `roleAssignmentScheduleInstances` | `RoleManagement.Read.Directory`, `GroupMember.Read.All` | — |
 | security_defaults | `/policies/identitySecurityDefaultsEnforcementPolicy` | `Policy.Read.All` | — |
-| conditional_access | `/identity/conditionalAccess/policies`; члены исключённых групп — `transitiveMembers` | `Policy.Read.All`, `GroupMember.ReadBasic.All` | Entra ID P1 |
+| conditional_access | `/identity/conditionalAccess/policies`; члены исключённых групп — `transitiveMembers` | `Policy.Read.All`, `GroupMember.Read.All` | Entra ID P1 |
 | authorization_policy | `/policies/authorizationPolicy` | `Policy.Read.All` | — |
-| sign_in_activity | `/users` с `signInActivity` | `User.Read.All`, `AuditLog.Read.All` | Entra ID P1 |
+| sign_in_activity | `/users` с `signInActivity`; отложен вместе с M365-007, в P1 всегда `skipped` | `User.Read.All`, `AuditLog.Read.All` | Entra ID P1 |
 | per_user_mfa | `/beta/users/{id}/authentication/requirements` | `Policy.Read.All` | — |
 
 Проверка → модули. Сбой обязательного модуля делает наблюдение проверки `unavailable` с причиной, перенесённой из статуса модуля. Условный модуль со статусом `license_missing` отражается в evidence, а не в причине.
@@ -287,7 +301,7 @@ Informational по умолчанию: число дней с последнег
 | M365-004 | licenses, security_defaults; conditional_access — при Entra ID P1 | conditional_access без P1 |
 | M365-005 | roles | — |
 | M365-006 | authorization_policy | — |
-| M365-007 | users, roles | sign_in_activity (без P1 — `license_missing` в оценке) |
+| M365-007 | users, roles | sign_in_activity — после ввода проверки; без P1 — `license_missing` в оценке |
 
 Как модули влияют на сбор и оценку:
 

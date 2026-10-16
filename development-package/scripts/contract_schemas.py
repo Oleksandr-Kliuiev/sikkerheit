@@ -6,7 +6,7 @@ from contract_catalog import (AGENT_COLLECTOR_REASONS, AGENT_IDS, ALWAYS_INFORMA
                               GRAPH_COLLECTOR_REASONS,
                               GRAPH_IDS, GRAPH_MODULES, GRAPH_SUBJECTS, INFORMATIONAL_REASONS, LANGUAGES,
                               LIFECYCLE_ACTIONS, LOCAL_ADMIN_KINDS, METHOD_KINDS, OS_FAMILIES, PROBLEM_CODES,
-                              REASON_CODES, RELEASE_KINDS, RESULTS, SERVER_IDS,
+                              PRIVILEGED_ROLE_TEMPLATES, REASON_CODES, RELEASE_KINDS, RESULTS, SERVER_IDS,
                               RETENTION_PURGE_ORDER, ROLES, SUBJECT_TYPES, VOLUME_IDS, WORKFLOW_STATES)
 
 DRAFT = 'https://json-schema.org/draft/2020-12/schema'
@@ -77,29 +77,6 @@ TIMEZONE_CREATE = string(80, description=TIMEZONE_RULE + ' Обязателен 
 ASSIGNEE = {**nullable(UUID), 'description': 'entraUserId сотрудника с ролью Admin или Technician '
                                              '(StaffUser.entraUserId); null — без ответственного.'}
 CONNECTION_STATUSES = ['not_connected', 'consent_pending', 'active', 'disconnected']
-# Built-in Microsoft Entra role templates counted as privileged by M365-002 (03, «Правило M365-001 и M365-002»).
-PRIVILEGED_ROLE_TEMPLATES = [
-    '62e90394-69f5-4237-9190-012177145e10',  # Global Administrator
-    'e8611ab8-c189-46e8-94e1-60213ab1f814',  # Privileged Role Administrator
-    '7be44c8a-adaf-4e2a-84d6-ab2649e08a13',  # Privileged Authentication Administrator
-    '194ae4cb-b126-40b2-bd5b-6091b380977d',  # Security Administrator
-    'b1be1c3e-b65d-4f19-8427-f6fa0d97feb9',  # Conditional Access Administrator
-    '29232cdf-9323-42fd-ade2-1d097af3e4de',  # Exchange Administrator
-    'f28a1f50-f6e7-4571-818b-6a12f2af6b6c',  # SharePoint Administrator
-    'fe930be7-5e62-47db-91af-98c3a49a38b1',  # User Administrator
-    'c4e39bd9-1100-46d3-8c65-fb160da0071f',  # Authentication Administrator
-    '9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3',  # Application Administrator
-    '158c047a-c907-4556-b7ef-446551a6b5f7',  # Cloud Application Administrator
-    '3a2c62db-5318-420d-8d74-23affee5d9d5',  # Intune Administrator
-    '729827e3-9c14-49f7-bb1b-9608f156bbb8',  # Helpdesk Administrator
-    'b0f54661-2d74-4c50-afa3-1ec803f12efe',  # Billing Administrator
-    '0526716b-113d-4c15-b2c8-68e3c22b9f80',  # Authentication Policy Administrator
-    '966707d0-3269-4727-9be2-8c3a10f19b9d',  # Password Administrator
-    '9360feb5-f418-4baa-8175-e2a00bac4301',  # Directory Writers
-    'e00e864a-17c5-4a4b-9c06-f5b95a8d5bd8',  # Partner Tier2 Support
-]
-
-
 def safe_text(maximum, **extra):
     return string(maximum, pattern=SAFE_TEXT_PATTERN, **extra)
 
@@ -201,23 +178,35 @@ GRAPH_EVIDENCE = {
                      'methodKinds': _methods()}),
     'M365-002': obj({'accountEnabled': BOOL, 'userType': USER_TYPE,
                      'roleTemplateIds': array(UUID, 50, unique=True, description=(
-                         'Активные привилегированные роли без временных активаций PIM; пустой список — роль снята.')),
-                     'assignment': enum('direct', 'group', 'direct_and_group', 'none'), 'methodKinds': _methods()}),
+                         'Активные роли из privilegedRoleTemplateIds, включая временные активации PIM; пустой список — '
+                         'роль снята.')),
+                     'temporaryRoleTemplateIds': array(UUID, 50, unique=True, description=(
+                         'Роли из roleTemplateIds, которые действуют только как активация PIM (assignmentType Activated '
+                         'при Entra ID P2). Нет поля — активации не отделялись.')),
+                     'assignment': enum('direct', 'group', 'direct_and_group', 'none'), 'methodKinds': _methods()},
+                    ['accountEnabled', 'userType', 'roleTemplateIds', 'assignment', 'methodKinds']),
     'M365-003': obj({'securityDefaults': enum('enabled', 'disabled'),
                      'conditionalAccess': enum('available', 'license_missing'),
                      'mfaPolicies': array(_ca_policy(), 200, description='Политики CA с grant control mfa или '
                                                                          'authentication strength в любом state.'),
                      'perUserMfa': {**nullable(obj({'required': integer(0), 'notRequired': integer(0),
-                                                    'unknown': integer(0)})), 'description': (
-                         'Счётчики per-user MFA включённых member-пользователей вне excludedUserIds: required — '
-                         'enabled или enforced, notRequired — disabled. null — модуль per_user_mfa не выполнялся.')}}),
+                                                    'unknown': integer(0), 'enabled': integer(0)},
+                                                   ['required', 'notRequired', 'unknown'])), 'description': (
+                         'Счётчики per-user MFA включённых member-пользователей вне excludedUserIds и без роли '
+                         'синхронизации: required — enforced, notRequired — disabled, enabled — enabled (до '
+                         'подтверждения в SP-01 не принуждение), unknown — отсутствующее или нераспознанное '
+                         'состояние, а без поля enabled — и enabled. null — модуль per_user_mfa не выполнялся.')}}),
     'M365-004': obj({'securityDefaults': enum('enabled', 'disabled'),
                      'conditionalAccess': enum('available', 'license_missing'),
                      'legacyBlockPolicies': array(_legacy_policy(), 200, description=(
                          'Политики CA с grant control block и типами клиентов устаревшей аутентификации.'))}),
     'M365-005': obj({'globalAdminUserIds': array(UUID, 100, unique=True, description='Включённые учётные записи.'),
                      'disabledGlobalAdminUserIds': array(UUID, 100, unique=True),
-                     'unresolvedGroupAssignments': integer(0)}),
+                     'unresolvedGroupAssignments': integer(0),
+                     'uncoveredRoleTemplateIds': array(UUID, 200, unique=True, description=(
+                         'Роли каталога вне privilegedRoleTemplateIds, назначенные включённым пользователям; на '
+                         'результат не влияют.'))},
+                    ['globalAdminUserIds', 'disabledGlobalAdminUserIds', 'unresolvedGroupAssignments']),
     'M365-006': obj({'permissionGrantPolicies': array(CONSENT_POLICY, 20, unique=True, description=(
         'Только записи ManagePermissionGrantsForSelf.* из defaultUserRolePermissions.permissionGrantPoliciesAssigned, '
         'префикс приведён к этому написанию; пустой список — согласие пользователей выключено.'))}),
@@ -407,8 +396,8 @@ def policy_configuration():
                              'maxBatchAgeDays': integer(2, maximum=32, default=9)}),
                'checks': obj({cid: _check_policy(cid, parameters.get(cid, obj({}))) for cid in CHECK_IDS})}),
         'description': 'Закрытая конфигурация policy_revision. WIN-011 обязательна в activeCheckIds; assessed без '
-                       'входных настроек, отсутствие WIN-011 и активная WIN-004 без WIN-003 дают 422 '
-                       'policy_inputs_missing. maxBatchAgeDays >= maxBufferDays + 1, minGlobalAdmins <= '
+                       'входных настроек или для отложенной M365-007, отсутствие WIN-011 и активная WIN-004 без '
+                       'WIN-003 дают 422 policy_inputs_missing. maxBatchAgeDays >= maxBufferDays + 1, minGlobalAdmins <= '
                        'maxGlobalAdmins, пороги warning WIN-001 не ниже critical и WIN-004 warnDays <= criticalDays, '
                        'иначе 422 validation_failed. У каждого обязательного поля-значения есть default; политика v1 '
                        'по умолчанию — значения default этой схемы.',
@@ -453,11 +442,16 @@ def _agent_schemas():
         'EnrollmentRequest': {
             **obj({'registrationRequestId': UUID, 'installationId': UUID, 'displayName': safe_text(120),
                    'machineFingerprint': FINGERPRINT, 'publicKey': ref('PublicKeyJwk'),
-                   'keyProtection': enum('tpm', 'software'), 'nonce': NONCE, 'signature': SIGNATURE}),
+                   'keyProtection': enum('tpm', 'software'), 'nonce': NONCE, 'signature': SIGNATURE,
+                   'previousKeySignature': SIGNATURE}, ['registrationRequestId', 'installationId', 'displayName',
+                                                        'machineFingerprint', 'publicKey', 'keyProtection', 'nonce',
+                                                        'signature']),
             'description': 'signature — подпись ключом publicKey строки "sikkerheit-enroll-v1\\n<nonce>\\n'
                            '<registrationRequestId>\\n<installationId>\\n<machineFingerprint>\\n<keyProtection>\\n'
-                           '<JWK thumbprint RFC 7638>" в UTF-8. keyProtection — заявление агента, для решений '
-                           'доверия не используется.'},
+                           '<JWK thumbprint RFC 7638>" в UTF-8. previousKeySignature — подпись той же строки текущим '
+                           'ключом устройства на сервере, когда агент меняет ключ, который у него ещё есть; без неё '
+                           'замена ключа идёт через разбор конфликта идентичности. keyProtection — заявление агента, '
+                           'для решений доверия не используется.'},
         'Enrollment': obj({'deviceId': UUID, 'enrolledAt': TIME_UTC, 'reenrolled': BOOL}),
         'SessionRequest': {
             **obj({'deviceId': UUID, 'nonce': NONCE, 'signature': SIGNATURE}),
@@ -569,8 +563,11 @@ def _portal_schemas():
         'CollectionRun': obj({'id': UUID, 'trigger': enum('scheduled', 'manual'),
                               'state': enum('queued', 'running', 'completed', 'partial', 'failed'),
                               'queuedAt': TIME, 'startedAt': nullable(TIME), 'completedAt': nullable(TIME),
-                              'failureCode': nullable(enum('consent_missing', 'tenant_mismatch', 'credential_error',
-                                                           'cancelled', 'run_timeout', 'temporary_error')),
+                              'failureCode': {**nullable(enum('consent_missing', 'tenant_mismatch', 'credential_error',
+                                                              'cancelled', 'run_timeout', 'temporary_error')),
+                                              'description': 'run_timeout — 30 минут истекли до чтения пользователей, '
+                                                             'или запуск открыт дольше 6 часов и закрыт плановым '
+                                                             'заданием (05, «Подключение M365 и сбор»).'},
                               'capabilities': array(ref('Capability'), len(GRAPH_MODULES))}),
         'Subject': obj({'type': enum(*SUBJECT_TYPES), 'key': string(200), 'displayName': nullable(safe_text(256)),
                         'deviceId': nullable(UUID)}),
@@ -617,15 +614,19 @@ def _portal_schemas():
                        'then': {'not': {'required': ['reviewAt']}},
                        'else': {'required': ['reason', 'reviewAt']}}]},
         'ReportCreate': {**obj({'periodStart': TIME, 'periodEnd': TIME, 'format': enum('html')}),
-                         'description': 'Только границы ISO-недели в timezone организации: periodStart — '
-                                        'понедельник 00:00, periodEnd — следующий понедельник 00:00; иные '
-                                        'границы — 422 validation_failed (05, «Отчёт и покрытие»).'},
-        'Report': obj({'id': UUID, 'periodStart': TIME, 'periodEnd': TIME, 'timezone': string(80),
+                         'description': 'Только завершённая ISO-неделя в timezone организации: periodStart — '
+                                        'понедельник 00:00, periodEnd — следующий понедельник 00:00 не позже '
+                                        'текущего момента; иные границы, текущая и будущая неделя — 422 '
+                                        'validation_failed (05, «Отчёт и покрытие»).'},
+        'Report': {**obj({'id': UUID, 'periodStart': TIME, 'periodEnd': TIME, 'timezone': string(80),
                        'language': enum(*LANGUAGES), 'state': enum('queued', 'ready', 'failed'),
                        'format': enum('html'),
                        'failureCode': {**nullable(enum('translation_missing', 'generation_error')),
                                        'description': 'translation_missing — нет перевода; generation_error — '
                                                       'сбой генерации по иной причине.'}}),
+                   'description': 'Отчёт ready неизменяем: снимок, записанный при генерации, не переписывается, а '
+                                  'потерянный файл строится заново из снимка. Отчёт failed повторный createReport '
+                                  'ставит в генерацию заново (05, «Отчёт и покрытие»).'},
         'EnrollmentKeyCreate': obj({'label': safe_text(120)}),
         'EnrollmentKey': obj({'id': UUID, 'enrollmentKey': {**ENROLLMENT_KEY, 'description': (
                                   'Секрет; показывается один раз, хранится только SHA-256.')},
@@ -637,12 +638,14 @@ def _portal_schemas():
         'Device': obj({'id': UUID, 'displayName': safe_text(120), 'status': enum('active', 'revoked'),
                        'dormant': {**BOOL, 'description': 'Нет check-in дольше 14 суток; устройство вне покрытия.'},
                        'identityState': enum('ok', 'identity_conflict'),
-                       'identityConflict': nullable(obj({'at': TIME, 'reportedDisplayName': nullable(safe_text(120))})),
+                       'identityConflict': nullable(obj({'at': TIME, 'kind': {**enum('fingerprint', 'key'), 'description': (
+                           'fingerprint — не совпал признак машины; key — новый ключ без подписи прежним.')},
+                                                         'reportedDisplayName': nullable(safe_text(120))})),
                        'clockStatus': enum('ok', 'inconsistent'), 'keyProtection': enum('tpm', 'software'),
                        'agentVersion': nullable(VERSION),
                        'enrolledAt': TIME, 'lastSeenAt': nullable(TIME), 'lastFullScanAt': nullable(TIME),
                        'enrollmentKeyId': nullable(UUID)}),
-        'DeviceIdentityResolution': obj({'decision': enum('accept_new_fingerprint', 'keep')}),
+        'DeviceIdentityResolution': obj({'decision': enum('accept_new_fingerprint', 'accept_new_key', 'keep')}),
         'WindowsRelease': obj({'product': enum('client'), 'branchBuild': integer(10000), 'ubr': integer(0), 'kb': KB,
                                'releaseAt': TIME, 'kind': enum(*RELEASE_KINDS),
                                'securityMonth': {**nullable(MONTH), 'description': (

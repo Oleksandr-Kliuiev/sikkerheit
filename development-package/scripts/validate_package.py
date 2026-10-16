@@ -1,7 +1,9 @@
 """Validate the Development Package without writing any file.
 
 Runs the bounded contract checks, document checks and, when jsonschema and openapi-spec-validator are
-installed, the standard validators with format assertion. Exit code is non-zero on any failure.
+installed, the standard validators with format assertion. Only files inside the package root are read.
+With --manifest every file must match manifest.json (a received package); without it a stale manifest is only
+reported, because build_package.py rewrites it. Exit code is non-zero on any failure.
 """
 import sys
 
@@ -9,6 +11,8 @@ sys.dont_write_bytecode = True
 from pathlib import Path  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import argparse  # noqa: E402
+import hashlib  # noqa: E402
 import json  # noqa: E402
 import re  # noqa: E402
 
@@ -25,6 +29,8 @@ ALLOWED_PATHS = [r'README\.md', r'VALIDATION\.md', r'REVIEW-BUNDLE\.md', r'manif
                  r'(0[1-9]|10)-[a-z0-9-]+\.md', r'source/boss-chat\.md', r'specs/[a-z0-9-]+(\.schema)?\.json',
                  r'examples/[a-z0-9-]+\.json', r'scripts/[a-z_]+\.py']
 VERSION = re.compile(r'\b[0-9]+\.[0-9]+\.[0-9]+\b')
+MANIFEST_KEYS = ['date', 'files', 'packageVersion', 'timezone']
+MANIFEST_ENTRY = ['bytes', 'path', 'sha256']
 
 
 def package_files(root):
@@ -46,6 +52,55 @@ def check_layout(report, root):
         found = VERSION.findall(lines[2]) if len(lines) > 2 else []
         report.check(bool(found) and set(found) == {CATALOG_VERSION}, 'docs',
                      f'{name}: line 3 must state version {CATALOG_VERSION}')
+
+
+def _manifest_entries(report, root):
+    """Entries of manifest.json by path, or None when the file is absent or malformed (structure is always checked)."""
+    path = root / 'manifest.json'
+    if not path.exists():
+        return None
+    try:
+        manifest = read_json(path)
+    except ValueError as error:
+        report.fail('contract', f'manifest.json: {error}')
+        return None
+    if not isinstance(manifest, dict) or sorted(manifest) != MANIFEST_KEYS or not isinstance(manifest['files'], list):
+        report.fail('contract', 'manifest.json: keys differ from packageVersion, date, timezone and files')
+        return None
+    entries = {}
+    for entry in manifest['files']:
+        valid = (isinstance(entry, dict) and sorted(entry) == MANIFEST_ENTRY and isinstance(entry['path'], str)
+                 and entry['path'] != 'manifest.json' and entry['path'] not in entries
+                 and any(re.fullmatch(pattern, entry['path']) for pattern in ALLOWED_PATHS)
+                 and isinstance(entry['bytes'], int) and re.fullmatch(r'[0-9a-f]{64}', str(entry['sha256'])))
+        if not valid:
+            report.fail('contract', f'manifest.json: invalid entry {entry}')
+            continue
+        entries[entry['path']] = entry
+    return manifest['packageVersion'], entries
+
+
+def check_manifest(report, root, strict):
+    """Compare manifest.json with the package files: size and SHA-256 of every file, no missing or extra file."""
+    loaded = _manifest_entries(report, root)
+    if loaded is None:
+        report.check(not strict, 'contract', 'manifest.json missing or unreadable')
+        report.summary['manifest'] = 'absent'
+        return
+    version, entries = loaded
+    files = {p.relative_to(root).as_posix(): p for p in package_files(root)}
+    files.pop('manifest.json', None)
+    changed = sorted(set(entries) ^ set(files))
+    for name in sorted(set(entries) & set(files)):
+        data = files[name].read_bytes()
+        if len(data) != entries[name]['bytes'] or hashlib.sha256(data).hexdigest() != entries[name]['sha256']:
+            changed.append(name)
+    current = not changed and version == CATALOG_VERSION
+    report.summary['manifest'] = 'current' if current else 'stale'
+    if strict:
+        report.check(version == CATALOG_VERSION, 'contract', 'manifest.json: packageVersion differs from the package')
+        for name in changed:
+            report.fail('contract', f'manifest.json: {name} is missing, extra or changed')
 
 
 class Report:
@@ -92,9 +147,10 @@ def standard_validation(report, root):
         report.summary['standardValidation'] = True
 
 
-def run(root=ROOT):
+def run(root=ROOT, manifest=False):
     report = Report()
     check_layout(report, root)
+    check_manifest(report, root, manifest)
     contracts.check_json_files(report, root)
     try:
         ctx = contracts.load(root)
@@ -109,7 +165,7 @@ def run(root=ROOT):
     documents.check_catalog_rows(report, ctx, docs)
     documents.check_os_lifecycle(report, docs)
     documents.check_requirements(report, ctx, docs)
-    documents.check_effort(report, docs, documents.check_p0_plan(report, docs))
+    documents.check_effort(report, docs)
     documents.check_calendar(report, docs)
     documents.check_acceptance_stages(report, ctx, docs)
     documents.check_runbooks(report, ctx, docs)
@@ -126,7 +182,10 @@ def run(root=ROOT):
 
 
 def main():
-    report = run()
+    parser = argparse.ArgumentParser(description='Validate the Development Package; writes no file.')
+    parser.add_argument('--manifest', action='store_true',
+                        help='fail unless every package file matches manifest.json (check a received package)')
+    report = run(manifest=parser.parse_args().manifest)
     for category, message in report.errors:
         print(f'[{category}] {message}')
     counts = {category: sum(1 for c, _ in report.errors if c == category) for category in ('contract', 'docs')}

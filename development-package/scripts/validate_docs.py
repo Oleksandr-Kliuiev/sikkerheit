@@ -1,6 +1,6 @@
 """Document checks: catalog rows in 03, FR contracts in 01, 05 tables, 04 roles and Graph permissions, ID
-references, links, chat, P0 plan, effort plan, calendar, acceptance stages, runbook operations, agent states and
-OS lifecycle tables; the transcript original outside the package is optional."""
+references, links, chat, acceptance-hours plan, calendar, acceptance stages, runbook operations, agent states and
+OS lifecycle tables. Only files inside the package root are read; links may not leave it."""
 from datetime import date, datetime, time, timedelta, timezone
 import hashlib
 import re
@@ -19,21 +19,22 @@ STAGES = ['P1', 'P2']
 FR_COUNT, AT_COUNT, RB_COUNT, CHAT_MESSAGES = 13, 17, 14, 12
 GENERATED = {'REVIEW-BUNDLE.md', 'VALIDATION.md'}
 REFERENCE = re.compile(r'\b(?:(R|FR|AT|RB|SP|ADR)-[0-9]{2}|(INV)-[0-9]{3}|(WP)-[0-9]{2}[A-Za-z]?)\b')
-P0_HEADER = ['Работа', 'Исполнитель', 'Недели', 'Инженерные недели']
-EFFORT_HEADER = ['Работа', 'Этап', 'Инженерные недели']
+EFFORT_HEADER = ['Работа', 'Этап', 'Часы приёмки']
+# The calendar rate is a parameter of 07: «| Параметр | Значение |», row RATE_ROW, a whole number of hours.
+RATE_HEADER = ['Параметр', 'Значение']
+RATE_ROW = 'Часы приёмки человеком в неделю'
 LIFECYCLE_HEADER = ['Продукт', 'Семейство', 'displayVersion', 'build', 'Последний день обслуживания',
                     'servicingEndsAt']
 AT_HEADER = ['ID', 'Этап', 'Сценарий', 'Ожидаемый результат', 'Ответственный WP']
 AT_STAGES = {'P1': {'P1'}, 'P2': {'P2'}, 'P1, P2': {'P1', 'P2'}}
 # Steps of «Условия допуска» and the stage whose scenario parts they require.
-ADMISSION_STAGE = {'Старт P1': 'P1', 'Пилот M365': 'P1', 'Подключение всех клиентов к M365': 'P1',
+ADMISSION_STAGE = {'Пилот M365': 'P1', 'Подключение всех клиентов к M365': 'P1',
                    'Пилот Windows': 'P2', 'Раскатка агента на все ПК': 'P2'}
 RB_HEADER = ['RB-nn', 'Название', 'Владелец роли', 'Этап', 'Операции']
-CALENDAR_HEADER = ['Отрезок', 'Состав', 'Инженерные недели', 'Минимум, недель', 'Календарные недели']
+CALENDAR_HEADER = ['Отрезок', 'Состав', 'Часы приёмки', 'Минимум, недель', 'Календарные недели']
 FSM_HEADER = ['Состояние', 'Что делает агент', 'Выход']
 FAMILY_HEADER = ['Семейство', 'editionId']
 PLAN = '07-delivery-plan-and-acceptance.md'
-P0_WEEKS, P0_LOAD, P0_ENGINEERS = 3, 0.8, ('Разработчик',)
 CHAT_SHA256 = 'c9a5c429c5d6274710320dc858fc2a096c730138273785d221a6d540707454fb'
 # Documents that state the retention_purge deletion order as a chain of `entity` → `entity`.
 PURGE_DOCS = ['04-security-and-privacy.md', '05-data-and-api.md']
@@ -180,12 +181,16 @@ def check_references(report, docs, invariant_ids):
 
 
 def check_markdown(report, root, docs):
+    base = root.resolve()
     for file, text in docs.items():
         report.check(text.count('```') % 2 == 0, 'docs', f'{file}: unclosed code fence')
         for target in re.findall(r'\[[^\]]*\]\(([^)]+)\)', text):
             if target.startswith(('https:', 'http:', '#', 'mailto:')):
                 continue
             local = ((root / file).parent / unquote(target.split('#')[0])).resolve()
+            if not local.is_relative_to(base):
+                report.fail('docs', f'{file}: local link {target} leaves the package')
+                continue
             report.check(local.exists(), 'docs', f'{file}: broken local link {target}')
 
 
@@ -198,51 +203,23 @@ def _range(cell):
     return (0.0, 0.0) if low == '—' else (_number(low), _number(high or low))
 
 
-def check_p0_plan(report, docs):
-    text = docs.get('07-delivery-plan-and-acceptance.md', '')
-    rows = table_exact(text, P0_HEADER)
-    report.check(bool(rows), 'docs', '07: table «План P0» missing')
-    load, spans, total = {}, {}, 0.0
-    for row in rows:
-        match = re.fullmatch(r'([1-9])(?:–([1-9]))?', row['Недели'])
-        first, last = (int(match[1]), int(match[2] or match[1])) if match else (0, 0)
-        if not 1 <= first <= last <= P0_WEEKS:
-            report.fail('docs', f'07: «План P0» {row["Работа"]}: weeks «{row["Недели"]}» outside 1–{P0_WEEKS}')
-            continue
-        weeks = range(first, last + 1)
-        if row['Исполнитель'] in P0_ENGINEERS:
-            value = _number(row['Инженерные недели'])
-            total += value
-            for week in weeks:
-                key = (row['Исполнитель'], week)
-                load[key] = load.get(key, 0.0) + value / len(weeks)
-        else:
-            report.check(row['Инженерные недели'] == '—', 'docs',
-                         f'07: «План P0» {row["Работа"]}: non-engineer row must be —')
-        sp = re.match(r'SP-[0-9]{2}', row['Работа'])
-        if sp:
-            spans.setdefault(sp[0], set()).update(weeks)
-    for (who, week), value in sorted(load.items()):
-        report.check(value <= P0_LOAD + 1e-9, 'docs', f'07: «План P0» {who} week {week}: {value:.2f} > {P0_LOAD}')
-    total, capacity = round(total, 2), round(len(P0_ENGINEERS) * P0_LOAD * P0_WEEKS, 2)
-    report.check(total == capacity, 'docs', f'07: «План P0» sums to {total}, capacity is {capacity}')
-    limits = {row['SP']: int(re.search(r'([0-9]+) нед', row['Лимит'])[1])
-              for table in tables_with(text, ['SP', 'Лимит']) for row in table}
-    for sp, weeks in sorted(spans.items()):
-        report.check(max(weeks) - min(weeks) + 1 <= limits.get(sp, 0), 'docs',
-                     f'07: «План P0» {sp} spans more weeks than its limit')
-    report.summary['p0EngineerWeeks'] = total
-    return total
-
-
 def _whole_weeks(value):
     return int(value + 0.5 + 1e-9)
 
 
+def _rate(report, text):
+    """Acceptance hours per week from the parameter table of 07; 0 when absent or not a positive whole number."""
+    rows = [row for row in table_exact(text, RATE_HEADER) if row['Параметр'] == RATE_ROW]
+    value = rows[0]['Значение'] if len(rows) == 1 else ''
+    report.check(value.isdigit() and int(value) > 0, 'docs', f'07: parameter «{RATE_ROW}» must be one whole number')
+    return int(value) if value.isdigit() else 0
+
+
 def check_calendar(report, docs):
-    """Each calendar segment sums its effort rows; weeks = max(minimum, engineer weeks / load), rounded."""
+    """Each calendar segment sums its plan rows; weeks = max(minimum, acceptance hours / weekly hours), rounded."""
     text = docs.get(PLAN, '')
-    effort = {('P0' if row['Этап'] == 'P0' else row['Работа']): _range(row['Инженерные недели'])
+    rate = _rate(report, text)
+    effort = {row['Работа']: _range(row['Часы приёмки'])
               for row in table_exact(text, EFFORT_HEADER) if not row['Работа'].startswith('**')}
     rows = table_exact(text, CALENDAR_HEADER)
     report.check(bool(rows), 'docs', '07: calendar table «Отрезок | Состав | …» missing')
@@ -252,13 +229,14 @@ def check_calendar(report, docs):
         unknown = [part for part in parts if part not in effort]
         report.check(not unknown, 'docs', f'07: calendar «{name}» lists unknown work {unknown}')
         used.extend(parts)
-        weeks = tuple(round(sum(effort.get(part, (0.0, 0.0))[i] for part in parts), 2) for i in (0, 1))
-        report.check(_range(row['Инженерные недели']) == weeks, 'docs', f'07: calendar «{name}» must sum to {weeks}')
+        hours = tuple(round(sum(effort.get(part, (0.0, 0.0))[i] for part in parts), 2) for i in (0, 1))
+        report.check(_range(row['Часы приёмки']) == hours, 'docs', f'07: calendar «{name}» must sum to {hours}')
         minimum = _range(row['Минимум, недель'])
-        expected = tuple(float(max(minimum[i], _whole_weeks(weeks[i] / P0_LOAD))) for i in (0, 1))
+        expected = tuple(float(max(minimum[i], _whole_weeks(hours[i] / rate) if rate else 0)) for i in (0, 1))
         report.check(_range(row['Календарные недели']) == expected, 'docs',
                      f'07: calendar «{name}» must last {expected} weeks')
-    report.check(sorted(used) == sorted(effort), 'docs', '07: every effort row must be in exactly one calendar segment')
+    report.check(sorted(used) == sorted(effort), 'docs', '07: every plan row must be in exactly one calendar segment')
+    report.summary['acceptanceHoursPerWeek'] = rate
 
 
 def _at_refs(text):
@@ -308,22 +286,21 @@ def check_agent_states(report, docs):
                  '05: agent state table must list AGENT_STATES in catalog order')
 
 
-def check_effort(report, docs, p0_total):
-    rows = table_exact(docs.get('07-delivery-plan-and-acceptance.md', ''), EFFORT_HEADER)
-    report.check(bool(rows), 'docs', '07: effort table «Работа | Этап | Инженерные недели» missing')
-    p0 = [row for row in rows if row['Этап'] == 'P0' and not row['Работа'].startswith('**')]
-    report.check(len(p0) == 1 and _range(p0[0]['Инженерные недели']) == (p0_total, p0_total), 'docs',
-                 f'07: effort row of P0 must equal the P0 plan ({p0_total})')
+def check_effort(report, docs):
+    rows = table_exact(docs.get(PLAN, ''), EFFORT_HEADER)
+    report.check(bool(rows), 'docs', '07: plan table «Работа | Этап | Часы приёмки» missing')
+    for row in rows:
+        report.check(row['Этап'] in STAGES, 'docs', f'07: plan row {row["Работа"]}: stage «{row["Этап"]}» not allowed')
     totals = {}
-    for stage in ('P1', 'P2'):
+    for stage in STAGES:
         items = [row for row in rows if row['Этап'] == stage and not row['Работа'].startswith('**')]
-        expected = tuple(round(sum(_range(row['Инженерные недели'])[i] for row in items), 2) for i in (0, 1))
+        expected = tuple(round(sum(_range(row['Часы приёмки'])[i] for row in items), 2) for i in (0, 1))
         found = [row for row in rows if row['Работа'] == f'**Итого {stage}**']
-        report.check(bool(items) and len(found) == 1 and _range(found[0]['Инженерные недели']) == expected, 'docs',
+        report.check(bool(items) and len(found) == 1 and _range(found[0]['Часы приёмки']) == expected, 'docs',
                      f'07: «Итого {stage}» differs from the sum of its rows {expected}')
         totals[stage] = expected
-    report.summary['effortWeeks'] = {stage: '–'.join(f'{v:g}'.replace('.', ',') for v in value)
-                                     for stage, value in totals.items()}
+    report.summary['acceptanceHours'] = {stage: '–'.join(f'{v:g}'.replace('.', ',') for v in value)
+                                         for stage, value in totals.items()}
 
 
 def _nth_sunday(year, month, n):
@@ -371,10 +348,6 @@ def check_chat(report, root):
     data = copy.read_bytes()
     report.check(hashlib.sha256(data).hexdigest() == CHAT_SHA256, 'docs',
                  'source/boss-chat.md differs from the pinned transcript hash')
-    original = root.parent / 'sikkerheit-app-chat-transcript.md'
-    compared = original.exists()
-    if compared:
-        report.check(original.read_bytes() == data, 'docs', 'source/boss-chat.md differs from the transcript')
     messages = len(re.findall(r'^## [0-9]+\. \S+$', data.decode('utf-8'), re.M))
     report.check(messages == CHAT_MESSAGES, 'docs', f'Chat transcript has {messages} messages')
-    report.summary.update(chatMessages=messages, chatOriginalCompared=compared)
+    report.summary['chatMessages'] = messages

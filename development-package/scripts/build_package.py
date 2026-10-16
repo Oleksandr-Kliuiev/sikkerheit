@@ -17,8 +17,8 @@ import zipfile  # noqa: E402
 import validate_package  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = '0.3.0'
-DATE = '2026-10-15'
+VERSION = '0.3.1'
+DATE = '2026-10-16'
 MONTHS = ('', 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября',
           'октября', 'ноября', 'декабря')
 INDENT = '  '
@@ -44,19 +44,17 @@ def validation_text(summary):
                 'Стандартная проверка не выполнена: jsonschema и openapi-spec-validator не установлены. '
                 'Выполнена только встроенная проверка подмножества JSON Schema.')
     s = summary
-    weeks = f'{s["p0EngineerWeeks"]:g}'.replace('.', ',')
-    p0_text = f'3 недели и ёмкость одного разработчика (инженерных недель — {weeks})'
     return f'''# Проверка Development Package
 
 Версия {VERSION}, дата {DATE}. Проверку выполняет `scripts/validate_package.py`; он ничего не записывает. `scripts/build_package.py` вызывает его первым и пишет этот файл, `REVIEW-BUNDLE.md`, `manifest.json` и архив только после успешной проверки.
 
-- Состав каталога соответствует белому списку путей пакета, скрытые файлы и `__pycache__` в пакет не входят; версия совпадает в `build_package.py`, `contract_catalog.py`, `README.md` и `09`.
+- Состав каталога соответствует белому списку путей пакета, скрытые файлы и `__pycache__` в пакет не входят; версия совпадает в `build_package.py`, `contract_catalog.py`, `README.md` и `09`. Проверка читает только файлы внутри пакета, локальные ссылки документов его не покидают. `manifest.json` записывается после проверки; `validate_package.py --manifest` сверяет с ним размер и SHA-256 каждого файла полученного пакета и находит лишние и недостающие файлы.
 - Прочитаны все JSON-файлы и разрешены локальные ссылки `$ref`; в `openapi.json` нет внешних ссылок, у четырёх отдельных схем (агент и Microsoft 365) есть `$id`.
 - Каталог: уникальных check IDs — {s["checkIds"]}, из них M365-* — {s["graphCheckIds"]}, WIN-* — {s["agentCheckIds"]}; у каждой проверки есть строка в `03`, объект и режим по умолчанию совпадают с каталогом; этап проверки следует из источника (M365 — P1, Windows — P2).
-- Документы: функциональных требований с колонкой «Контракт» — {s["requirements"]}, приёмочных сценариев — {s["acceptance"]}, runbooks — {s["runbooks"]}; каждая операция OpenAPI входит в «Контракт» ровно своего этапа; ссылки на ID разрешаются в определения; порядок `retention_purge` в `04` и `05` совпадает с контрактом; права Graph в `04` совпадают с каталогом (всего {s["graphPermissions"]}); таблица «План P0» укладывается в {p0_text}, строки плана трудоёмкости суммируются в итоги этапов (P1 — {s["effortWeeks"]["P1"]}, P2 — {s["effortWeeks"]["P2"]} инженерных недель), а каждый отрезок календаря — в свои инженерные и календарные недели.
+- Документы: функциональных требований с колонкой «Контракт» — {s["requirements"]}, приёмочных сценариев — {s["acceptance"]}, runbooks — {s["runbooks"]}; каждая операция OpenAPI входит в «Контракт» ровно своего этапа; ссылки на ID разрешаются в определения; порядок `retention_purge` в `04` и `05` совпадает с контрактом; права Graph в `04` совпадают с каталогом (всего {s["graphPermissions"]}); строки плана приёмки суммируются в итоги этапов (P1 — {s["acceptanceHours"]["P1"]}, P2 — {s["acceptanceHours"]["P2"]} часов приёмки), а каждый отрезок календаря — в свои часы и календарные недели при {s["acceptanceHoursPerWeek"]} часах приёмки в неделю.
 - Этапы: у каждого приёмочного сценария есть этап P1, P2 или обе части; требования, записи реестра инвариантов и условия допуска ссылаются только на сценарии своего этапа; операции runbooks существуют и не относятся к более позднему этапу; таблица состояний агента в `05` совпадает с каталогом.
 - Таблица жизненного цикла ОС: строк — {s["osLifecycleRows"]}; семейства совпадают с каталогом; каждое `servicingEndsAt` равно началу следующего дня по America/Los_Angeles в UTC.
-- Синтетические примеры (всего {s["examples"]}): два пакета агента содержат ровно все WIN-* и проходят схему и семантическую проверку, основной содержит эталонный случай BitLocker; запуск сбора M365 покрывает все M365-* и содержит эталонный случай report-only для M365-003.
+- Синтетические примеры (всего {s["examples"]}): два пакета агента содержат ровно все WIN-* и проходят схему и семантическую проверку, основной содержит эталонный случай BitLocker; запуск сбора M365 покрывает все собираемые M365-* (у отложенной M365-007 модуль `skipped` и наблюдений нет) и содержит эталонный случай report-only для M365-003.
 - Отклонены все отрицательные варианты (всего {s["negativeVariants"]}: пакеты агента, запуски M365 и тела `createPolicyRevision`); положительные варианты (SAFE_TEXT, WIN-006 без успешного поиска, норвежский UPN) приняты (всего {s["positiveVariants"]}).
 - Операции OpenAPI: всего {s["operations"]} (P1 — {s["operationsP1"]}, P2 — {s["operationsP2"]}; агентских {s["agentOperations"]}, портальных {s["portalOperations"]}); проверены path parameters, `x-phase`, security, CSRF, hostname агента, роли, `x-audit-read`, `Accept-Language` и заголовки выдачи отчёта.
 - Ответы: коды `Problem.code` (всего {s["problemCodes"]}) совпадают с таблицей `05`, действия агента (всего {s["agentActions"]}) образуют закрытый перечень; наборы статусов операций соответствуют правилам.
@@ -116,6 +114,9 @@ def main():
     (ROOT / 'VALIDATION.md').write_text(validation_text(report.summary), encoding='utf-8')
     bundle = write_bundle(source_copy)
     archive, files = write_archive()
+    written = validate_package.Report()
+    validate_package.check_manifest(written, ROOT, strict=True)
+    assert not written.errors, f'manifest.json does not match the package: {written.errors}'
     print(json.dumps({'packageVersion': VERSION, 'files': len(files + [ROOT / 'manifest.json']),
                       'apiOperations': report.summary['operations'], 'archiveBytes': archive.stat().st_size,
                       'bundleBytes': bundle.stat().st_size, 'archive': str(archive), 'bundle': str(bundle)},

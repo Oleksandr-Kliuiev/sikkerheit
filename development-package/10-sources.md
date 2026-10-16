@@ -15,8 +15,10 @@
 | [Authentication Methods Activity](https://learn.microsoft.com/en-us/entra/identity/authentication/howto-authentication-methods-activity) | Отчётность требует Entra ID P1/P2, задержка данных до 36 часов | 2026-10-15 |
 | [List roleAssignments](https://learn.microsoft.com/en-us/graph/api/rbacapplication-list-roleassignments?view=graph-rest-1.0) | Наименьшее право — RoleManagement.Read.Directory; возвращаются активные назначения | 2026-10-15 |
 | [PIM API overview](https://learn.microsoft.com/en-us/graph/api/resources/privilegedidentitymanagementv3-overview?view=graph-rest-1.0) | Назначения eligible — отдельные ресурсы и в roleAssignments до активации не видны | 2026-10-15 |
+| [List roleAssignmentScheduleInstances](https://learn.microsoft.com/en-us/graph/api/rbacapplication-list-roleassignmentscheduleinstances?view=graph-rest-1.0) | Наименьшее application-право — RoleAssignmentSchedule.Read.Directory, RoleManagement.Read.Directory тоже достаточно; `assignmentType` — `Assigned` или `Activated` | 2026-10-16 |
 | [Role-assignable groups](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/groups-concept) | Требуют Entra ID P1, не бывают вложенными, не больше 500 на tenant | 2026-10-15 |
-| [List transitiveMembers](https://learn.microsoft.com/en-us/graph/api/group-list-transitivemembers?view=graph-rest-1.0) | Наименьшее право — GroupMember.ReadBasic.All | 2026-10-15 |
+| [List transitiveMembers](https://learn.microsoft.com/en-us/graph/api/group-list-transitivemembers?view=graph-rest-1.0) | Страница называет наименьшим правом GroupMember.ReadBasic.All, но в справочнике прав такого права нет; из перечисленных на странице наименьшее существующее application-право — GroupMember.Read.All | 2026-10-16 |
+| [Permissions reference](https://learn.microsoft.com/en-us/graph/permissions-reference) | GroupMember.Read.All (application, `98830695-27a2-44f7-8c18-0c3ebc9698f6`) — членство и базовые свойства всех групп, требует admin consent; GroupMember.ReadBasic.All в справочнике нет | 2026-10-16 |
 | [Security Defaults API](https://learn.microsoft.com/en-us/graph/api/identitysecuritydefaultsenforcementpolicy-get?view=graph-rest-1.0) | Policy.Read.All, свойство `isEnabled` | 2026-10-15 |
 | [Conditional Access policies API](https://learn.microsoft.com/en-us/graph/api/conditionalaccessroot-list-policies?view=graph-rest-1.0) | Policy.Read.All; более широкого права нет | 2026-10-15 |
 | [Conditional Access overview](https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview) | Conditional Access требует Entra ID P1, Business Premium его включает | 2026-10-15 |
@@ -27,9 +29,11 @@
 | [Get organization](https://learn.microsoft.com/en-us/graph/api/organization-get?view=graph-rest-1.0) | Наименьшее право — Organization.Read.All | 2026-10-15 |
 | [Certificate credentials](https://learn.microsoft.com/en-us/entra/identity-platform/certificate-credentials) | Client assertion: PS256 и заголовок `x5t#S256` | 2026-10-15 |
 | [MSAL.NET client assertions](https://learn.microsoft.com/en-us/entra/msal/dotnet/acquiring-tokens/msal-net-client-assertions) | `WithClientAssertion` позволяет подписывать в Key Vault или HSM | 2026-10-15 |
+| [Access tokens](https://learn.microsoft.com/en-us/entra/identity-platform/access-tokens) | Версию access token задаёт `requestedAccessTokenVersion` приложения API: null или 1 — v1.0, 2 — v2.0; в примерах страницы `amr` есть только в токене v1.0 | 2026-10-16 |
+| [Access token claims](https://learn.microsoft.com/en-us/entra/identity-platform/access-token-claims-reference) | Значения `amr`: `mfa` — многофакторная аутентификация, `wiaormfa` — Windows или MFA; claim `acrs` — authentication context | 2026-10-16 |
 | [Admin consent endpoint](https://learn.microsoft.com/en-us/entra/identity-platform/v2-admin-consent) | Параметры ответа; значению `tenant` из ответа нельзя доверять для авторизации | 2026-10-15 |
 | [Grant tenant-wide admin consent](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/grant-admin-consent) | Application permissions Graph согласует Privileged Role Administrator (и Global Administrator) | 2026-10-15 |
-| [Built-in roles](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/permissions-reference) | Идентификаторы шаблонов 14 ролей политики M365-002 | 2026-10-15 |
+| [Built-in roles](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/permissions-reference) | Идентификаторы шаблонов 18 ролей политики M365-002 | 2026-10-15 |
 | [Throttling](https://learn.microsoft.com/en-us/graph/throttling) | 429 и Retry-After, без заголовка — экспоненциальная пауза | 2026-10-15 |
 | [Throttling limits](https://learn.microsoft.com/en-us/graph/throttling-limits) | Методы аутентификации и отчёты — 5 запросов за 10 с на tenant и 122 на все tenant; `signInActivity` — 10 в минуту; Conditional Access — 1 в секунду без Retry-After | 2026-10-15 |
 | [JSON batching](https://learn.microsoft.com/en-us/graph/json-batching) | До 20 запросов в пакете, каждый ограничивается отдельно | 2026-10-15 |
@@ -79,16 +83,20 @@
 | [PostgreSQL backup and restore](https://learn.microsoft.com/en-us/azure/postgresql/backup-restore/concepts-backup-restore) | Хранение 7–35 суток, PITR в новый сервер того же региона, геоизбыточность выбирается при создании | 2026-10-15 |
 | [PostgreSQL private access (CLI)](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/how-to-manage-virtual-network-cli) | Приватный доступ через VNet после создания сервера не меняется на публичный | 2026-10-15 |
 | [Entra authentication for PostgreSQL](https://learn.microsoft.com/en-us/azure/postgresql/security/security-entra-concepts) | Вход managed identity и групп Entra | 2026-10-15 |
+| [Manage Entra roles in PostgreSQL](https://learn.microsoft.com/en-us/azure/postgresql/security/security-manage-entra-users) | `pgaadauth_create_principal_with_oid(roleName, objectId, objectType, isAdmin, isMfa)` создаёт роль для объекта Entra по его object id | 2026-10-16 |
+| [Trust a managed identity](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-config-app-trust-managed-identity) | Federated credential приложения от managed identity: issuer `https://login.microsoftonline.com/{tenant}/v2.0`, subject — object (principal) id identity, audience `api://AzureADTokenExchange`; секрет и сертификат не нужны | 2026-10-16 |
 | [Key Vault key types and algorithms](https://learn.microsoft.com/en-us/azure/key-vault/keys/about-keys-details) | Подпись RSA: PS256 и RS256 | 2026-10-15 |
 | [Key Vault keys](https://learn.microsoft.com/en-us/azure/key-vault/keys/about-keys) | Ключи RSA-HSM требуют уровня Premium | 2026-10-15 |
 | [Key Vault RBAC](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide) | Роль Key Vault Crypto User для криптографических операций | 2026-10-13 |
 | [Immutable storage](https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview) | WORM по времени; заблокированную политику нельзя сократить или удалить | 2026-10-13 |
+| [Storage built-in roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/storage) | Роли данных Blob: Reader, Contributor (чтение, запись и удаление), Owner, Delegator; роли «только создавать» нет | 2026-10-16 |
 | [PostgreSQL row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) | Политики строк, FORCE и обход владельцем или superuser | 2026-10-12 |
 | [PostgreSQL SET](https://www.postgresql.org/docs/current/sql-set.html) | SET LOCAL и равнозначный `set_config(..., true)` действуют только до конца текущей транзакции | 2026-10-13 |
 | [PostgreSQL CREATE INDEX](https://www.postgresql.org/docs/current/sql-createindex.html) | `NULLS NOT DISTINCT` для уникальных индексов с PostgreSQL 15 | 2026-10-15 |
 | [App Service deployment slots](https://learn.microsoft.com/en-us/azure/app-service/deploy-staging-slots) | Настройки, закреплённые за слотом, и порядок переключения | 2026-10-15 |
 | [Azure Retail Prices API](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices) | Цены Norway East: P0v3 Linux около 0,0985 USD/ч, PostgreSQL B2s около 0,0876 USD/ч, ключ HSM RSA 3072 — 5 USD в месяц | 2026-10-15 |
 | [Retirement of Office 365 connectors in Teams](https://devblogs.microsoft.com/microsoft365dev/retirement-of-office-365-connectors-within-microsoft-teams/) | Коннекторы Office 365 в Teams отключены в 2026 году; замена — Workflows | 2026-10-15 |
+| [Adaptive Cards text features](https://learn.microsoft.com/en-us/adaptive-cards/authoring-cards/text-features) | Markdown поддерживает TextBlock; RichTextBlock с элементами TextRun Markdown не обрабатывает | 2026-10-16 |
 | [Политика поддержки .NET](https://dotnet.microsoft.com/en-us/platform/support/policy/dotnet-core) | .NET 10 LTS до 2028-11-14 | 2026-10-15 |
 | [Npgsql EF Core provider](https://www.nuget.org/packages/Npgsql.EntityFrameworkCore.PostgreSQL) | Выпуск 10.x для EF Core 10 | 2026-10-15 |
 | [Artifact Signing overview](https://learn.microsoft.com/en-us/azure/artifact-signing/overview) | Новое название Trusted Signing | 2026-10-15 |

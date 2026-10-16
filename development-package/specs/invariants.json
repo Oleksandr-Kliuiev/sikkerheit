@@ -1,5 +1,5 @@
 {
-  "version": "0.3.0",
+  "version": "0.3.1",
   "invariants": [
     {
       "id": "INV-001",
@@ -19,7 +19,7 @@
     },
     {
       "id": "INV-002",
-      "rule": "Токен входа без признака MFA (amr без mfa), из другого tenant или без app role не создаёт сессию.",
+      "rule": "Токен входа без признака MFA (amr без mfa в access token v1 собственного API), из другого tenant или без app role не создаёт сессию.",
       "sourceDoc": {
         "file": "04-security-and-privacy.md",
         "section": "Вход сотрудников и роли"
@@ -114,7 +114,7 @@
     },
     {
       "id": "INV-008",
-      "rule": "Изменения клиентских таблиц (INSERT, UPDATE, DELETE) возможны только в области одной организации: в области чтения all и для строк чужой организации они затрагивают 0 строк.",
+      "rule": "Изменения клиентских таблиц (INSERT, UPDATE, DELETE) возможны только в области одной организации: в области чтения all и для строк чужой организации они затрагивают 0 строк или отклоняются ошибкой PostgreSQL, данные не меняются.",
       "sourceDoc": {
         "file": "02-architecture-and-stack.md",
         "section": "Разделение клиентов"
@@ -433,7 +433,7 @@
       },
       "phase": "P1",
       "enforcement": "evaluator",
-      "negativeExample": "M365-007 в tenant без Entra ID P1.",
+      "negativeExample": "M365-007 после её ввода в tenant без Entra ID P1.",
       "expectedError": {
         "assessmentMode": "informational",
         "result": null,
@@ -541,7 +541,7 @@
     },
     {
       "id": "INV-035",
-      "rule": "Временная активация роли в PIM не создаёт пару M365-002 и не меняет счёт M365-005.",
+      "rule": "Временная активация роли Global Administrator в PIM не меняет счёт M365-005.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Правило M365-005"
@@ -623,7 +623,7 @@
     },
     {
       "id": "INV-040",
-      "rule": "M365-003: per-user MFA enabled или enforced у всех включённых member-пользователей вне исключений даёт pass и в tenant с Entra ID P1.",
+      "rule": "M365-003: per-user MFA enforced у всех включённых member-пользователей вне исключений даёт pass и в tenant с Entra ID P1.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Правило M365-003"
@@ -720,7 +720,7 @@
     },
     {
       "id": "INV-046",
-      "rule": "M365-007 в режиме assessed: lastSuccessfulSignInAt и createdAt равны null — fail, потому что учётная запись создана до июня 2018 года и с декабря 2023 года не входила.",
+      "rule": "M365-007 после её ввода в режиме assessed: lastSuccessfulSignInAt и createdAt равны null — fail, потому что учётная запись создана до июня 2018 года и с декабря 2023 года не входила.",
       "sourceDoc": {
         "file": "03-check-catalog.md",
         "section": "Правило M365-007"
@@ -1309,7 +1309,7 @@
     },
     {
       "id": "INV-082",
-      "rule": "Отмена удаления, записанная в журнал после планирования, после restore возвращает организацию в disabled; любое удаление после restore выполняется не раньше чем через 7 суток.",
+      "rule": "Отмена удаления, записанная в журнал после планирования, после restore возвращает организацию в disabled; запланированное удаление после restore выполняется не раньше чем через 7 суток, а повтор состоявшегося удаления (organization.delete) — сразу.",
       "sourceDoc": {
         "file": "06-azure-and-operations.md",
         "section": "Резервное копирование и восстановление"
@@ -1324,7 +1324,7 @@
     },
     {
       "id": "INV-083",
-      "rule": "Записи журнала безопасности нельзя изменить или удалить до конца срока неизменяемости.",
+      "rule": "Записи журнала безопасности нельзя изменить или удалить до конца срока неизменяемости, хотя identity сервиса пишет ролью Storage Blob Data Contributor: запрет даёт заблокированная политика контейнера.",
       "sourceDoc": {
         "file": "04-security-and-privacy.md",
         "section": "Журнал безопасности"
@@ -1564,14 +1564,14 @@
     },
     {
       "id": "INV-098",
-      "rule": "Повторная регистрация с тем же installationId и признаком машины заменяет публичный ключ с сохранением deviceId и истории.",
+      "rule": "Новый ключ устройства с тем же installationId и признаком машины заменяет прежний с сохранением deviceId и истории, только если запрос подписан прежним ключом (previousKeySignature) или Admin принял ключ решением accept_new_key.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
         "section": "Регистрация и сессия"
       },
       "phase": "P2",
       "enforcement": "agent_api",
-      "negativeExample": "TPM очищен, агент регистрируется заново.",
+      "negativeExample": "Агент меняет ключ и подписывает запрос прежним ключом.",
       "expectedError": {
         "audit": "device.key_replaced"
       },
@@ -1690,7 +1690,7 @@
     },
     {
       "id": "INV-106",
-      "rule": "Повторный challenge_invalid при доступном локальном ключе ведёт к регистрации заново с тем же installationId не чаще раза в сутки; при совпадающем признаке машины сервер заменяет публичный ключ.",
+      "rule": "Повторный challenge_invalid при доступном локальном ключе ведёт к регистрации заново с тем же installationId не чаще раза в сутки; если сервер помнит другой ключ, регистрация получает identity_conflict вида key, и ключ принимает Admin.",
       "sourceDoc": {
         "file": "05-data-and-api.md",
         "section": "Конечный автомат агента"
@@ -2840,6 +2840,399 @@
         "result": null
       },
       "acceptance": "AT-14"
+    },
+    {
+      "id": "INV-177",
+      "rule": "Обновление сессии раз в 60 минут погашает refresh token сотрудника в Entra ID; отказ Entra, отсутствие mfa в amr или ролей удаляют сессию.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Вход сотрудников и роли"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Учётная запись отключена в Entra во время сессии.",
+      "expectedError": {
+        "http": 401,
+        "code": "session_required"
+      },
+      "acceptance": "AT-02"
+    },
+    {
+      "id": "INV-178",
+      "rule": "M365-002: временная активация роли PIM учитывается отдельным видом назначения (temporaryRoleTemplateIds); администратор, активировавший роль без метода MFA, получает fail critical.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Правило M365-001 и M365-002"
+      },
+      "phase": "P1",
+      "enforcement": "evaluator",
+      "negativeExample": "Активация Global Administrator пользователем только с паролем.",
+      "expectedError": {
+        "assessmentMode": "assessed",
+        "result": "fail"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-179",
+      "rule": "M365-005 перечисляет роли вне privilegedRoleTemplateIds в uncoveredRoleTemplateIds; на результат M365-005 и M365-002 они не влияют.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Правило M365-005"
+      },
+      "phase": "P1",
+      "enforcement": "evaluator",
+      "negativeExample": "Пользователь с ролью Global Reader при двух включённых глобальных администраторах.",
+      "expectedError": {
+        "assessmentMode": "assessed",
+        "result": "pass"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-180",
+      "rule": "M365-003: per-user MFA enabled у части пользователей при отсутствии disabled даёт unknown/enforcement_unconfirmed: до подтверждения в SP-01 enabled не считается принуждением.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Правило M365-003"
+      },
+      "phase": "P1",
+      "enforcement": "evaluator",
+      "negativeExample": "perUserMfa = {required: 3, notRequired: 0, unknown: 0, enabled: 2}.",
+      "expectedError": {
+        "assessmentMode": "assessed",
+        "result": "unknown",
+        "reasonCode": "enforcement_unconfirmed"
+      },
+      "acceptance": "AT-05"
+    },
+    {
+      "id": "INV-181",
+      "rule": "M365-003: ответ Security Defaults без логического isEnabled или политика CA с MFA и условием вне CA_CONDITIONS дают модулю partial и unknown/partial_data, а не pass.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Правило M365-003"
+      },
+      "phase": "P1",
+      "enforcement": "collector",
+      "negativeExample": "Политика CA на всех с условием times.",
+      "expectedError": {
+        "assessmentMode": "assessed",
+        "result": "unknown",
+        "reasonCode": "partial_data"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-182",
+      "rule": "Модуль sign_in_activity в P1 всегда skipped: M365-007 отложена, право AuditLog.Read.All не запрашивается.",
+      "sourceDoc": {
+        "file": "03-check-catalog.md",
+        "section": "Правило M365-007"
+      },
+      "phase": "P1",
+      "enforcement": "collector",
+      "negativeExample": "Запуск сбора в tenant с Entra ID P1.",
+      "expectedError": {
+        "capabilityStatus": "skipped"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-183",
+      "rule": "Плановое задание сбора не присоединяется к незавершённому запуску: запуск, открытый дольше 6 часов, закрывается failed/run_timeout без записи наблюдений, и начинается ровно один новый.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Подключение M365 и сбор"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Процесс упал во время сбора, запуск в running 7 часов.",
+      "expectedError": {
+        "effect": "single"
+      },
+      "acceptance": "AT-04"
+    },
+    {
+      "id": "INV-184",
+      "rule": "При пересчёте политики пара без наблюдения получает unknown/missing_observation только в режиме assessed; informational-пара без наблюдения и M365-002 без проекции оценки не получают.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Выбор текущего состояния"
+      },
+      "phase": "P1",
+      "enforcement": "evaluator",
+      "negativeExample": "Новая ревизия переводит M365-004 в assessed до первого сбора.",
+      "expectedError": {
+        "assessmentMode": "assessed",
+        "result": "unknown",
+        "reasonCode": "missing_observation"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-185",
+      "rule": "Каждая транзакция порции recalculate_policy проверяет lease задания: после потери lease прежний владелец не пишет следующую порцию.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Фоновые задания и планировщик"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Lease истёк между второй и третьей порцией.",
+      "expectedError": {
+        "effect": "none"
+      },
+      "acceptance": "AT-10"
+    },
+    {
+      "id": "INV-186",
+      "rule": "Сводка Teams за период отмечается в teams_digest после принятия webhook: повтор задания с отметкой ничего не отправляет.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Фоновые задания и планировщик"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Задание teams_digest захвачено повторно после отправки.",
+      "expectedError": {
+        "effect": "single"
+      },
+      "acceptance": "AT-10"
+    },
+    {
+      "id": "INV-187",
+      "rule": "Недоверенные строки в сводке Teams передаются только элементами TextRun Adaptive Card: разметка Markdown не обрабатывается, адреса из данных не строятся.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Недоверенные строки и выдача отчёта"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Имя организации «[x](https://example.invalid)».",
+      "expectedError": {
+        "effect": "none"
+      },
+      "acceptance": "AT-07"
+    },
+    {
+      "id": "INV-188",
+      "rule": "Каждое решение decideFindingRisk, включая withdrawn, создаёт ровно одну неизменяемую запись risk_decision со ссылкой на событие workflow_changed.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Автомат workflowState"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Смена risk_accepted на suppressed без записи прежнего основания.",
+      "expectedError": {
+        "effect": "single"
+      },
+      "acceptance": "AT-08"
+    },
+    {
+      "id": "INV-189",
+      "rule": "Роль приложения не изменяет историю: UPDATE finding_event, risk_decision и audit_event отклоняется.",
+      "sourceDoc": {
+        "file": "02-architecture-and-stack.md",
+        "section": "Разделение клиентов"
+      },
+      "phase": "P1",
+      "enforcement": "db_rls",
+      "negativeExample": "UPDATE finding_event SET cause от роли приложения.",
+      "expectedError": {
+        "rows": 0
+      },
+      "acceptance": "AT-01"
+    },
+    {
+      "id": "INV-190",
+      "rule": "createReport за текущую или будущую неделю отклоняется: отчёт строится только за завершённую неделю.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Отчёт и покрытие"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "periodEnd — следующий понедельник.",
+      "expectedError": {
+        "http": 422,
+        "code": "validation_failed"
+      },
+      "acceptance": "AT-07"
+    },
+    {
+      "id": "INV-191",
+      "rule": "Повторный createReport за ту же неделю и язык ставит failed в генерацию заново, а для ready возвращает существующий отчёт без изменений.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Отчёт и покрытие"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Повтор после готового отчёта.",
+      "expectedError": {
+        "replay": {
+          "http": 202,
+          "duplicate": true
+        }
+      },
+      "acceptance": "AT-07"
+    },
+    {
+      "id": "INV-192",
+      "rule": "Отчёт ready не переписывается: UPDATE строки отклоняет триггер, показатели закрытой недели берутся только из снимка, потерянный файл строится из него заново.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Отчёт и покрытие"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Смена ролей и политики после генерации отчёта.",
+      "expectedError": {
+        "effect": "none"
+      },
+      "acceptance": "AT-07"
+    },
+    {
+      "id": "INV-193",
+      "rule": "Подключённый tenant до первого сбора не выпадает из покрытия: его обязательные пары считаются без данных, и coverageAt равен 0, а не «нет данных».",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Отчёт и покрытие"
+      },
+      "phase": "P1",
+      "enforcement": "evaluator",
+      "negativeExample": "Подключение активно, сбора ещё не было.",
+      "expectedError": {
+        "effect": "none"
+      },
+      "acceptance": "AT-07"
+    },
+    {
+      "id": "INV-194",
+      "rule": "weekly_report не создаёт отчёт за неделю, закончившуюся до создания организации, и догоняет не больше 4 пропущенных недель.",
+      "sourceDoc": {
+        "file": "02-architecture-and-stack.md",
+        "section": "Фоновые задания"
+      },
+      "phase": "P1",
+      "enforcement": "worker",
+      "negativeExample": "Организация создана в среду, сервис был выключен 6 недель.",
+      "expectedError": {
+        "effect": "none"
+      },
+      "acceptance": "AT-07"
+    },
+    {
+      "id": "INV-195",
+      "rule": "После restore версии политики продолжаются со следующей эпохи — наименьшего кратного 10 000, большего максимальной сохранённой версии: номер потерянной ревизии не повторяется.",
+      "sourceDoc": {
+        "file": "06-azure-and-operations.md",
+        "section": "Резервное копирование и восстановление"
+      },
+      "phase": "P1",
+      "enforcement": "infra",
+      "negativeExample": "После точки restore потеряно 140 ревизий политики.",
+      "expectedError": {
+        "effect": "none"
+      },
+      "acceptance": "AT-11"
+    },
+    {
+      "id": "INV-196",
+      "rule": "До ввода M365-007 режим assessed для неё отклоняется: проверка не собирается, и пара дала бы каждому пользователю unknown/missing_observation.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "createPolicyRevision с M365-007 assessed.",
+      "expectedError": {
+        "http": 422,
+        "code": "policy_inputs_missing"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-197",
+      "rule": "Новый ключ устройства без подписи прежним ключом не заменяет ключ: 409 identity_conflict вида key, ключ оригинала прежний.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Регистрация и сессия"
+      },
+      "phase": "P2",
+      "enforcement": "agent_api",
+      "negativeExample": "Клон с копией диска, ключом организации и новым ключом.",
+      "expectedError": {
+        "http": 409,
+        "code": "identity_conflict"
+      },
+      "acceptance": "AT-12"
+    },
+    {
+      "id": "INV-198",
+      "rule": "Замена ключа устройства удаляет все его сессии: токен, выданный прежнему ключу, отклоняется со следующего запроса.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Ключ устройства и сессия"
+      },
+      "phase": "P2",
+      "enforcement": "agent_api",
+      "negativeExample": "submitScan со старым токеном после accept_new_key.",
+      "expectedError": {
+        "http": 401,
+        "code": "session_invalid"
+      },
+      "acceptance": "AT-12"
+    },
+    {
+      "id": "INV-199",
+      "rule": "revoked_installation не удаляется по сроку, пока у организации есть активный ключ регистрации.",
+      "sourceDoc": {
+        "file": "04-security-and-privacy.md",
+        "section": "Сроки хранения"
+      },
+      "phase": "P2",
+      "enforcement": "worker",
+      "negativeExample": "Отзыв 25 месяцев назад, ключ регистрации организации активен.",
+      "expectedError": {
+        "effect": "none"
+      },
+      "acceptance": "AT-09"
+    },
+    {
+      "id": "INV-200",
+      "rule": "Полнота пакета считается по активным проверкам агента (source=agent): пакет со всеми WIN-проверками полный и при активных M365-проверках, а пара без наблюдения получает unknown/missing_observation.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Порядок приёма пакета"
+      },
+      "phase": "P2",
+      "enforcement": "evaluator",
+      "negativeExample": "Пакет без WIN-009 при политике со всеми проверками.",
+      "expectedError": {
+        "assessmentMode": "assessed",
+        "result": "unknown",
+        "reasonCode": "missing_observation"
+      },
+      "acceptance": "AT-13"
+    },
+    {
+      "id": "INV-201",
+      "rule": "Скрипт RMM устанавливает только утверждённый MSI: кроме подписи и издателя проверяются версия и SHA-256, закреплённые в задании.",
+      "sourceDoc": {
+        "file": "06-azure-and-operations.md",
+        "section": "Распространение агента через RMM"
+      },
+      "phase": "P2",
+      "enforcement": "infra",
+      "negativeExample": "Старая подписанная версия с известной уязвимостью.",
+      "expectedError": {
+        "effect": "none"
+      },
+      "acceptance": "AT-16"
     }
   ]
 }

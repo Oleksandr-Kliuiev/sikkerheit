@@ -42,7 +42,7 @@
     },
     {
       "module": "sign_in_activity",
-      "status": "available"
+      "status": "skipped"
     },
     {
       "module": "per_user_mfa",
@@ -105,6 +105,7 @@
         "roleTemplateIds": [
           "62e90394-69f5-4237-9190-012177145e10"
         ],
+        "temporaryRoleTemplateIds": [],
         "assignment": "direct",
         "methodKinds": [
           "password",
@@ -178,7 +179,10 @@
           "aaaaaaaa-0000-4000-8000-000000000002"
         ],
         "disabledGlobalAdminUserIds": [],
-        "unresolvedGroupAssignments": 0
+        "unresolvedGroupAssignments": 0,
+        "uncoveredRoleTemplateIds": [
+          "f2ef992c-3afb-46b9-b7cf-a126ee74c451"
+        ]
       }
     },
     {
@@ -194,42 +198,6 @@
         "permissionGrantPolicies": [
           "ManagePermissionGrantsForSelf.microsoft-user-default-legacy"
         ]
-      }
-    },
-    {
-      "checkId": "M365-007",
-      "collectorVersion": "0.1.0",
-      "subject": {
-        "type": "user",
-        "key": "aaaaaaaa-0000-4000-8000-000000000001",
-        "userPrincipalName": "kari.nordmann@example.invalid"
-      },
-      "observedAt": "2026-10-12T03:04:00Z",
-      "collectionStatus": "collected",
-      "evidence": {
-        "accountEnabled": true,
-        "userType": "Member",
-        "directorySyncAccount": false,
-        "lastSuccessfulSignInAt": "2026-10-10T07:12:00Z",
-        "createdAt": "2024-03-01T09:00:00Z"
-      }
-    },
-    {
-      "checkId": "M365-007",
-      "collectorVersion": "0.1.0",
-      "subject": {
-        "type": "user",
-        "key": "aaaaaaaa-0000-4000-8000-000000000002",
-        "userPrincipalName": "ola.admin@example.invalid"
-      },
-      "observedAt": "2026-10-12T03:04:00Z",
-      "collectionStatus": "collected",
-      "evidence": {
-        "accountEnabled": true,
-        "userType": "Member",
-        "directorySyncAccount": false,
-        "lastSuccessfulSignInAt": null,
-        "createdAt": "2025-01-15T09:00:00Z"
       }
     }
   ]
