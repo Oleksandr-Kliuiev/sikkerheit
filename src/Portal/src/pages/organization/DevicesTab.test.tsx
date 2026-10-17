@@ -23,7 +23,7 @@ const key: EnrollmentKeySummary = {
 
 const calls: { method: string; path: string; body: unknown }[] = [];
 
-function respond(devices: Device[], keys: EnrollmentKeySummary[]) {
+function respond(devices: Device[], keys: EnrollmentKeySummary[], nextCursor: string | null = null) {
   vi.stubGlobal('fetch', vi.fn(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     calls.push({ method, path, body: init?.body ? JSON.parse(init.body as string) : undefined });
@@ -38,7 +38,7 @@ function respond(devices: Device[], keys: EnrollmentKeySummary[]) {
       return json(device({ identityState: 'ok' }));
     }
     if (path.includes('/devices')) {
-      return json({ items: devices, nextCursor: null });
+      return json({ items: devices, nextCursor });
     }
     return json({});
   }));
@@ -75,6 +75,30 @@ afterEach(() => {
 });
 
 describe('DevicesTab', () => {
+  it('filters by enrollment key and requires confirmation for a complete revocation snapshot', async () => {
+    respond([device({ enrollmentKeyId: key.id }), device({ id: '77777777-7777-4777-8777-777777777777', enrollmentKeyId: null })], [key]);
+    view(['Admin']);
+    await screen.findByRole('option', { name: 'RMM (sikk_AbCd)' });
+    await userEvent.selectOptions(await screen.findByLabelText('Enrollment key'), key.id);
+    await waitFor(() => expect(calls.some((call) => call.path.includes(`enrollmentKeyId=${key.id}`))).toBe(true));
+    await userEvent.click(screen.getByRole('button', { name: 'Revoke devices for this key' }));
+    expect(calls.some((call) => call.path.endsWith('/revoke'))).toBe(false);
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Revoke' }));
+    await screen.findByText('Revoked: 1. Failed: 0.');
+    expect(calls.filter((call) => call.path.endsWith('/revoke')).map((call) => call.path))
+      .toEqual([`/api/v1/organizations/${organization.id}/devices/22222222-2222-4222-8222-222222222222/revoke`]);
+  });
+
+  it('cannot bulk revoke an incomplete cursor list', async () => {
+    respond([device({ enrollmentKeyId: key.id })], [key], 'more-devices');
+    view(['Admin']);
+    await screen.findByRole('option', { name: 'RMM (sikk_AbCd)' });
+    await userEvent.selectOptions(await screen.findByLabelText('Enrollment key'), key.id);
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Revoke devices for this key' }) as HTMLButtonElement).disabled).toBe(true));
+    expect(calls.some((call) => call.path.endsWith('/revoke'))).toBe(false);
+  });
+
   it('lists devices with their state and hides the keys from a technician', async () => {
     respond([device({}), device({ id: '66666666-6666-4666-8666-666666666666', displayName: 'PC-OLA', status: 'revoked' })], [key]);
     view(['Technician']);

@@ -1,5 +1,5 @@
 {
-  "version": "0.3.1",
+  "version": "0.3.2",
   "invariants": [
     {
       "id": "INV-001",
@@ -3233,6 +3233,100 @@
         "effect": "none"
       },
       "acceptance": "AT-16"
+    },
+    {
+      "id": "INV-202",
+      "rule": "Подписанный предпросмотр шаблона связан с сотрудником и организацией; чужой token отклоняется.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Применение token другого Admin или другого клиента.",
+      "expectedError": {
+        "http": 400,
+        "code": "invalid_cursor"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-203",
+      "rule": "После предпросмотра смена версии политики или шаблона требует нового просмотра, без записи ревизии.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Другой Admin сохранил политику или шаблон между просмотром и применением.",
+      "expectedError": {
+        "http": 412,
+        "code": "revision_mismatch"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-204",
+      "rule": "Неприменённый предпросмотр действует 30 минут; после срока он не создаёт ревизию.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Применение через 31 минуту после просмотра.",
+      "expectedError": {
+        "http": 422,
+        "code": "validation_failed"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-205",
+      "rule": "Повтор того же применения, в том числе одновременно и после потери ответа, возвращает квитанцию без новой политики, задания и события аудита.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Два применения одного token.",
+      "expectedError": {
+        "effect": "none"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-206",
+      "rule": "Архивированный шаблон нельзя предварительно просмотреть для применения к клиенту.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Предпросмотр архивированной текущей версии.",
+      "expectedError": {
+        "http": 422,
+        "code": "validation_failed"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-207",
+      "rule": "При применении сохраняются идентификаторы клиента, исключения, расписания, доверенные провайдеры, перечни ролей/согласий, SID/RID и редакций; они не копируются из библиотеки.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "У клиента собственные провайдеры, tenant ID и исключения; применён общий Windows-шаблон.",
+      "expectedError": {
+        "effect": "none"
+      },
+      "acceptance": "AT-06"
     }
   ]
 }

@@ -1,0 +1,232 @@
+{
+  "activeCheckIds": [
+    "M365-001",
+    "M365-002",
+    "M365-003",
+    "M365-004",
+    "M365-005",
+    "M365-006",
+    "M365-007",
+    "WIN-001",
+    "WIN-002",
+    "WIN-003",
+    "WIN-004",
+    "WIN-005",
+    "WIN-006",
+    "WIN-007",
+    "WIN-008",
+    "WIN-009",
+    "WIN-010",
+    "WIN-011"
+  ],
+  "m365": {
+    "collectionHourLocal": 3,
+    "excludedUserIds": []
+  },
+  "agent": {
+    "scanIntervalHours": 24,
+    "checkInIntervalHours": 4,
+    "scanJitterMinutes": 10,
+    "maxBufferDays": 7,
+    "maxBatchAgeDays": 9
+  },
+  "checks": {
+    "M365-001": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 48,
+      "parameters": {
+        "phoneMethodsAccepted": true
+      }
+    },
+    "M365-002": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 48,
+      "parameters": {
+        "privilegedRoleTemplateIds": [
+          "62e90394-69f5-4237-9190-012177145e10",
+          "e8611ab8-c189-46e8-94e1-60213ab1f814",
+          "7be44c8a-adaf-4e2a-84d6-ab2649e08a13",
+          "194ae4cb-b126-40b2-bd5b-6091b380977d",
+          "b1be1c3e-b65d-4f19-8427-f6fa0d97feb9",
+          "29232cdf-9323-42fd-ade2-1d097af3e4de",
+          "f28a1f50-f6e7-4571-818b-6a12f2af6b6c",
+          "fe930be7-5e62-47db-91af-98c3a49a38b1",
+          "c4e39bd9-1100-46d3-8c65-fb160da0071f",
+          "9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3",
+          "158c047a-c907-4556-b7ef-446551a6b5f7",
+          "3a2c62db-5318-420d-8d74-23affee5d9d5",
+          "729827e3-9c14-49f7-bb1b-9608f156bbb8",
+          "b0f54661-2d74-4c50-afa3-1ec803f12efe",
+          "0526716b-113d-4c15-b2c8-68e3c22b9f80",
+          "966707d0-3269-4727-9be2-8c3a10f19b9d",
+          "9360feb5-f418-4baa-8175-e2a00bac4301",
+          "e00e864a-17c5-4a4b-9c06-f5b95a8d5bd8"
+        ]
+      }
+    },
+    "M365-003": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 48,
+      "parameters": {
+        "deviceAlternativeAccepted": false,
+        "trustedLocationsExclusionAccepted": false
+      }
+    },
+    "M365-004": {
+      "assessmentMode": "informational",
+      "freshnessWindowHours": 48,
+      "parameters": {}
+    },
+    "M365-005": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 48,
+      "parameters": {
+        "minGlobalAdmins": 2,
+        "maxGlobalAdmins": 4
+      }
+    },
+    "M365-006": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 48,
+      "parameters": {
+        "allowedPermissionGrantPolicies": [
+          "ManagePermissionGrantsForSelf.microsoft-user-default-low"
+        ]
+      }
+    },
+    "M365-007": {
+      "assessmentMode": "informational",
+      "freshnessWindowHours": 48,
+      "parameters": {
+        "inactiveDays": 90
+      }
+    },
+    "WIN-001": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 72,
+      "parameters": {
+        "warnFreePercent": 10,
+        "warnFreeBytes": 10737418240,
+        "criticalFreePercent": 5,
+        "criticalFreeBytes": 2147483648
+      },
+      "notApplicableEditionIds": []
+    },
+    "WIN-002": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 72,
+      "parameters": {
+        "encryptionRequired": true
+      },
+      "notApplicableEditionIds": [
+        "Core",
+        "CoreN",
+        "CoreSingleLanguage",
+        "CoreCountrySpecific"
+      ]
+    },
+    "WIN-003": {
+      "assessmentMode": "informational",
+      "freshnessWindowHours": 72,
+      "parameters": {
+        "approvedProviders": [],
+        "defenderApproved": true
+      },
+      "notApplicableEditionIds": []
+    },
+    "WIN-004": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 72,
+      "parameters": {
+        "warnDays": 3,
+        "criticalDays": 7
+      },
+      "notApplicableEditionIds": []
+    },
+    "WIN-005": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 72,
+      "parameters": {
+        "requiredProfiles": [
+          "domain",
+          "private",
+          "public"
+        ],
+        "approvedFirewallProviders": []
+      },
+      "notApplicableEditionIds": []
+    },
+    "WIN-006": {
+      "assessmentMode": "informational",
+      "freshnessWindowHours": 72,
+      "parameters": {
+        "maxSearchAgeDays": 7
+      },
+      "notApplicableEditionIds": []
+    },
+    "WIN-007": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 72,
+      "parameters": {
+        "warnDays": 3
+      },
+      "notApplicableEditionIds": []
+    },
+    "WIN-008": {
+      "assessmentMode": "informational",
+      "freshnessWindowHours": 72,
+      "parameters": {
+        "allowBuiltinAdministrator": true,
+        "allowedDomainRids": [
+          512
+        ],
+        "allowedSids": [],
+        "maxOtherLocalAccounts": 0
+      },
+      "notApplicableEditionIds": []
+    },
+    "WIN-009": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 72,
+      "parameters": {
+        "secureBootRequired": true
+      },
+      "notApplicableEditionIds": []
+    },
+    "WIN-010": {
+      "assessmentMode": "informational",
+      "freshnessWindowHours": 72,
+      "parameters": {
+        "expectedTenantId": null
+      },
+      "notApplicableEditionIds": []
+    },
+    "WIN-011": {
+      "assessmentMode": "informational",
+      "freshnessWindowHours": 72,
+      "parameters": {},
+      "notApplicableEditionIds": []
+    },
+    "SYS-001": {
+      "assessmentMode": "informational",
+      "freshnessWindowHours": 72,
+      "parameters": {},
+      "notApplicableEditionIds": []
+    },
+    "SYS-002": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 72,
+      "parameters": {},
+      "notApplicableEditionIds": []
+    },
+    "SYS-003": {
+      "assessmentMode": "assessed",
+      "freshnessWindowHours": 72,
+      "parameters": {
+        "graceDays": 14,
+        "criticalBehindMonths": 2
+      },
+      "notApplicableEditionIds": []
+    }
+  }
+}

@@ -47,7 +47,7 @@ Sikkerheit — внутренний сервис IT-компании для ре
 | --- | --- | --- | --- | --- |
 | FR-01 | Организации: создание, изменение, отключение, экспорт и удаление с отсрочкой; сводка по каждому клиенту | P1 | AT-01, AT-09 | listOrganizations, createOrganization, getOrganization, updateOrganization, changeOrganizationLifecycle, createOrganizationExport, getOrganizationExport, downloadOrganizationExport |
 | FR-02 | Вход сотрудников через Entra ID компании с MFA, роли Admin, Technician и Reader, аудит изменений | P1 | AT-02 | getCurrentStaff, listStaff, listAuditEvents |
-| FR-03 | Политика клиента: неизменяемые версии, режим и параметры каждой проверки | P1 | AT-06 | listPolicyRevisions, createPolicyRevision |
+| FR-03 | Политика клиента: неизменяемые версии, режим и параметры проверок, общая библиотека шаблонов и применение с просмотром | P1 | AT-06 | listPolicyRevisions, createPolicyRevision, listPolicyTemplates, createPolicyTemplate, getPolicyTemplate, listPolicyTemplateRevisions, createPolicyTemplateRevision, previewPolicyTemplate, applyPolicyTemplate |
 | FR-04 | Подключение Microsoft 365 через admin consent клиента для заранее указанного tenant, проверка подключения, видимое состояние и отключение | P1 | AT-03 | getTenantConnection, startTenantConsent, verifyTenantConnection, disconnectTenant |
 | FR-05 | Ежедневный и внеплановый сбор Microsoft 365 с явными возможностями модулей и частичными результатами | P1 | AT-04, AT-10 | listCollectionRuns, requestCollection |
 | FR-06 | Оценки: четыре результата, отдельная свежесть, информационный режим и основание вывода | P1 | AT-05, AT-06 | listAssessments |

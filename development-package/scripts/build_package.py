@@ -17,8 +17,8 @@ import zipfile  # noqa: E402
 import validate_package  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = '0.3.1'
-DATE = '2026-10-16'
+VERSION = '0.3.2'
+DATE = '2026-10-17'
 MONTHS = ('', 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября',
           'октября', 'ноября', 'декабря')
 INDENT = '  '

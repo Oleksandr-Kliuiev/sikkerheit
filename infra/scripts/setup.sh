@@ -10,7 +10,22 @@
 #           SIKKERHEIT_GITHUB_REPO=owner/repo (identity for .github/workflows/deploy.yml, OIDC without secrets),
 #           SIKKERHEIT_DATABASE_SERVER=<server> (the restored server after RB-05; by default the server that the
 #           connection string of the app names, on the first install psql-sikkerheit-<env>-<5>).
+#           SIKKERHEIT_AGENT_HOST (DNS name already bound with TLS), SIKKERHEIT_MINIMUM_AGENT_VERSION (x.y.z).
+#           SIKKERHEIT_COLLECTION_CONCURRENCY / SIKKERHEIT_MAINTENANCE_CONCURRENCY (1..8; live settings are preserved).
+#           Both default to the live app settings; on the first install P2 is closed (disabled.invalid).
 set -euo pipefail
+setup_secret_file=""
+cleanup_setup() {
+  local setup_exit_status=$?
+  trap - EXIT
+  if [[ -n "$setup_secret_file" ]] && ! rm -f -- "$setup_secret_file"; then
+    (( setup_exit_status != 0 )) || setup_exit_status=1
+  fi
+  exit "$setup_exit_status"
+}
+trap cleanup_setup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 env="${1:-prod}"
 [[ "$env" == prod || "$env" == test ]] || { echo "Usage: $0 prod|test"; exit 2; }
@@ -20,7 +35,10 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
 state="$root/infra/.state"
 mkdir -p "$state"
-: "${SIKKERHEIT_ALERT_EMAIL:?Set SIKKERHEIT_ALERT_EMAIL to the operations mailbox}"
+if [[ -z "${SIKKERHEIT_ALERT_EMAIL:-}" ]]; then
+  echo "Set SIKKERHEIT_ALERT_EMAIL to the operations mailbox" >&2
+  exit 1
+fi
 repository_pattern='^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
 if [[ -n "${SIKKERHEIT_GITHUB_REPO:-}" && ! "$SIKKERHEIT_GITHUB_REPO" =~ $repository_pattern ]]; then
   echo "SIKKERHEIT_GITHUB_REPO must be owner/repo exactly as on GitHub"; exit 2
@@ -105,6 +123,8 @@ deploy() {
     --template-file "$root/infra/bicep/main.bicep" \
     --parameters environmentName="$env" location="$location" alertEmail="$SIKKERHEIT_ALERT_EMAIL" \
                  portalClientId="${1:-}" graphClientId="${2:-}" securityLogLocked="$locked" databaseServerName="$database_server" databaseStorageGb="$database_storage" \
+                 agentHostname="$agent_hostname" minimumAgentVersion="$minimum_agent_version" \
+                 collectionConcurrency="$collection_concurrency" maintenanceConcurrency="$maintenance_concurrency" \
     --query properties.outputs -o json > "$state/$env.json"
 }
 output() { jq -r ".$1.value" "$state/$env.json"; }
@@ -113,6 +133,20 @@ say "1/7 Resource group and resources (first pass)"
 az group create --name "$group" --location "$location" --tags app=sikkerheit environment="$env" -o none
 database_server="$(resolve_database_server)"
 database_storage="$(resolve_database_storage)"
+existing_site="$(az webapp list --resource-group "$group" --query "[?starts_with(name, 'app-sikkerheit-${env}-')].name | [0]" -o tsv)"
+agent_settings='[]'
+if [[ -n "$existing_site" ]]; then
+  agent_settings="$(az webapp config appsettings list --resource-group "$group" --name "$existing_site" \
+    --query "[?name=='Hosting__AgentHosts__0'||name=='Agents__MinimumAgentVersion'||name=='Jobs__CollectionConcurrency'||name=='Jobs__MaintenanceConcurrency'].{name:name,value:value}" -o json)"
+fi
+agent_hostname="${SIKKERHEIT_AGENT_HOST:-$(jq -r 'map(select(.name=="Hosting__AgentHosts__0"))[0].value // "disabled.invalid"' <<<"$agent_settings")}"
+minimum_agent_version="${SIKKERHEIT_MINIMUM_AGENT_VERSION:-$(jq -r 'map(select(.name=="Agents__MinimumAgentVersion"))[0].value // "0.1.0"' <<<"$agent_settings")}"
+collection_concurrency="${SIKKERHEIT_COLLECTION_CONCURRENCY:-$(jq -r 'map(select(.name=="Jobs__CollectionConcurrency"))[0].value // "8"' <<<"$agent_settings")}"
+maintenance_concurrency="${SIKKERHEIT_MAINTENANCE_CONCURRENCY:-$(jq -r 'map(select(.name=="Jobs__MaintenanceConcurrency"))[0].value // "2"' <<<"$agent_settings")}"
+[[ "$collection_concurrency" =~ ^[1-8]$ && "$maintenance_concurrency" =~ ^[1-8]$ ]] \
+  || { echo "Job concurrency must be between 1 and 8: stopping before deployment" >&2; exit 2; }
+[[ ${#agent_hostname} -le 253 && "$agent_hostname" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ && "$minimum_agent_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+  || { echo "Invalid agent hostname or minimum version: stopping before deployment" >&2; exit 2; }
 echo "   database server: ${database_server:-psql-sikkerheit-$env-<5> (new)}, disk ${database_storage} GiB"
 deploy "$(cat "$state/$env.portal" 2>/dev/null || true)" "$(cat "$state/$env.graph" 2>/dev/null || true)"
 site="$(output siteName)"; prod_host="$(output productionHost)"; staging_host="$(output stagingHost)"
@@ -215,8 +249,24 @@ az role assignment create --assignee-object-id "$prod_principal" --assignee-prin
   --role "Key Vault Crypto User" --scope "$vault_id/keys/graph-reader" -o none
 az role assignment create --assignee-object-id "$prod_principal" --assignee-principal-type ServicePrincipal \
   --role "Key Vault Certificate User" --scope "$vault_id/certificates/graph-reader" -o none
-az keyvault secret show --vault-name "$vault" --name cursor-key -o none 2>/dev/null \
-  || az keyvault secret set --vault-name "$vault" --name cursor-key --value "$(openssl rand -base64 32)" -o none
+# List metadata rather than treating every failed read as "missing": a transient failure must never rotate a key.
+# Pass new keys through a private file, so they never appear in the process arguments or the deployment outputs.
+ensure_random_secret() {
+  local name="$1" existing secret_file
+  existing="$(az keyvault secret list --vault-name "$vault" --query "[?name=='$name'].id | [0]" -o tsv)" || return 1
+  [[ -z "$existing" ]] || return 0
+  secret_file="$(umask 077; mktemp)" || return 1
+  setup_secret_file="$secret_file"
+  if ! openssl rand -base64 32 > "$secret_file" \
+    || ! az keyvault secret set --vault-name "$vault" --name "$name" --file "$secret_file" --encoding utf-8 -o none; then
+    rm -f "$secret_file"
+    return 1
+  fi
+  rm -f "$secret_file"
+  setup_secret_file=""
+}
+ensure_random_secret cursor-key
+ensure_random_secret agents-nonce-key
 if [[ -n "${SIKKERHEIT_TEAMS_WEBHOOK:-}" ]]; then
   az keyvault secret set --vault-name "$vault" --name teams-webhook --value "$SIKKERHEIT_TEAMS_WEBHOOK" -o none
 fi

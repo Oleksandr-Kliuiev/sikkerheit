@@ -26,6 +26,7 @@ from arm_eval import (  # noqa: E402
 from iac_common import (  # noqa: E402
     AZ, MUTATIONS, Failed, commands, identities_of, mutation, one_or_more, raw_of, replace_text, set_value, settings_of)
 import restore_checks  # noqa: E402
+import deployment_checks  # noqa: E402
 
 # Records of development-package/specs/invariants.json (enforcement «infra») that these checks enforce.
 INVARIANTS = ("INV-081", "INV-083", "INV-085")
@@ -39,7 +40,7 @@ ENVIRONMENTS = ('prod', 'test')
 CONTAINERS = ('agent-releases', 'dataprotection', 'exports', 'reports', 'security-log')
 ORPHAN_PREFIXES = ('reports/restore-orphans/', 'exports/restore-orphans/')
 SECRET_MARKERS = ('Password=', 'AccountKey=', 'SharedAccessSignature')
-KEY_VAULT_SETTINGS = ('Cursors__Key', 'Teams__WebhookUrl')
+KEY_VAULT_SETTINGS = ('Cursors__Key', 'Agents__NonceKey', 'Teams__WebhookUrl')
 
 
 # --- Checks of the template --------------------------------------------------------------------------------------
@@ -318,11 +319,11 @@ CHECKS = (
     ('migrations identity', None, check_migrations_identity),
     ('jobs only in the production slot', 'INV-085', check_jobs),
     ('no secrets in settings', None, check_secrets),
-) + restore_checks.CHECKS
+) + restore_checks.CHECKS + deployment_checks.CHECKS
 SCRIPT_CHECKS = (
     ('setup.sh locks security-log', 'INV-083', check_setup_lock),
     ('deploy stops staging after swap', 'INV-085', check_deploy_stop),
-) + restore_checks.SCRIPT_CHECKS
+) + restore_checks.SCRIPT_CHECKS + deployment_checks.SCRIPT_CHECKS
 
 
 def attempt(check, subject):

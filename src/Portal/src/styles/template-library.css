@@ -1,0 +1,21 @@
+.template-library { display: grid; gap: 24px; margin-top: 24px; align-items: start; }
+.template-library .card { margin: 0; }
+.template-content { min-width: 0; }
+.template-list, .template-client-list, .template-history { max-height: 360px; overflow-y: auto; overflow-wrap: anywhere; }
+.template-list { display: grid; gap: 8px; margin: 16px 0; }
+.template-list .button { width: 100%; justify-content: flex-start; text-align: left; }
+.template-fields { display: grid; gap: 16px; align-items: start; }
+.template-editor .field { max-width: 640px; }
+.template-checks { margin: 24px 0; }
+.template-check { border-top: 1px solid var(--line); padding: 16px 0; overflow-wrap: anywhere; }
+.template-check summary, .template-history summary { cursor: pointer; min-height: 32px; font-weight: 600; }
+.template-check summary .badge { margin-left: 8px; }
+.template-check .template-fields { margin-top: 16px; }
+.template-history { margin-top: 24px; }
+.template-history article { border-top: 1px solid var(--line); margin-top: 16px; }
+.template-bulk > .button, .template-bulk > .message { margin-top: 16px; }
+@media (min-width: 720px) { .template-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .template-library { grid-template-columns: 300px minmax(0, 1fr); } }
+
+.template-preview-list { max-height: 640px; overflow-y: auto; margin: 16px 0; scrollbar-gutter: stable; }
+@media (max-width: 520px) { .template-editor .dialog-footer .button { flex: 1 1 100%; } }

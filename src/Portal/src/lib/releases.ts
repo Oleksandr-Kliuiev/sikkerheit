@@ -13,7 +13,7 @@ export interface ParsedEntries {
 }
 
 /**
- * Manual entries of a month, one per line: «branch ubr kb kind securityMonth [date] [auto|manual]» — for example
+ * Manual entries of a month, one per line: «branch ubr kb kind securityMonth date [auto|manual]» — for example
  * «26200 9711 5062002 security_monthly 2026-10 2026-10-13». The month «-» means a release without security fixes.
  */
 export function parseEntries(text: string): ParsedEntries {
@@ -24,15 +24,19 @@ export function parseEntries(text: string): ParsedEntries {
     if (!line || line.startsWith('#')) {
       return;
     }
-    const [branch, ubr, kb, kind, securityMonth, date, offered] = line.split(/\s+/);
+    const parts = line.split(/\s+/);
+    const [branch, ubr, kb, kind, securityMonth, date, offered] = parts;
     const releaseAt = date ? new Date(`${date}T00:00:00Z`) : null;
     const ok =
+      (parts.length === 6 || parts.length === 7) &&
       /^\d{5,}$/.test(branch ?? '') &&
+      Number.isSafeInteger(Number(branch)) && Number.isSafeInteger(Number(ubr)) &&
       /^\d+$/.test(ubr ?? '') &&
       /^\d{6,8}$/.test(kb ?? '') &&
       (releaseKinds as readonly string[]).includes(kind ?? '') &&
       (securityMonth === '-' || month.test(securityMonth ?? '')) &&
-      (releaseAt === null || !Number.isNaN(releaseAt.getTime())) &&
+      /^\d{4}-\d{2}-\d{2}$/.test(date ?? '') && releaseAt !== null && !Number.isNaN(releaseAt.getTime()) &&
+      releaseAt.toISOString().slice(0, 10) === date &&
       (offered === undefined || offered === 'auto' || offered === 'manual');
     if (!ok) {
       invalid.push(index + 1);
@@ -44,14 +48,14 @@ export function parseEntries(text: string): ParsedEntries {
       kb: kb!,
       kind: kind as ReleaseEntry['kind'],
       securityMonth: securityMonth === '-' ? null : securityMonth!,
-      releaseAt: (releaseAt ?? new Date(`${securityMonth === '-' ? '2000-01' : securityMonth}-13T00:00:00Z`)).toISOString(),
+      releaseAt: releaseAt!.toISOString(),
       autoOffered: offered !== 'manual',
     });
   });
   return { entries, invalid };
 }
 
-/** The previous completed month (YYYY-MM) of a date, the one an Admin verifies in the week after Patch Tuesday. */
+/** The current security month (YYYY-MM), which an Admin verifies after Patch Tuesday. */
 export function currentSecurityMonth(now: Date): string {
   const month = String(now.getUTCMonth() + 1).padStart(2, '0');
   return `${now.getUTCFullYear()}-${month}`;

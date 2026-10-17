@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/auth';
 import { decisionsFor, deviceTone } from '../../lib/devices';
 import { formatDateTime } from '../../lib/format';
 import { useOrganizationId } from './OrganizationLayout';
+import { RevokeDevicesByKey } from './RevokeDevicesByKey';
 
 /** Windows devices and enrollment keys of the customer (FR-09, FR-10; 04 «Регистрация и аутентификация агента»). */
 export function DevicesTab() {
@@ -26,9 +27,12 @@ export function DevicesTab() {
 function DevicesCard({ organization }: { organization: Organization }) {
   const { t, locale } = useI18n();
   const id = useOrganizationId();
+  const { isAdmin } = useAuth();
+  const keys = useEnrollmentKeys(id, isAdmin);
+  const [keyId, setKeyId] = useState('');
   const [status, setStatus] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
-  const devices = useDevices(id, { status });
+  const devices = useDevices(id, { status, enrollmentKeyId: keyId });
   const items = devices.data?.pages.flatMap((page) => page.items) ?? [];
   const current = items.find((device) => device.id === selected) ?? null;
   return (
@@ -44,7 +48,16 @@ function DevicesCard({ organization }: { organization: Organization }) {
             </select>
           )}
         </Field>
+        {isAdmin && <Field label={t('devices.filterKey')}>
+          {(fieldId) => <select id={fieldId} disabled={keys.isPending} value={keyId} onChange={(event) => { setKeyId(event.target.value); setStatus('active'); }}>
+            <option value="">{t('common.all')}</option>
+            {keys.data?.map((key) => <option key={key.id} value={key.id}>{key.label} ({key.keyPrefix})</option>)}
+          </select>}
+        </Field>}
+        {isAdmin && keyId && <RevokeDevicesByKey key={keyId} organizationId={id} keyId={keyId} devices={items}
+          incomplete={Boolean(devices.hasNextPage) || devices.isFetching || Boolean(devices.error)} />}
       </div>
+      <ErrorMessage error={keys.error} />
       {devices.isPending && <Loading />}
       <ErrorMessage error={devices.error} onRetry={() => void devices.refetch()} />
       {devices.data && items.length === 0 && <Empty>{t('devices.empty')}</Empty>}

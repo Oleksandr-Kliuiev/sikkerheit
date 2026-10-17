@@ -20,6 +20,16 @@ param databaseServerName string = ''
 @description('PostgreSQL disk in GiB. setup.sh passes the current size of an existing server: autoGrow may have enlarged it and Azure refuses to shrink a disk.')
 @minValue(32)
 param databaseStorageGb int = 32
+@description('Agent hostname already bound to the app with TLS. disabled.invalid keeps P2 closed until SP-05.')
+param agentHostname string = 'disabled.invalid'
+@description('Oldest approved agent version. setup.sh preserves the live value when not overridden.')
+param minimumAgentVersion string = '0.1.0'
+@minValue(1)
+@maxValue(8)
+param collectionConcurrency int = 8
+@minValue(1)
+@maxValue(8)
+param maintenanceConcurrency int = 2
 
 var name = 'sikkerheit-${environmentName}'
 // Production deploys through a staging slot; test runs on B1, and Basic plans have no slots (06 «Ресурсы»).
@@ -96,6 +106,10 @@ module app 'modules/app.bicep' = {
     insightsConnectionString: monitoring.outputs.connectionString
     portalClientId: portalClientId
     graphClientId: graphClientId
+    agentHostname: agentHostname
+    minimumAgentVersion: minimumAgentVersion
+    collectionConcurrency: collectionConcurrency
+    maintenanceConcurrency: maintenanceConcurrency
   }
 }
 
@@ -121,6 +135,27 @@ module alerts 'modules/alerts.bicep' = {
     alertEmail: alertEmail
     monthlyBudget: monthlyBudget
     budgetStartDate: budgetStartDate
+  }
+}
+
+module jobAlerts 'modules/job-alerts.bicep' = {
+  name: 'job-alerts'
+  params: {
+    name: name
+    location: location
+    insightsId: monitoring.outputs.insightsId
+    actionGroupId: monitoring.outputs.actionGroupId
+  }
+}
+
+module agentAlerts 'modules/agent-alerts.bicep' = {
+  name: 'agent-alerts'
+  params: {
+    name: name
+    location: location
+    insightsId: monitoring.outputs.insightsId
+    actionGroupId: monitoring.outputs.actionGroupId
+    enabled: agentHostname != 'disabled.invalid'
   }
 }
 

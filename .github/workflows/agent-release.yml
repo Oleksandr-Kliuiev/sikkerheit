@@ -1,0 +1,116 @@
+name: agent-release
+
+# Manual candidate build. The owner configures and approves the agent-release environment before its first run.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Approved candidate version (x.y.z)
+        required: true
+      manufacturer:
+        description: Legal publisher name
+        required: true
+      server_url:
+        description: HTTPS agent hostname verified in SP-05
+        required: true
+      wix_license_confirmed:
+        description: Owner has accepted the WiX v7 EULA and resolved applicable fees
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: agent-release
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    if: inputs.wix_license_confirmed && github.ref == 'refs/heads/main'
+    runs-on: windows-2025
+    environment: agent-release
+    timeout-minutes: 45
+    env:
+      AGENT_VERSION: ${{ inputs.version }}
+      AGENT_MANUFACTURER: ${{ inputs.manufacturer }}
+      AGENT_SERVER_URL: ${{ inputs.server_url }}
+      WIX_VERSION: '7.0.0'
+      PUBLISHER_CN: ${{ vars.PUBLISHER_COMMON_NAME }}
+      PUBLISHER_O: ${{ vars.PUBLISHER_ORGANIZATION }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Validate release inputs
+        run: |
+          if ($env:AGENT_VERSION -notmatch '^\d+\.\d+\.\d+$') { throw 'Version must be x.y.z' }
+          $uri = [Uri]$env:AGENT_SERVER_URL
+          if ($uri.Scheme -ne 'https' -or $uri.UserInfo -or $uri.Query -or $uri.Fragment -or $uri.AbsolutePath -ne '/') {
+            throw 'Server URL must be an HTTPS origin without credentials'
+          }
+          if (-not $env:PUBLISHER_CN -or -not $env:PUBLISHER_O -or -not $env:AGENT_MANUFACTURER) { throw 'Publisher is required' }
+      - name: Install the pinned WiX version and record owner EULA acceptance
+        run: |
+          dotnet tool install --global wix --version $env:WIX_VERSION
+          if ($LASTEXITCODE) { throw 'WiX installation failed' }
+          wix eula accept wix7
+          if ($LASTEXITCODE) { throw 'WiX EULA acceptance failed' }
+      - name: Windows tests (required for release)
+        run: |
+          dotnet test --project tests/Sikkerheit.Agent.Tests -c Release
+          if ($LASTEXITCODE) { throw 'Agent tests failed' }
+          ./tools/rmm/tests/Run-RmmTests.ps1
+      - name: RMM syntax and tests in Windows PowerShell 5.1 (required for release)
+        shell: powershell
+        run: |
+          ./tools/rmm/Test-Syntax.ps1
+          if ($LASTEXITCODE) { throw 'PowerShell 5.1 syntax check failed' }
+          ./tools/rmm/tests/Run-RmmTests.ps1
+          if ($LASTEXITCODE) { throw 'PowerShell 5.1 RMM tests failed' }
+      - name: Publish the Windows agent
+        run: ./src/Agent/Installer/build.ps1 -Version $env:AGENT_VERSION -Manufacturer $env:AGENT_MANUFACTURER -ServerUrl $env:AGENT_SERVER_URL -PublishOnly
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign the agent binaries before packaging
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\src\Agent\Installer\out\publish
+          files-folder-filter: Sikkerheit*.exe,Sikkerheit*.dll
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Build and validate MSI from the signed payload
+        run: ./src/Agent/Installer/build.ps1 -Version $env:AGENT_VERSION -Manufacturer $env:AGENT_MANUFACTURER -ServerUrl $env:AGENT_SERVER_URL -WixVersion $env:WIX_VERSION -PackageOnly
+      - name: Sign the MSI
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\src\Agent\Installer\out\Sikkerheit.Agent.msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Verify publisher, timestamps and create the candidate manifest
+        run: ./tools/rmm/Verify-Release.ps1 -Version $env:AGENT_VERSION -PublisherCommonName $env:PUBLISHER_CN -PublisherOrganization $env:PUBLISHER_O
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-${{ inputs.version }}-candidate
+          path: |
+            src/Agent/Installer/out/Sikkerheit.Agent.msi
+            src/Agent/Installer/out/release.json
+          if-no-files-found: error
+          retention-days: 30

@@ -8,8 +8,10 @@ import { useI18n } from '../../i18n/i18n';
 import { useAuth } from '../../lib/auth';
 import { formatDateTime } from '../../lib/format';
 import { useOrganizationId } from './OrganizationLayout';
-
-const m365Checks = ['M365-001', 'M365-002', 'M365-003', 'M365-004', 'M365-005', 'M365-006', 'M365-007'] as const;
+import { WindowsPolicyFields } from './WindowsPolicyFields';
+import { PolicyReview } from './PolicyReview';
+import { PolicyTemplates } from './PolicyTemplates';
+import policyFields from '../../lib/policy-template-fields.g.json';
 
 type Checks = PolicyConfiguration['checks'];
 
@@ -33,7 +35,7 @@ function lines(value: string): string[] {
   return value.split('\n').map((line) => line.trim()).filter(Boolean);
 }
 
-/** A structured editor of the M365 part of the closed PolicyConfiguration; every save is a new revision (FR-03). */
+/** Every save is a new policy revision (FR-03), including the Windows and server checks. */
 function PolicyEditor({ revision, onSaved }: { revision: PolicyRevision; onSaved: (version: number) => void }) {
   const { t, locale } = useI18n();
   const { isAdmin } = useAuth();
@@ -43,14 +45,11 @@ function PolicyEditor({ revision, onSaved }: { revision: PolicyRevision; onSaved
   const [excluded, setExcluded] = useState(revision.configuration.m365.excludedUserIds.join('\n'));
   const [allowedConsent, setAllowedConsent] = useState(
     revision.configuration.checks['M365-006'].parameters.allowedPermissionGrantPolicies.join('\n'));
+  const [proposed, setProposed] = useState<PolicyConfiguration | null>(null);
   const save = useMutation({
-    mutationFn: () => {
-      const next = structuredClone(config);
-      next.m365.excludedUserIds = lines(excluded);
-      next.checks['M365-006'].parameters.allowedPermissionGrantPolicies = lines(allowedConsent);
-      return post<PolicyRevision>(`${org(id)}/policy-revisions`, { configuration: next }, `"${revision.version}"`);
-    },
+    mutationFn: (next: PolicyConfiguration) => post<PolicyRevision>(`${org(id)}/policy-revisions`, { configuration: next }, `"${revision.version}"`),
     onSuccess: async (created) => {
+      setProposed(null);
       onSaved(created.version);
       await client.invalidateQueries({ queryKey: ['policies', id] });
     },
@@ -75,6 +74,18 @@ function PolicyEditor({ revision, onSaved }: { revision: PolicyRevision; onSaved
       actions={<span className="muted">{t('policy.effectiveFrom', { time: formatDateTime(revision.effectiveFrom, locale) })}</span>}>
       {!isAdmin && <Notice>{t('policy.readOnly')}</Notice>}
       <ErrorMessage error={save.error} />
+      {isAdmin && <PolicyTemplates configuration={{ ...config, m365: { ...config.m365, excludedUserIds: lines(excluded) },
+        checks: { ...config.checks, 'M365-006': { ...config.checks['M365-006'], parameters: { allowedPermissionGrantPolicies: lines(allowedConsent) } } } }}
+        onApply={(next) => { setConfig(next); setProposed(null); save.reset(); }} />}
+      <form className="policy-form" onSubmit={(event) => {
+        event.preventDefault();
+        if (!isAdmin) return;
+        const next = structuredClone(config);
+        next.m365.excludedUserIds = lines(excluded);
+        next.checks['M365-006'].parameters.allowedPermissionGrantPolicies = lines(allowedConsent);
+        save.reset();
+        setProposed(next);
+      }}>
       <fieldset className="form-grid" disabled={disabled}>
         <legend>{t('policy.m365')}</legend>
         <Field label={t('policy.collectionHour')}>
@@ -132,26 +143,29 @@ function PolicyEditor({ revision, onSaved }: { revision: PolicyRevision; onSaved
               </tr>
             </thead>
             <tbody>
-              {m365Checks.map((checkId) => (
+              {(Object.keys(config.checks) as (keyof Checks)[]).map((checkId) => (
                 <tr key={checkId}>
                   <th scope="row">
                     {t(`check.${checkId}`)} <span className="id">{checkId}</span>
                   </th>
                   <td>
-                    <input type="checkbox" aria-label={`${t('policy.active')} ${checkId}`} checked={active.has(checkId)}
+                    {checkId.startsWith('SYS-') ? t('policy.serverCheck') : <input type="checkbox"
+                      disabled={checkId === 'WIN-011'} aria-label={`${t('policy.active')} ${checkId}`} checked={active.has(checkId)}
                       onChange={(event) => update((draft) => {
                         draft.activeCheckIds = (event.target.checked
                           ? [...draft.activeCheckIds, checkId]
                           : draft.activeCheckIds.filter((value) => value !== checkId)) as PolicyConfiguration['activeCheckIds'];
-                      })} />
+                      })} />}
                   </td>
                   <td>
                     <select aria-label={`${t('policy.mode')} ${checkId}`} value={config.checks[checkId].assessmentMode}
+                      disabled={policyFields.constraints[checkId].modes.length === 1}
                       onChange={(event) => setCheck(checkId, (check) => {
                         check.assessmentMode = event.target.value as 'assessed' | 'informational';
                       })}>
-                      <option value="assessed">{t('policy.modeAssessed')}</option>
-                      <option value="informational">{t('policy.modeInformational')}</option>
+                      {policyFields.constraints[checkId].modes.map((mode) => <option key={mode} value={mode}>
+                        {t(mode === 'assessed' ? 'policy.modeAssessed' : 'policy.modeInformational')}
+                      </option>)}
                     </select>
                   </td>
                   <td>
@@ -166,13 +180,17 @@ function PolicyEditor({ revision, onSaved }: { revision: PolicyRevision; onSaved
         </div>
         <p className="help">{t('policy.windowsNote')}</p>
       </fieldset>
+      <WindowsPolicyFields configuration={config} disabled={disabled} update={update} />
       {isAdmin && (
         <div className="button-row">
-          <Button variant="primary" busy={save.isPending} onClick={() => save.mutate()}>
+          <Button variant="primary" type="submit" busy={save.isPending}>
             {t('policy.save')}
           </Button>
         </div>
       )}
+      </form>
+      {isAdmin && proposed && <PolicyReview before={revision.configuration} after={proposed} pending={save.isPending} error={save.error}
+        onClose={() => setProposed(null)} onConfirm={() => save.mutate(proposed)} />}
     </Section>
   );
 }

@@ -96,7 +96,7 @@ function MonthCard() {
   const { t, locale } = useI18n();
   const client = useQueryClient();
   const [month, setMonth] = useState(currentSecurityMonth(new Date()));
-  const [source, setSource] = useState<'msrc_cvrf' | 'manual'>('msrc_cvrf');
+  const [source, setSource] = useState<'msrc_cvrf' | 'manual'>('manual');
   const [text, setText] = useState('');
   const [noNew, setNoNew] = useState(false);
   const [result, setResult] = useState<{ kind: 'import' | 'verify'; month: WindowsReleaseMonth } | null>(null);

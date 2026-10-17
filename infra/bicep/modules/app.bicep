@@ -24,6 +24,10 @@ param insightsConnectionString string
 param portalClientId string = ''
 @description('Client id of «Sikkerheit Graph Reader»; empty until setup.sh has registered the application.')
 param graphClientId string = ''
+param agentHostname string
+param minimumAgentVersion string
+param collectionConcurrency int
+param maintenanceConcurrency int
 
 resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
   name: 'asp-${name}'
@@ -86,6 +90,8 @@ resource staging 'Microsoft.Web/sites/slots@2024-04-01' = if (stagingSlot) {
 
 var common = {
   ASPNETCORE_ENVIRONMENT: 'Production'
+  // App Service is the sole ingress. Process its last X-Forwarded-For/Proto hop (ASP.NET Core defaults to one).
+  ASPNETCORE_FORWARDEDHEADERS_ENABLED: 'true'
   APPLICATIONINSIGHTS_CONNECTION_STRING: insightsConnectionString
   Database__EntraAuth: 'true'
   Database__AppRole: 'sikkerheit_app'
@@ -101,6 +107,10 @@ var common = {
   DataProtection__BlobUri: '${blobEndpoint}dataprotection/keys.xml'
   DataProtection__KeyVaultKeyId: dataProtectionKeyUri
   Cursors__Key: '@Microsoft.KeyVault(VaultName=${vaultName};SecretName=cursor-key)'
+  Agents__NonceKey: '@Microsoft.KeyVault(VaultName=${vaultName};SecretName=agents-nonce-key)'
+  Agents__MinimumAgentVersion: minimumAgentVersion
+  Jobs__CollectionConcurrency: '${collectionConcurrency}'
+  Jobs__MaintenanceConcurrency: '${maintenanceConcurrency}'
   Teams__WebhookUrl: '@Microsoft.KeyVault(VaultName=${vaultName};SecretName=teams-webhook)'
 }
 
@@ -114,6 +124,7 @@ resource productionSettings 'Microsoft.Web/sites/config@2024-04-01' = {
   properties: union(common, {
     ConnectionStrings__Sikkerheit: 'Host=${databaseHost};Database=sikkerheit;Username=sikkerheit-app;Ssl Mode=VerifyFull;Maximum Pool Size=20'
     Hosting__PortalHosts__0: productionHost
+    Hosting__AgentHosts__0: agentHostname
     Auth__Entra__RedirectUri: 'https://${productionHost}/auth/callback'
     M365__ConsentRedirectUri: 'https://${productionHost}/consent-complete'
     Teams__PortalUrl: 'https://${productionHost}'
@@ -129,6 +140,7 @@ resource stagingSettings 'Microsoft.Web/sites/slots/config@2024-04-01' = if (sta
   properties: union(common, {
     ConnectionStrings__Sikkerheit: 'Host=${databaseHost};Database=sikkerheit;Username=sikkerheit-staging;Ssl Mode=VerifyFull;Maximum Pool Size=10'
     Hosting__PortalHosts__0: stagingHost
+    Hosting__AgentHosts__0: agentHostname == 'disabled.invalid' ? 'disabled.invalid' : stagingHost
     Auth__Entra__RedirectUri: 'https://${stagingHost}/auth/callback'
     M365__ConsentRedirectUri: 'https://${productionHost}/consent-complete'
     Teams__PortalUrl: 'https://${productionHost}'
@@ -153,6 +165,8 @@ resource sticky 'Microsoft.Web/sites/config@2024-04-01' = if (stagingSlot) {
       'Database__AppPrincipals__0__Name', 'Database__AppPrincipals__0__ObjectId', 'Database__AppPrincipals__1__Name'
       'Database__AppPrincipals__1__ObjectId', 'Hosting__PortalHosts__0', 'Auth__Entra__RedirectUri', 'M365__ConsentRedirectUri'
       'Teams__PortalUrl', 'Jobs__Enabled', 'Database__MigrateOnStart', 'Restore__ManagedIdentityClientId'
+      'Jobs__CollectionConcurrency', 'Jobs__MaintenanceConcurrency'
+      'Agents__NonceKey', 'Agents__MinimumAgentVersion', 'Hosting__AgentHosts__0'
     ]
   }
 }

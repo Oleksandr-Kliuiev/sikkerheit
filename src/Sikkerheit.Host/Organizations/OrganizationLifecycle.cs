@@ -23,11 +23,11 @@ public static class OrganizationLifecycle
     public static int NextEpoch(int maxVersion) => (maxVersion / PolicyEpoch + 1) * PolicyEpoch;
 
     /// <summary>Tables of this module in the organization export, with their stable order.</summary>
-    private static readonly (string Table, string Order)[] ExportTables = [("organization", "id"), ("policy_revision", "version")];
+    private static readonly (string Table, string Order)[] ExportTables = [("organization", "id"), ("policy_revision", "version"), ("policy_template_application", "applied_at, token_hash")];
 
     /// <summary>Removes the policy revisions and the organization itself, after the other modules removed their rows.</summary>
     public static Task DeleteOrganizationDataAsync(DbScope scope, CancellationToken ct) =>
-        OrganizationRows.DeleteAsync(scope, ["policy_revision", "organization"], ct);
+        OrganizationRows.DeleteAsync(scope, ["policy_template_application", "policy_revision", "organization"], ct);
 
     /// <summary>The organization and its policy revisions for the organization export.</summary>
     public static Task ExportAsync(DbScope scope, TableRowsWriter write, CancellationToken ct) =>

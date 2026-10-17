@@ -15,6 +15,7 @@ MIGRATIONS = "/ids/id-sikkerheit-test-migrations"
 def rules(extra=()):
     return [*extra,
             rule(r"^webapp list --resource-group " + GROUP, out=SITE),
+            rule(r"^webapp config appsettings list .*Hosting__AgentHosts", out="disabled.invalid"),
             rule(r"^webapp show .*defaultHostName", out="app.example.net"),
             rule(r"^webapp identity assign", out=""),
             rule(r"^webapp identity show .*principalId", out="p-app"),
@@ -32,10 +33,10 @@ class DeployAppTests(ScriptCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({key: {"value": value} for key, value in outputs.items()}))
 
-    def deploy(self, *, state=True, extra=()):
+    def deploy(self, *, state=True, extra=(), env=None):
         if state:
             self.write_state()
-        return self.run_script("deploy-app.sh", "test", rules=rules(extra))
+        return self.run_script("deploy-app.sh", "test", rules=rules(extra), env=env)
 
     def settings_calls(self):
         return self.calls_matching("webapp config appsettings set")
@@ -83,6 +84,12 @@ class DeployAppTests(ScriptCase):
                                                                  rule(r"^webapp show .*--slot", out="")])
         self.assertEqual(result.returncode, 1, self.describe(result))
         self.assertEqual(self.calls_matching("webapp deploy"), [])
+
+    def test_agent_smoke_failure_fails_deployment_and_removes_migration_access(self):
+        result = self.deploy(env={'CURL_CHALLENGE_STATUS': '503'})
+        self.assertNotEqual(result.returncode, 0, self.describe(result))
+        self.assertIn('SMOKE FAILED: agent challenge', result.stdout)
+        self.assertEqual(len(self.calls_matching('webapp identity remove')), 1)
 
 
 if __name__ == "__main__":

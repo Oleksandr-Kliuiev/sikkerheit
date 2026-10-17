@@ -160,6 +160,16 @@ public sealed class M365CollectionJob(DbScopes scopes, M365Collector collector, 
             await scope.CommitAsync(ct);
             return Guid.Empty;
         }
+        // Admission serialized this scheduled job behind an overlapping manual collection. It already satisfied
+        // the scheduled request; do not collect the same tenant again merely because the job could not run earlier.
+        if (open is null && lease.EnqueuedAt is { } enqueued && await scope.Db.CollectionRuns.AnyAsync(r =>
+            r.OrganizationId == org && (r.State == "completed" || r.State == "partial")
+                && r.CompletedAt >= enqueued && r.CompletedAt <= now, ct))
+        {
+            await lease.CompleteAsync(scope, ct);
+            await scope.CommitAsync(ct);
+            return Guid.Empty;
+        }
         if (open is not null)
         {
             open.State = "failed";

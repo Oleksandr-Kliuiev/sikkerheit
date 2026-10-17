@@ -1,5 +1,5 @@
 {
-  "catalogVersion": "0.3.1",
+  "catalogVersion": "0.3.2",
   "checks": [
     {
       "checkId": "M365-001",

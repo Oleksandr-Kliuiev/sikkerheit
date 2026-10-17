@@ -1,0 +1,297 @@
+{
+  "scopes": {
+    "m365": [
+      "M365-001",
+      "M365-002",
+      "M365-003",
+      "M365-004",
+      "M365-005",
+      "M365-006"
+    ],
+    "windows": [
+      "WIN-001",
+      "WIN-002",
+      "WIN-003",
+      "WIN-004",
+      "WIN-005",
+      "WIN-006",
+      "WIN-007",
+      "WIN-008",
+      "WIN-009",
+      "WIN-011",
+      "SYS-001",
+      "SYS-002",
+      "SYS-003"
+    ],
+    "all": [
+      "M365-001",
+      "M365-002",
+      "M365-003",
+      "M365-004",
+      "M365-005",
+      "M365-006",
+      "WIN-001",
+      "WIN-002",
+      "WIN-003",
+      "WIN-004",
+      "WIN-005",
+      "WIN-006",
+      "WIN-007",
+      "WIN-008",
+      "WIN-009",
+      "WIN-011",
+      "SYS-001",
+      "SYS-002",
+      "SYS-003"
+    ]
+  },
+  "protectedParameters": {
+    "M365-002": [
+      "privilegedRoleTemplateIds"
+    ],
+    "M365-006": [
+      "allowedPermissionGrantPolicies"
+    ],
+    "WIN-003": [
+      "approvedProviders",
+      "defenderApproved"
+    ],
+    "WIN-005": [
+      "approvedFirewallProviders"
+    ],
+    "WIN-008": [
+      "allowedDomainRids",
+      "allowedSids"
+    ]
+  },
+  "constraints": {
+    "M365-001": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "phoneMethodsAccepted": {}
+      }
+    },
+    "M365-002": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "privilegedRoleTemplateIds": {}
+      }
+    },
+    "M365-003": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "deviceAlternativeAccepted": {},
+        "trustedLocationsExclusionAccepted": {}
+      }
+    },
+    "M365-004": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {}
+    },
+    "M365-005": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "minGlobalAdmins": {
+          "minimum": 0,
+          "maximum": 10
+        },
+        "maxGlobalAdmins": {
+          "minimum": 1,
+          "maximum": 20
+        }
+      }
+    },
+    "M365-006": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "allowedPermissionGrantPolicies": {}
+      }
+    },
+    "M365-007": {
+      "modes": [
+        "informational"
+      ],
+      "parameters": {
+        "inactiveDays": {
+          "minimum": 30,
+          "maximum": 365
+        }
+      }
+    },
+    "WIN-001": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "warnFreePercent": {
+          "minimum": 0,
+          "maximum": 100
+        },
+        "warnFreeBytes": {
+          "minimum": 0
+        },
+        "criticalFreePercent": {
+          "minimum": 0,
+          "maximum": 100
+        },
+        "criticalFreeBytes": {
+          "minimum": 0
+        }
+      }
+    },
+    "WIN-002": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "encryptionRequired": {}
+      }
+    },
+    "WIN-003": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "approvedProviders": {},
+        "defenderApproved": {}
+      }
+    },
+    "WIN-004": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "warnDays": {
+          "minimum": 1
+        },
+        "criticalDays": {
+          "minimum": 1
+        }
+      }
+    },
+    "WIN-005": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "requiredProfiles": {},
+        "approvedFirewallProviders": {}
+      }
+    },
+    "WIN-006": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "maxSearchAgeDays": {
+          "minimum": 1,
+          "maximum": 60
+        }
+      }
+    },
+    "WIN-007": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "warnDays": {
+          "minimum": 1,
+          "maximum": 60
+        }
+      }
+    },
+    "WIN-008": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "allowBuiltinAdministrator": {},
+        "allowedDomainRids": {},
+        "allowedSids": {},
+        "maxOtherLocalAccounts": {
+          "minimum": 0,
+          "maximum": 10
+        }
+      }
+    },
+    "WIN-009": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "secureBootRequired": {}
+      }
+    },
+    "WIN-010": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "expectedTenantId": {}
+      }
+    },
+    "WIN-011": {
+      "modes": [
+        "informational"
+      ],
+      "parameters": {}
+    },
+    "SYS-001": {
+      "modes": [
+        "informational"
+      ],
+      "parameters": {}
+    },
+    "SYS-002": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {}
+    },
+    "SYS-003": {
+      "modes": [
+        "assessed",
+        "informational"
+      ],
+      "parameters": {
+        "graceDays": {
+          "minimum": 0,
+          "maximum": 60
+        },
+        "criticalBehindMonths": {
+          "minimum": 2,
+          "maximum": 12
+        }
+      }
+    }
+  }
+}

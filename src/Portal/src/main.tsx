@@ -6,6 +6,10 @@ import { ApiError } from './api/client';
 import { Root } from './App';
 import { I18nProvider } from './i18n/i18n';
 import './styles.css';
+import './styles/forms-tables.css';
+import './styles/dialogs.css';
+import './styles/workflows.css';
+import './styles/template-library.css';
 
 /**
  * An expired session anywhere sends the person back to sign-in: the session query is checked again. Its own 401

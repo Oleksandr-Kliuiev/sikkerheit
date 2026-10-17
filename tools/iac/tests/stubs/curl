@@ -4,6 +4,10 @@ args="$*"
 case "$args" in
   *"%{redirect_url}"*) echo -n "https://login.microsoftonline.com/tenant/oauth2" ;;
   *"%{http_code}"*)
-    case "$args" in *"/api/v1/me"*) echo -n 401 ;; *) echo -n 200 ;; esac ;;
+    case "$args" in
+      *"/api/v1/me"*) echo -n 401 ;;
+      *"/api/v1/agent/challenges"*) echo -n "${CURL_CHALLENGE_STATUS:-404}" ;;
+      *) echo -n 200 ;;
+    esac ;;
   *"-sI"*) printf "HTTP/2 200\r\nContent-Security-Policy: default-src 'self'\r\n" ;;
 esac

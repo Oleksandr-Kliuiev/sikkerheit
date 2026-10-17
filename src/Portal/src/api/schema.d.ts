@@ -726,6 +726,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/policy-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Общая библиотека шаблонов */
+        get: operations["listPolicyTemplates"];
+        put?: never;
+        /** Создать пользовательский шаблон */
+        post: operations["createPolicyTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policy-templates/{templateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Текущая версия шаблона */
+        get: operations["getPolicyTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policy-templates/{templateId}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** История версий шаблона */
+        get: operations["listPolicyTemplateRevisions"];
+        put?: never;
+        /** Изменить или архивировать шаблон */
+        post: operations["createPolicyTemplateRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policy-templates/{templateId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Предпросмотр применения к выбранным клиентам
+         * @description До 50 явных organizationIds; не меняет данные. Подписанный previewToken связан с сотрудником, клиентом, версиями шаблона/политики, содержимым результата; срок 30 минут.
+         */
+        post: operations["previewPolicyTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organizationId}/policy-template-applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Применить просмотренный шаблон к одному клиенту
+         * @description Проверяет просмотренный результат, активность клиента и текущие версии. Повтор того же token возвращает прежний результат без новой ревизии. Каждый клиент — отдельная транзакция.
+         */
+        post: operations["applyPolicyTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1814,6 +1907,602 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
         };
+        PolicyTemplateContent: {
+            /** @constant */
+            scope: "m365";
+            activeCheckIds: ("M365-001" | "M365-002" | "M365-003" | "M365-004" | "M365-005" | "M365-006")[];
+            checks: {
+                "M365-001": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 48 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default true */
+                        phoneMethodsAccepted: boolean;
+                    };
+                };
+                "M365-002": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 48 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "M365-003": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 48 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /**
+                         * @description Засчитывать grant «MFA или соответствующее либо гибридное устройство».
+                         * @default false
+                         */
+                        deviceAlternativeAccepted: boolean;
+                        /**
+                         * @description Засчитывать политику, которая не требует MFA из доверенных расположений.
+                         * @default false
+                         */
+                        trustedLocationsExclusionAccepted: boolean;
+                    };
+                };
+                "M365-004": {
+                    /**
+                     * @default informational
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 48 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "M365-005": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 48 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default 2 */
+                        minGlobalAdmins: number;
+                        /** @default 4 */
+                        maxGlobalAdmins: number;
+                    };
+                };
+                "M365-006": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 48 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+            };
+        } | {
+            /** @constant */
+            scope: "windows";
+            activeCheckIds: ("WIN-001" | "WIN-002" | "WIN-003" | "WIN-004" | "WIN-005" | "WIN-006" | "WIN-007" | "WIN-008" | "WIN-009" | "WIN-011")[];
+            checks: {
+                "WIN-001": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default 10 */
+                        warnFreePercent: number;
+                        /** @default 10737418240 */
+                        warnFreeBytes: number;
+                        /** @default 5 */
+                        criticalFreePercent: number;
+                        /** @default 2147483648 */
+                        criticalFreeBytes: number;
+                    };
+                };
+                "WIN-002": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default true */
+                        encryptionRequired: boolean;
+                    };
+                };
+                "WIN-003": {
+                    /**
+                     * @default informational
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "WIN-004": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default 3 */
+                        warnDays: number;
+                        /** @default 7 */
+                        criticalDays: number;
+                    };
+                };
+                "WIN-005": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /**
+                         * @default [
+                         *       "domain",
+                         *       "private",
+                         *       "public"
+                         *     ]
+                         */
+                        requiredProfiles: ("domain" | "private" | "public")[];
+                    };
+                };
+                "WIN-006": {
+                    /**
+                     * @default informational
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default 7 */
+                        maxSearchAgeDays: number;
+                    };
+                };
+                "WIN-007": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default 3 */
+                        warnDays: number;
+                    };
+                };
+                "WIN-008": {
+                    /**
+                     * @default informational
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default true */
+                        allowBuiltinAdministrator: boolean;
+                        /** @default 0 */
+                        maxOtherLocalAccounts: number;
+                    };
+                };
+                "WIN-009": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default true */
+                        secureBootRequired: boolean;
+                    };
+                };
+                "WIN-011": {
+                    /**
+                     * @default informational
+                     * @constant
+                     */
+                    assessmentMode: "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "SYS-001": {
+                    /**
+                     * @default informational
+                     * @constant
+                     */
+                    assessmentMode: "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "SYS-002": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "SYS-003": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default 14 */
+                        graceDays: number;
+                        /** @default 2 */
+                        criticalBehindMonths: number;
+                    };
+                };
+            };
+        } | {
+            /** @constant */
+            scope: "all";
+            activeCheckIds: ("M365-001" | "M365-002" | "M365-003" | "M365-004" | "M365-005" | "M365-006" | "WIN-001" | "WIN-002" | "WIN-003" | "WIN-004" | "WIN-005" | "WIN-006" | "WIN-007" | "WIN-008" | "WIN-009" | "WIN-011")[];
+            checks: {
+                "M365-001": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 48 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default true */
+                        phoneMethodsAccepted: boolean;
+                    };
+                };
+                "M365-002": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 48 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "M365-003": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 48 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /**
+                         * @description Засчитывать grant «MFA или соответствующее либо гибридное устройство».
+                         * @default false
+                         */
+                        deviceAlternativeAccepted: boolean;
+                        /**
+                         * @description Засчитывать политику, которая не требует MFA из доверенных расположений.
+                         * @default false
+                         */
+                        trustedLocationsExclusionAccepted: boolean;
+                    };
+                };
+                "M365-004": {
+                    /**
+                     * @default informational
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 48 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "M365-005": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 48 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default 2 */
+                        minGlobalAdmins: number;
+                        /** @default 4 */
+                        maxGlobalAdmins: number;
+                    };
+                };
+                "M365-006": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 48 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "WIN-001": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default 10 */
+                        warnFreePercent: number;
+                        /** @default 10737418240 */
+                        warnFreeBytes: number;
+                        /** @default 5 */
+                        criticalFreePercent: number;
+                        /** @default 2147483648 */
+                        criticalFreeBytes: number;
+                    };
+                };
+                "WIN-002": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default true */
+                        encryptionRequired: boolean;
+                    };
+                };
+                "WIN-003": {
+                    /**
+                     * @default informational
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "WIN-004": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default 3 */
+                        warnDays: number;
+                        /** @default 7 */
+                        criticalDays: number;
+                    };
+                };
+                "WIN-005": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /**
+                         * @default [
+                         *       "domain",
+                         *       "private",
+                         *       "public"
+                         *     ]
+                         */
+                        requiredProfiles: ("domain" | "private" | "public")[];
+                    };
+                };
+                "WIN-006": {
+                    /**
+                     * @default informational
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default 7 */
+                        maxSearchAgeDays: number;
+                    };
+                };
+                "WIN-007": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default 3 */
+                        warnDays: number;
+                    };
+                };
+                "WIN-008": {
+                    /**
+                     * @default informational
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default true */
+                        allowBuiltinAdministrator: boolean;
+                        /** @default 0 */
+                        maxOtherLocalAccounts: number;
+                    };
+                };
+                "WIN-009": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default true */
+                        secureBootRequired: boolean;
+                    };
+                };
+                "WIN-011": {
+                    /**
+                     * @default informational
+                     * @constant
+                     */
+                    assessmentMode: "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "SYS-001": {
+                    /**
+                     * @default informational
+                     * @constant
+                     */
+                    assessmentMode: "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "SYS-002": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: Record<string, never>;
+                };
+                "SYS-003": {
+                    /**
+                     * @default assessed
+                     * @enum {string}
+                     */
+                    assessmentMode: "assessed" | "informational";
+                    /** @default 72 */
+                    freshnessWindowHours: number;
+                    parameters: {
+                        /** @default 14 */
+                        graceDays: number;
+                        /** @default 2 */
+                        criticalBehindMonths: number;
+                    };
+                };
+            };
+        };
+        PolicyTemplateApplicationAuditDetails: {
+            /** Format: uuid */
+            templateId: string;
+            templateRevision: number;
+            policyVersion: number;
+        };
+        PolicyTemplateCreate: {
+            name: string;
+            description: string;
+            content: components["schemas"]["PolicyTemplateContent"];
+        };
+        PolicyTemplateRevisionCreate: {
+            name: string;
+            description: string;
+            content: components["schemas"]["PolicyTemplateContent"];
+            archived: boolean;
+        };
+        PolicyTemplate: {
+            name: string;
+            description: string;
+            content: components["schemas"]["PolicyTemplateContent"];
+            /** Format: uuid */
+            id: string;
+            revision: number;
+            archived: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdBy: string;
+        };
+        PolicyTemplatePreviewRequest: {
+            organizationIds: string[];
+        };
+        PolicyTemplatePreviewItem: {
+            /** Format: uuid */
+            organizationId: string;
+            organizationName: string | null;
+            /** @enum {string} */
+            status: "ready" | "unchanged" | "unavailable";
+            policyVersion: number | null;
+            before: components["schemas"]["PolicyConfiguration"] | null;
+            after: components["schemas"]["PolicyConfiguration"] | null;
+            previewToken: string | null;
+            /** @enum {string|null} */
+            problemCode: "invalid_json" | "unsupported_media_type" | "payload_too_large" | "schema_violation" | "unsupported_schema_version" | "unexpected_subject" | "duplicate_observation" | "unknown_policy_version" | "batch_too_old" | "batch_time_inconsistent" | "agent_version_unsupported" | "idempotency_conflict" | "sequence_conflict" | "identity_conflict" | "organization_inactive" | "enrollment_key_invalid" | "challenge_invalid" | "session_invalid" | "device_unknown" | "device_revoked" | "rate_limited" | "temporarily_unavailable" | "session_required" | "csrf_failed" | "forbidden" | "not_found" | "invalid_cursor" | "revision_mismatch" | "if_match_required" | "workflow_transition_forbidden" | "lifecycle_transition_forbidden" | "connection_state_conflict" | "tenant_conflict" | "consent_not_granted" | "resource_not_ready" | "validation_failed" | "policy_inputs_missing" | null;
+        };
+        PolicyTemplatePreview: {
+            /** Format: uuid */
+            templateId: string;
+            templateRevision: number;
+            /** Format: date-time */
+            expiresAt: string;
+            items: components["schemas"]["PolicyTemplatePreviewItem"][];
+        };
+        PolicyTemplateApplyRequest: {
+            /** Format: uuid */
+            templateId: string;
+            templateRevision: number;
+            previewToken: string;
+        };
+        PolicyTemplateApplication: {
+            /** Format: uuid */
+            templateId: string;
+            templateRevision: number;
+            policyVersion: number;
+            /** Format: date-time */
+            appliedAt: string;
+            replayed: boolean;
+        };
         OrganizationOverviewPage: {
             items: components["schemas"]["OrganizationOverview"][];
             nextCursor: string | null;
@@ -1860,6 +2549,10 @@ export interface components {
         };
         WindowsReleasePage: {
             items: components["schemas"]["WindowsRelease"][];
+            nextCursor: string | null;
+        };
+        PolicyTemplatePage: {
+            items: components["schemas"]["PolicyTemplate"][];
             nextCursor: string | null;
         };
     };
@@ -3771,6 +4464,10 @@ export interface operations {
                 checkId?: "M365-001" | "M365-002" | "M365-003" | "M365-004" | "M365-005" | "M365-006" | "M365-007" | "WIN-001" | "WIN-002" | "WIN-003" | "WIN-004" | "WIN-005" | "WIN-006" | "WIN-007" | "WIN-008" | "WIN-009" | "WIN-010" | "WIN-011" | "SYS-001" | "SYS-002" | "SYS-003";
                 /** @description Несколько значений через запятую, например workflowState=new,in_progress. Очередь по умолчанию — technicalState=open&workflowState=new,in_progress. */
                 workflowState?: ("new" | "in_progress" | "risk_accepted" | "suppressed")[];
+                /** @description Только задачи текущего сотрудника из серверной сессии. Включает только open, new/in_progress, действующие субъекты и активные организации; cursor связан с сотрудником. */
+                assignedTo?: "me";
+                /** @description Только задачи с dueAt < серверного now: open, new/in_progress, действующие субъекты и активные организации. Без срока, решённые и принятые риски исключены. Можно сочетать с assignedTo=me; остальные фильтры пересекаются. */
+                overdue?: "true";
             };
             header?: {
                 /** @description Язык title, recommendation и explanation. Принимаются nb, nn и en; без заголовка или при любом другом значении используется nb, ошибки нет. */
@@ -3958,6 +4655,10 @@ export interface operations {
                 checkId?: "M365-001" | "M365-002" | "M365-003" | "M365-004" | "M365-005" | "M365-006" | "M365-007" | "WIN-001" | "WIN-002" | "WIN-003" | "WIN-004" | "WIN-005" | "WIN-006" | "WIN-007" | "WIN-008" | "WIN-009" | "WIN-010" | "WIN-011" | "SYS-001" | "SYS-002" | "SYS-003";
                 /** @description Несколько значений через запятую, например workflowState=new,in_progress. Очередь по умолчанию — technicalState=open&workflowState=new,in_progress. */
                 workflowState?: ("new" | "in_progress" | "risk_accepted" | "suppressed")[];
+                /** @description Только задачи текущего сотрудника из серверной сессии. Включает только open, new/in_progress, действующие субъекты и активные организации; cursor связан с сотрудником. */
+                assignedTo?: "me";
+                /** @description Только задачи с dueAt < серверного now: open, new/in_progress, действующие субъекты и активные организации. Без срока, решённые и принятые риски исключены. Можно сочетать с assignedTo=me; остальные фильтры пересекаются. */
+                overdue?: "true";
             };
             header?: {
                 /** @description Язык title, recommendation и explanation. Принимаются nb, nn и en; без заголовка или при любом другом значении используется nb, ошибки нет. */
@@ -6464,6 +7165,802 @@ export interface operations {
             };
             /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            429: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            503: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPolicyTemplates: {
+        parameters: {
+            query?: {
+                /** @description Непрозрачный cursor, связанный с запросом и фильтром; иначе 400 invalid_cursor. */
+                cursor?: string;
+                limit?: number;
+                includeArchived?: "true";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Успешный результат по семантике 05-data-and-api.md. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyTemplatePage"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            429: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            503: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createPolicyTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyTemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description Успешный результат по семантике 05-data-and-api.md. */
+            201: {
+                headers: {
+                    /** @description Текущая ревизия в кавычках. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyTemplate"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            429: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            503: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPolicyTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Успешный результат по семантике 05-data-and-api.md. */
+            200: {
+                headers: {
+                    /** @description Текущая ревизия в кавычках. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyTemplate"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            429: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            503: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPolicyTemplateRevisions: {
+        parameters: {
+            query?: {
+                /** @description Непрозрачный cursor, связанный с запросом и фильтром; иначе 400 invalid_cursor. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                templateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Успешный результат по семантике 05-data-and-api.md. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyTemplatePage"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            429: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            503: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createPolicyTemplateRevision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Текущая ревизия в кавычках. Устаревшая: 412 revision_mismatch; отсутствует: 428 if_match_required. */
+                "If-Match": string;
+            };
+            path: {
+                templateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyTemplateRevisionCreate"];
+            };
+        };
+        responses: {
+            /** @description Успешный результат по семантике 05-data-and-api.md. */
+            201: {
+                headers: {
+                    /** @description Текущая ревизия в кавычках. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyTemplate"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            429: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            503: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewPolicyTemplate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Текущая ревизия в кавычках. Устаревшая: 412 revision_mismatch; отсутствует: 428 if_match_required. */
+                "If-Match": string;
+            };
+            path: {
+                templateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyTemplatePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Успешный результат по семантике 05-data-and-api.md. */
+            200: {
+                headers: {
+                    /** @description Текущая ревизия в кавычках. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyTemplatePreview"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            429: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            503: {
+                headers: {
+                    /** @description Seconds before retry. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    applyPolicyTemplate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Текущая ревизия в кавычках. Устаревшая: 412 revision_mismatch; отсутствует: 428 if_match_required. */
+                "If-Match": string;
+            };
+            path: {
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyTemplateApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Успешный результат по семантике 05-data-and-api.md. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyTemplateApplication"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem с безопасным кодом из каталога Problem.code (05) и correlationId. */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -43,10 +43,10 @@ describe('portal strings', () => {
   });
 
   it('label every closed value the API returns', () => {
-    const schemas = (schema as { components: { schemas: Record<string, { properties: Record<string, { enum?: (string | null)[] }> }> } })
+    const schemas = (schema as { components: { schemas: Record<string, { properties?: Record<string, { enum?: (string | null)[] }> }> } })
       .components.schemas;
     const values = (component: string, property: string) =>
-      (schemas[component]!.properties[property]!.enum ?? []).filter((v): v is string => v !== null);
+      (schemas[component]!.properties![property]!.enum ?? []).filter((v): v is string => v !== null);
     const expected = [
       ...values('Problem', 'code').map((v) => `problem.${v}`),
       ...values('Finding', 'workflowState').map((v) => `workflow.${v}`),
@@ -76,7 +76,7 @@ describe('portal strings', () => {
       ...values('WindowsRelease', 'state').map((v) => `releaseState.${v}`),
       ...values('DeviceIdentityResolution', 'decision').map((v) => `devices.decision.${v}`),
     ];
-    const conflict = (schemas.Device!.properties.identityConflict as unknown as { properties: Record<string, { enum: string[] }> }).properties;
+    const conflict = (schemas.Device!.properties!.identityConflict as unknown as { properties: Record<string, { enum: string[] }> }).properties;
     expected.push(...conflict.kind!.enum.map((v) => `conflictKind.${v}`));
     expect(expected.filter((key) => !(key in dictionaries.nb))).toEqual([]);
   });

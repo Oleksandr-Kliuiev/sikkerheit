@@ -11,18 +11,26 @@ describe('parseEntries', () => {
     ]);
   });
 
-  it('accepts a release without security fixes and a missing date', () => {
-    const { entries, invalid } = parseEntries('26200 9712 5062003 preview -');
+  it('accepts a release without security fixes with its actual release date', () => {
+    const { entries, invalid } = parseEntries('26200 9712 5062003 preview - 2026-10-20');
     expect(invalid).toEqual([]);
     expect(entries[0]).toMatchObject({ securityMonth: null, kind: 'preview', autoOffered: true });
   });
 
   it('names the lines that are not releases', () => {
     const { entries, invalid } = parseEntries(
-      ['26200 9711 5062002 security_monthly 2026-10', 'nonsense', '26200 9711 12 security_monthly 2026-10', '26200 9711 5062002 weekly 2026-10', '26200 9711 5062002 preview 2026-13', '26200 9711 5062002 preview 2026-10 not-a-date'].join('\n'),
+      ['26200 9711 5062002 security_monthly 2026-10 2026-10-13', 'nonsense', '26200 9711 12 security_monthly 2026-10', '26200 9711 5062002 weekly 2026-10', '26200 9711 5062002 preview 2026-13', '26200 9711 5062002 preview 2026-10 not-a-date'].join('\n'),
     );
     expect(entries).toHaveLength(1);
     expect(invalid).toEqual([2, 3, 4, 5, 6]);
+  });
+
+  it('refuses invented dates, missing dates and trailing unparsed data', () => {
+    for (const row of ['26200 9711 5062002 security_monthly 2026-10',
+      '26200 9711 5062002 security_monthly 2026-02 2026-02-31',
+      '26200 9711 5062002 security_monthly 2026-10 2026-10-13 auto extra']) {
+      expect(parseEntries(row)).toEqual({ entries: [], invalid: [1] });
+    }
   });
 });
 

@@ -70,7 +70,14 @@ FINDING_FILTERS = [
     {'name': 'workflowState', 'in': 'query', 'style': 'form', 'explode': False,
      'schema': array(enum(*WORKFLOW_STATES), len(WORKFLOW_STATES), 1, unique=True),
      'description': 'Несколько значений через запятую, например workflowState=new,in_progress. '
-                    'Очередь по умолчанию — technicalState=open&workflowState=new,in_progress.'}]
+                    'Очередь по умолчанию — technicalState=open&workflowState=new,in_progress.'},
+    {'name': 'assignedTo', 'in': 'query', 'schema': enum('me'),
+     'description': 'Только задачи текущего сотрудника из серверной сессии. Включает только open, '
+                    'new/in_progress, действующие субъекты и активные организации; cursor связан с сотрудником.'},
+    {'name': 'overdue', 'in': 'query', 'schema': enum('true'),
+     'description': 'Только задачи с dueAt < серверного now: open, new/in_progress, действующие субъекты '
+                    'и активные организации. Без срока, решённые и принятые риски исключены. '
+                    'Можно сочетать с assignedTo=me; остальные фильтры пересекаются.'}]
 
 
 def _error_codes(operation_id, kind, has_body, if_match):
@@ -364,8 +371,38 @@ def _release_paths():
     }
 
 
+def _template_paths():
+    base = '/api/v1/policy-templates'
+    tid = [pathparam('templateId')]
+    return {
+        base: {
+            'get': operation('listPolicyTemplates', 'Общая библиотека шаблонов', 'P1', 'portal', 200,
+                'PolicyTemplatePage', roles=READ_ROLES, parameters=PAGE + [
+                    {'name': 'includeArchived', 'in': 'query', 'schema': enum('true')}]),
+            'post': _add_etag(operation('createPolicyTemplate', 'Создать пользовательский шаблон', 'P1',
+                'portal_mutation', 201, 'PolicyTemplate', 'PolicyTemplateCreate', ADMIN_ROLES))},
+        base + '/{templateId}': {'get': _add_etag(operation('getPolicyTemplate', 'Текущая версия шаблона',
+            'P1', 'portal', 200, 'PolicyTemplate', roles=READ_ROLES, parameters=tid))},
+        base + '/{templateId}/revisions': {
+            'get': operation('listPolicyTemplateRevisions', 'История версий шаблона', 'P1', 'portal', 200,
+                'PolicyTemplatePage', roles=READ_ROLES, parameters=tid + PAGE),
+            'post': _add_etag(operation('createPolicyTemplateRevision', 'Изменить или архивировать шаблон',
+                'P1', 'portal_mutation', 201, 'PolicyTemplate', 'PolicyTemplateRevisionCreate', ADMIN_ROLES, tid + [IF_MATCH]))},
+        base + '/{templateId}/preview': {'post': _add_etag(operation('previewPolicyTemplate',
+            'Предпросмотр применения к выбранным клиентам', 'P1', 'portal_mutation', 200,
+            'PolicyTemplatePreview', 'PolicyTemplatePreviewRequest', ADMIN_ROLES, tid + [IF_MATCH], description=(
+                'До 50 явных organizationIds; не меняет данные. Подписанный previewToken связан с сотрудником, '
+                'клиентом, версиями шаблона/политики, содержимым результата; срок 30 минут.')))},
+        ORG_PATH + '/policy-template-applications': {'post': operation('applyPolicyTemplate',
+            'Применить просмотренный шаблон к одному клиенту', 'P1', 'portal_mutation', 200,
+            'PolicyTemplateApplication', 'PolicyTemplateApplyRequest', ADMIN_ROLES, ORG + [IF_MATCH], description=(
+                'Проверяет просмотренный результат, активность клиента и текущие версии. Повтор того же token '
+                'возвращает прежний результат без новой ревизии. Каждый клиент — отдельная транзакция.'))},
+    }
+
+
 def build_paths():
     paths = {}
-    for part in (_organization_paths, _m365_paths, _finding_paths, _device_paths, _release_paths, _agent_paths):
+    for part in (_organization_paths, _m365_paths, _finding_paths, _device_paths, _release_paths, _agent_paths, _template_paths):
         paths.update(part())
     return paths

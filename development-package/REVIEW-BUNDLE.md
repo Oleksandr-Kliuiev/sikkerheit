@@ -1,6 +1,6 @@
 # Development Package для независимой оценки
 
-Версия 0.3.1 от 16 октября 2026 года. Полный комплект требований, архитектуры и предложенных контрактов.
+Версия 0.3.2 от 17 октября 2026 года. Полный комплект требований, архитектуры и предложенных контрактов.
 
 Рецензент начинает с запроса независимой оценки и проверяет весь комплект.
 
@@ -9,11 +9,22 @@
 
 # Development Package для сервиса проверки безопасности
 
-Версия 0.3.1 от 16 октября 2026 года. Рабочее название проекта — Sikkerheit. Владелец продукта — IT-компания, обслуживающая около 40 клиентов и около 400 компьютеров Windows через RMM.
+Версия 0.3.2 от 17 октября 2026 года. Рабочее название проекта — Sikkerheit. Владелец продукта — IT-компания, обслуживающая около 40 клиентов и около 400 компьютеров Windows через RMM.
 
 Sikkerheit — внутренний сервис регулярной проверки безопасности клиентов. Техники видят на портале отклонения всех клиентов с основанием и историей, клиенты получают еженедельный отчёт. Первый этап (P1) — проверки Microsoft 365 и Entra ID через одно приложение Graph только для чтения, без установки ПО на ПК. Второй (P2) — агент Windows, который распространяет RMM компании. Код и тесты пишут ИИ-агенты, человек ставит задачи и принимает результат.
 
-Статус — сервис P1 написан по версии 0.3.0 и проверен автоматическими тестами на локальных данных; версия 0.3.1 приводит пакет в соответствие с решениями, принятыми при реализации и по итогам независимой оценки 0.3.0. Развёртывание в Azure, эксперименты SP-01…SP-05, приёмка человеком, пилоты и агент Windows (P2) впереди. Контракты описывают требуемое поведение; оценки сроков, нагрузка и пороги — плановые допущения.
+Статус — сервис P1, серверная часть P2, портал и код агента Windows реализованы и проверены локально. Версия 0.3.2 включает подготовку развёртывания, параллельные задания, распределённый ограничитель Graph и инструменты работы техников. Развёртывание в Azure, SP-01/SP-02 на реальных tenant, SP-04/SP-05 на Windows и в RMM, подписанный MSI, приёмка человеком и пилоты ещё не выполнены. Контракты описывают требуемое поведение; локальные проверки не подтверждают доступность внешних API, производительность Azure и допуск пилота.
+
+## Изменения в 0.3.2
+
+- Исправлено соответствие Production-конфигурации и Azure: HMAC nonce агента, разделение hostname, закрепление параметров слотов, проверка запуска и smoke после переключения; добавлены оповещения очереди, Graph и агента.
+- Параллельные группы заданий с общим допуском PostgreSQL и продлением lease. Квоты Graph и полный `Retry-After` действуют между экземплярами, включая JSON batch; некорректная страница не считается полным списком, а некорректное тело ошибки не отменяет серверную паузу.
+- Серверные фильтры finding `assignedTo=me` и `overdue=true`: применяются до пагинации, пересекаются с остальными фильтрами, cursor «Моих задач» связан с текущим сотрудником.
+- Общая библиотека пользовательских шаблонов с версиями, архивированием, предпросмотром до 50 клиентов, проверками версий и квитанциями повторного применения.
+- Встроенные шаблоны политики заполняют черновик с предварительным просмотром. Сохранение проходит обычную проверку роли Admin, схемы, входных параметров и `If-Match`; исключения клиента не копируются из другого клиента.
+- Массовое назначение исполнителей и сроков с просмотром изменений, сохранённые представления и сводка просроченных задач Teams. Редактор Windows-политик, отзыв устройств по ключу и ручной импорт каталога с обязательной датой выпуска.
+- Подготовлен конвейер кандидата MSI с подписью полезной нагрузки до упаковки. Проверка на настоящей Windows и в RMM остаётся условием допуска P2.
+- Собраны `VALIDATION.md`, `REVIEW-BUNDLE.md`, `manifest.json` и архив. Получатель проверяет комплект командой `python3 -I scripts/validate_package.py --manifest` из каталога пакета; результаты относятся к контрактам и документации, а не к облачной приёмке.
 
 ## Как читать пакет
 
@@ -140,7 +151,7 @@ Sikkerheit — внутренний сервис IT-компании для ре
 | --- | --- | --- | --- | --- |
 | FR-01 | Организации: создание, изменение, отключение, экспорт и удаление с отсрочкой; сводка по каждому клиенту | P1 | AT-01, AT-09 | listOrganizations, createOrganization, getOrganization, updateOrganization, changeOrganizationLifecycle, createOrganizationExport, getOrganizationExport, downloadOrganizationExport |
 | FR-02 | Вход сотрудников через Entra ID компании с MFA, роли Admin, Technician и Reader, аудит изменений | P1 | AT-02 | getCurrentStaff, listStaff, listAuditEvents |
-| FR-03 | Политика клиента: неизменяемые версии, режим и параметры каждой проверки | P1 | AT-06 | listPolicyRevisions, createPolicyRevision |
+| FR-03 | Политика клиента: неизменяемые версии, режим и параметры проверок, общая библиотека шаблонов и применение с просмотром | P1 | AT-06 | listPolicyRevisions, createPolicyRevision, listPolicyTemplates, createPolicyTemplate, getPolicyTemplate, listPolicyTemplateRevisions, createPolicyTemplateRevision, previewPolicyTemplate, applyPolicyTemplate |
 | FR-04 | Подключение Microsoft 365 через admin consent клиента для заранее указанного tenant, проверка подключения, видимое состояние и отключение | P1 | AT-03 | getTenantConnection, startTenantConsent, verifyTenantConnection, disconnectTenant |
 | FR-05 | Ежедневный и внеплановый сбор Microsoft 365 с явными возможностями модулей и частичными результатами | P1 | AT-04, AT-10 | listCollectionRuns, requestCollection |
 | FR-06 | Оценки: четыре результата, отдельная свежесть, информационный режим и основание вывода | P1 | AT-05, AT-06 | listAssessments |
@@ -296,8 +307,9 @@ flowchart LR
 - у организации не больше одного незавершённого запуска; одновременно обслуживаются не больше 8 tenant;
 - лимиты Graph соблюдает общий ограничитель сервиса: методы аутентификации и отчёты — не больше 5 запросов за 10 секунд на tenant и 122 за 10 секунд на все tenant; `signInActivity` — не больше 10 запросов в минуту на все tenant, страница 500; Conditional Access — 1 запрос в секунду на tenant. Каждый запрос внутри JSON batch учитывается отдельно. Поэтому tenant с 300 пользователями собирается около 10 минут, а расчётная модель — в ночном окне;
 - таймаут запроса — 30 секунд, запуска — 30 минут; запуск, не успевший прочитать методы всех пользователей, получает `partial`, а непрочитанные пользователи — unavailable/`temporary_error`. При лимите 5 запросов за 10 секунд это граница около 850 включённых пользователей на tenant. Запуск, оставшийся открытым дольше 6 часов (сбой процесса), закрывает следующее плановое задание с `failed`/`run_timeout`;
-- `Retry-After` соблюдается всегда, без него — экспоненциальная пауза (Conditional Access его не возвращает);
-- следующая страница берётся только по `@odata.nextLink` на `graph.microsoft.com`;
+- квоты и серверные паузы хранятся в `graph_rate_window` в PostgreSQL: короткая транзакция по часам базы резервирует все места JSON batch перед каждой HTTP-попыткой; соединение не удерживается при ожидании Graph. Размер batch не превышает вместимость окна, ответы успешных подзапросов не запрашиваются повторно;
+- `Retry-After` в секундах или HTTP-date соблюдается полностью, в том числе у последнего неуспешного ответа и отдельного batch-подзапроса; без него — экспоненциальная пауза. Некорректное тело ошибки или соседний batch-ответ не отменяют уже полученную паузу;
+- следующая страница берётся только по HTTPS `@odata.nextLink` на `graph.microsoft.com` с исходным путём, стандартным портом и без userinfo; HTTP redirect не выполняется. Некорректные `value` и nextLink дают неполный список, а не подтверждение отсутствия пользователей или ролей;
 - частичный результат допустим и помечается.
 
 Правила подключения, сбора и вывода пользователей из учёта — `05`, раздел «Подключение M365 и сбор».
@@ -342,7 +354,7 @@ flowchart LR
 Порядок выполнения заданий:
 
 1. **Планирование.** Планировщик каждые 5 минут вставляет периодические задания с уникальным ключом (`type`, `organizationId`, `periodKey`) с `NULLS NOT DISTINCT` через `INSERT … ON CONFLICT DO NOTHING`. Пропущенные периоды догоняются не глубже 24 часов, для `weekly_report` — 4 недель, но не раньше недели, в которую создана организация.
-2. **Захват.** Задание захватывается через `FOR UPDATE SKIP LOCKED` с lease на 5 минут. Долгое задание продлевает lease; `leaseToken` растёт при каждом захвате.
+2. **Захват.** Задание захватывается через `FOR UPDATE SKIP LOCKED` с lease на 5 минут и продлением раз в минуту. Общий допуск PostgreSQL ограничивает две группы: `Jobs:CollectionConcurrency` (по умолчанию 8) и `Jobs:MaintenanceConcurrency` (2), каждая 1…8. Все экземпляры используют одинаковые настройки; два сбора одной организации одновременно не захватываются. Advisory lock удерживается только на время захвата. `leaseToken` растёт при каждом захвате; потеря lease отменяет обработчик. Плановое задание, ожидавшее завершившийся после его постановки сбор, использует этот результат без второго сбора.
 3. **Завершение.** Завершение и бизнес-эффект выполняются в одной транзакции с условием `leaseToken`; если обновлено 0 строк, транзакция откатывается. Эффекты идемпотентны за счёт уникальных ограничений. Задание с несколькими транзакциями (порции `recalculate_policy`) проверяет lease в каждой из них, поэтому прежний владелец после потери lease не пишет следующую порцию. Сообщение в Teams откатить нельзя: отметка периода пишется сразу после ответа webhook, и сбой между ними даёт повтор сообщения, а не его потерю.
 4. **Ошибки.** Ошибка даёт повтор через 1, 5, 15 и 60 минут, затем раз в час. После 10 попыток задание переходит в `failed` и поднимает оповещение.
 
@@ -400,8 +412,8 @@ docs
 | Модуль | Таблицы |
 | --- | --- |
 | `Access` | `staff_user`, `staff_session`, `staff_login` |
-| `Organizations` | `organization`, `policy_revision` |
-| `M365` | `tenant_connection`, `collection_run` |
+| `Organizations` | `organization`, `policy_revision`, `policy_template`, `policy_template_revision`, `policy_template_application` |
+| `M365` | `tenant_connection`, `collection_run`, `graph_rate_window` |
 | `Assessment` | `subject`, `observation`, `assessment`, `finding`, `finding_event`, `risk_decision`; в P2 — `windows_release`, `windows_release_month` |
 | `Reports` | `report`, `teams_digest` |
 | `Exports` | `organization_export` |
@@ -410,6 +422,10 @@ docs
 | `Agents` (P2) | `enrollment_key`, `enrollment`, `device`, `device_presence`, `revoked_installation`, `scan_batch`, `scan_request`, `agent_challenge`, `agent_session` |
 
 `Data` (схема, области RLS, соединения) и точка композиции сервиса модулям не принадлежат. Архитектурный тест разбирает исходники сервиса и сверяет обращения к таблицам — через контекст базы и в тексте SQL — с владельцами: у каждой таблицы схемы есть владелец, а новое обращение модуля к чужой таблице роняет сборку. Каталог проверок и закрытые перечни C# генерируются из контракта пакета, типы TypeScript — из OpenAPI; зависимости Windows не попадают в сборку сервиса.
+
+Пользовательские шаблоны — общая платформенная библиотека без клиентских идентификаторов и расписаний. Их авторизация — Admin на запись, остальные сотрудники читают. Предпросмотр и массовое применение работают через явный перечень клиентов, в области каждого клиента; область all для записи не используется. Квитанции применения — клиентская таблица с RLS. Подробности — `05`, «Общая библиотека шаблонов и применение».
+
+Платформенные таблицы без RLS также включают `policy_template`, неизменяемую историю `policy_template_revision` и оперативную `graph_rate_window`. Последняя содержит ключи квот, время запросов и сроки ожидания без токенов и evidence; истёкшие строки удаляются при следующем обращении ограничителя.
 
 
 Файл `03-check-catalog.md`
@@ -1263,6 +1279,8 @@ Admin создаёт ключ в портале (`createEnrollmentKey`). Фор�
 
 Критические дефекты доступа, изоляции и распространения агента закрываются до пилота с данными клиентов.
 
+Общая библиотека пользовательских политик: Admin создаёт, версионирует, архивирует и применяет; Technician и Reader читают текущие и архивные версии. Клиентские идентификаторы, исключения и расписания в библиотеку не принимаются (закрытая схема PolicyTemplateContent). История версий шаблонов неизменяема и хранит автора/время; клиентское применение дополнительно пишет обычный audit_event. Квитанции применения живут в области клиента, экспортируются и удаляются вместе с ним, а не остаются в общей библиотеке. Предпросмотр ограничен 50 клиентами, подписан, связан с Admin и версиями, действует 30 минут; конфликты и частичный результат явно видны в портале.
+
 
 Файл `05-data-and-api.md`
 
@@ -1309,7 +1327,22 @@ Admin создаёт ключ в портале (`createEnrollmentKey`). Фор�
 
 `basisSnapshot` неизменяем и содержит checkId, ruleId, ruleVersion, evaluatedPolicyVersion, result, severity, reasonCode, observedAt и минимальные поля для explanation; у SYS-003 — также `verifiedThroughMonth` каталога, ожидаемый месяц и число пропущенных месяцев. Через 90 дней evidence удаляется, остаётся `basisSnapshot`, `evidenceAvailability=expired`, `observationId=NULL`.
 
+### Общая библиотека шаблонов и применение
+
+`policy_template` и `policy_template_revision` — платформенные таблицы модуля Organizations, без RLS: содержат только переносимые настройки, доступные всем сотрудникам. Текущая версия задаётся заголовком; версии неизменяемы, содержат автора и время. История сохраняется без автоматического удаления. Создание и новые версии, включая архивирование и восстановление из архива, разрешены только Admin. `If-Match` проверяет текущую ревизию, устаревшая — 412 `revision_mismatch`; без заголовка — 428 `if_match_required`. Физического удаления через API нет. Все изменения библиотеки оставляют неизменяемую версию с автором и временем, без создания клиентской ревизии.
+
+`PolicyTemplateContent` — закрытый объект `{scope, activeCheckIds, checks}`. scope=m365 включает M365-001…006; windows — WIN-001…009, WIN-011 и SYS-001…003; all — оба набора. Для области передаются все её checks; сервер разрешает только переносимые параметры. Нет m365, agent, WIN-010, M365-007, notApplicableEditionIds; запрещены privilegedRoleTemplateIds, allowedPermissionGrantPolicies, approvedProviders, defenderApproved, approvedFirewallProviders, allowedDomainRids, allowedSids. Поэтому tenant ID, исключения, расписания, доверенные провайдеры, роли/согласия, SID/RID и редакции клиента сохраняются. При создании шаблон проверяется на политике по умолчанию; каждый реальный результат снова проходит схему PolicyConfiguration и PolicyRules. Клиент с недостающими входными параметрами получает unavailable в просмотре, без записи.
+
+Admin выбирает до 50 уникальных organizationIds явно. Предпросмотр читает каждого клиента в отдельной области REPEATABLE READ, ничего не пишет и возвращает before/after, policyVersion, status=ready|unchanged|unavailable, problemCode и previewToken. ready означает наличие изменений, но ещё не запись; unchanged не имеет token и новой ревизии не создаёт. Неактивный или недоступный клиент не мешает просмотру остальных. Снимки не сохраняются в общую платформенную таблицу. Token подписан ключом Cursors: связан с Admin, клиентом, версией шаблона, версией политики, хэшем результата, случайным nonce и сроком 30 минут. Чужой или изменённый token — 400 invalid_cursor; истёкший неприменённый — 422 validation_failed. Архивированный шаблон не допускает просмотра/применения. Смена шаблона, включая архивирование, или политики после просмотра — 412 revision_mismatch, требуется новый просмотр.
+
+Массовое применение вызывает applyPolicyTemplate отдельно для каждого ready-клиента. Сервер блокирует организацию, проверяет её активность и исходный If-Match, блокирует заголовок шаблона от смены версии, сам повторяет слияние и сравнивает хэш. Тело не принимает конфигурацию от браузера. Одна транзакция создаёт policy_revision, recalculate_policy, аудит policy.revision_create и policy.template_apply и квитанцию policy_template_application. Квитанция содержит только хэш token, ссылки на версии, appliedAt/appliedBy; это клиентская таблица с принудительной RLS, входит в экспорт/удаление организации. Ссылка на policy_revision удаляется каскадом при её штатном удалении по срокам (не менее 12 месяцев). Повтор того же подписанного token тем же Admin возвращает исходную policyVersion с replayed=true, без новой ревизии, задания или аудита; одновременно отправленные повторы сериализуются. Успешный повтор доступен и после срока просмотра, пока хранится квитанция; клиент должен оставаться активным.
+
+Групповой транзакции нет: возможен частичный результат. Портал показывает applied/failed/unknown/skipped отдельно. После потери ответа, 5xx, смены версии, потери прав или ограничения частоты новые записи останавливаются; неизвестный результат можно подтвердить только тем же token. Неприменённые клиенты требуют нового просмотра, без скрытого изменения состава группы и без автоматического повтора с новой версией. Библиотека и приложение шаблонов не обращаются к Graph, RMM или PSA и не меняют настройки Microsoft 365 либо Windows.
+
 ### Политика клиента
+
+В портале Admin может заполнить черновик встроенным шаблоном версии 1: базовый Microsoft 365 (`M365-001`…`M365-006`), тот же набор без принятия телефонных методов для `M365-001`, базовый Windows (`WIN-001`…`WIN-009`, `WIN-011`). Значения по умолчанию берутся из схемы `PolicyConfiguration`. Шаблон действует только в указанной области; `M365-007`, `WIN-010` и `SYS-*` не меняются. Сохраняются расписания, `excludedUserIds`, `expectedTenantId`, перечни привилегированных ролей и согласий, доверенные антивирусы/межсетевые экраны, разрешённые SID/RID и исключения редакций. Предпросмотр сравнивает шаблон с текущим черновиком; применение заполняет только черновик. Отдельное сохранение создаёт обычную неизменяемую ревизию через `createPolicyRevision`, требует Admin и исходный `If-Match`, проходит прежние проверки и аудит. Шаблоны не изменяют настройки Microsoft 365 и не содержат идентификаторов других клиентов. Общая пользовательская библиотека и применение к выбранным клиентам описаны ниже.
+
 
 `policy_revision.configuration` описывается закрытой схемой `PolicyConfiguration`. Поля:
 
@@ -1727,6 +1760,9 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 
 Портал использует серверную сессию сотрудника (`PortalSession`) и CSRF-токен (`CsrfToken`) для изменений. Списки возвращают cursor pagination, максимум 100 записей. Cursor связан с операцией, организацией и фильтром; чужой или изменённый cursor — 400 `invalid_cursor`. Изменения finding и политики требуют `If-Match`: устаревшая ревизия — 412 `revision_mismatch`, отсутствующий заголовок — 428 `if_match_required`. Тело запроса портала ограничено 65536 байт. Префикс `{org}` означает `/api/v1/organizations/{organizationId}`. Роли: A — Admin, T — Technician, R — Reader (`04`, «Вход сотрудников и роли»).
 
+Дополнительные фильтры списков finding: `assignedTo=me` выбирает назначения текущему сотруднику из серверной сессии; `overdue=true` выбирает `dueAt < now` по серверному времени. Оба ограничивают выборку состояниями `technicalState=open`, `workflowState=new|in_progress`, действующими субъектами (`retiredAt=null`) и активными организациями. Другие значения отклоняются как `schema_violation`. Фильтры пересекаются с остальными и применяются до пагинации. Cursor для `assignedTo=me` связан с Entra ID сотрудника. Время проверяется заново на каждой странице; очередь является живой выборкой, а не снимком.
+
+
 | operationId | Метод и путь | Роли | Повтор и конкуренция | Успех |
 | --- | --- | --- | --- | --- |
 | getCurrentStaff | GET `/api/v1/me` | A, T, R | Возвращает роли и CSRF-токен сессии | 200 CurrentStaff |
@@ -1742,6 +1778,13 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 | listAuditEvents | GET `{org}/audit-events` | A | cursor; аудит каждого чтения | 200 AuditEventPage |
 | listPolicyRevisions | GET `{org}/policy-revisions` | A, T, R | cursor | 200 PolicyRevisionPage |
 | createPolicyRevision | POST `{org}/policy-revisions` | A | `If-Match` = `"<текущая версия>"` | 201 PolicyRevision + ETag |
+| listPolicyTemplates | GET `/api/v1/policy-templates` | A, T, R | cursor; includeArchived=true | 200 PolicyTemplatePage |
+| createPolicyTemplate | POST `/api/v1/policy-templates` | A | PolicyTemplateCreate | 201 PolicyTemplate + ETag |
+| getPolicyTemplate | GET `/api/v1/policy-templates/{templateId}` | A, T, R | Текущая версия | 200 PolicyTemplate + ETag |
+| listPolicyTemplateRevisions | GET `/api/v1/policy-templates/{templateId}/revisions` | A, T, R | cursor; новые первыми | 200 PolicyTemplatePage |
+| createPolicyTemplateRevision | POST `/api/v1/policy-templates/{templateId}/revisions` | A | If-Match; PolicyTemplateRevisionCreate; включая archived | 201 PolicyTemplate + ETag |
+| previewPolicyTemplate | POST `/api/v1/policy-templates/{templateId}/preview` | A | If-Match шаблона; PolicyTemplatePreviewRequest | 200 PolicyTemplatePreview + ETag |
+| applyPolicyTemplate | POST `{org}/policy-template-applications` | A | If-Match политики; PolicyTemplateApplyRequest; token предпросмотра | 200 PolicyTemplateApplication |
 | getTenantConnection | GET `{org}/m365-connection` | A, T, R | — | 200 TenantConnection |
 | startTenantConsent | POST `{org}/m365-connection/consent` | A | Тело `tenantHint`; ссылка только для ожидаемого tenant, действует 7 суток | 201 ConsentStart |
 | verifyTenantConnection | POST `{org}/m365-connection/verify` | A | Повтор после успеха возвращает активное подключение | 200 TenantConnection |
@@ -1771,6 +1814,8 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 | verifyWindowsReleaseMonth | POST `/api/v1/windows-releases/months/{securityMonth}/verify` | A | Идемпотентно; вводит записи месяца в действие и ставит `patch_level_sweep` всех организаций; месяц без записей — только с `noNewReleases=true`, иначе 422 `validation_failed` | 200 WindowsReleaseMonth |
 
 Аудит:
+
+- policy.template_apply содержит templateId, templateRevision, policyVersion; повтор по квитанции не пишет событие повторно.
 
 - **Изменения.** Каждое изменение портала пишет `audit_event` своей организации; `createOrganization` — в аудит созданной организации. Изменения каталога выпусков — платформенные: автор и время записываются в `importedBy`, `verifiedBy` и `verifiedAt` и в журнал запросов сервиса.
 - **Чтения.** Выдача отчёта и экспорта и чтение журнала аудита пишут аудит при каждом обращении (расширение `x-audit-read`).
@@ -1931,12 +1976,14 @@ Fixture записи с оценкой задаёт режим проверки 
 1. Публикация в слот staging и его запуск.
 2. Миграции expand при старте слота staging под identity миграций (`02`, «Развёртывание и окружения»).
 3. Smoke-тесты через hostname слота: health, портал, страница входа, ответ 401 на `getCurrentStaff` без сессии, CSP портала; с P2 — `createAgentChallenge`.
-4. Переключение слотов.
+4. Переключение слотов и повтор health/smoke на production hostname; при включённом P2 проверяются challenge на hostname агента и закрытие перекрёстных маршрутов портала и агента.
 5. Остановка слота staging.
 
 В test (план B1 без слотов) и в запасном варианте production на плане B2 развёртывание идёт без слота: конвейер на время развёртывания назначает приложению identity миграций и включает `Database:MigrateOnStart`, публикует версию, проверяет smoke-тесты и снимает identity и настройку (`02`, «Развёртывание и окружения»).
 
 До настройки конвейера CD установку окружения и выпуск версии выполняют скрипты `infra/scripts` под учётной записью владельца подписки (`az login` в его терминале); секреты не попадают в репозиторий и в журналы скриптов.
+
+Перед публикацией команда `check-configuration` проверяет Production-настройки локально. `Cursors:Key` и `Agents:NonceKey` — отдельные 32-байтовые ключи из Key Vault; повторный setup сохраняет существующие ключи. `Hosting:AgentHosts:0=disabled.invalid` закрывает агентский API до подготовки DNS/TLS. Production hostname портала и агента различаются; staging использует собственный hostname для smoke. Hostname, минимальная версия агента и ограничения групп заданий закреплены за слотами; setup сохраняет действующие значения, если оператор явно их не переопределил. Проверка конфигурации не подтверждает доступность Azure, разрешения identity или consent tenant.
 
 Откат — запуск слота staging с прежней версией и обратное переключение: схема совместима с предыдущей версией. Contract-миграции выходят только следующим релизом. Вход конвейера в Azure — OIDC (federated credentials), без секретов; к базе конвейер не подключается. Версии сервиса — SemVer с тегом в репозитории и release notes.
 
@@ -2270,6 +2317,8 @@ SP-01 и SP-02 выполняются по ходу разработки P1: SP-
 
 Каждый runbook содержит признак запуска, шаги с операциями портала из колонки «Операции» или командами Azure, проверку результата и запись в протокол. «—» означает, что шаги выполняются в Azure или режимом обслуживания образа, без произвольного SQL. Runbooks P1 готовы к допуску пилота M365, runbooks P2 — к допуску пилота Windows.
 
+Дополнение приёмки AT-06 для пользовательских шаблонов: проверить роли библиотеки, неизменяемую историю и If-Match, архивирование/восстановление, исключение идентификаторов и сохранение клиентских настроек; просмотреть группу с готовым, неизменившимся и недоступным клиентом; изменить политику или шаблон между просмотром и записью; повторить один token одновременно и после потери ответа; проверить истечение 30 минут и частичный результат без повторной записи успешных клиентов. Локальные тесты этих условий не заменяют облачную приёмку.
+
 
 Файл `08-risks-and-decisions.md`
 
@@ -2371,7 +2420,7 @@ SP-01 и SP-02 выполняются по ходу разработки P1: SP-
 
 # Запрос независимой оценки Development Package
 
-Если владелец решит провести независимую оценку, передайте текст ниже каждому рецензенту вместе с одинаковой версией 0.3.1. Сначала получите независимые ответы, затем сравните их. При загрузке одного файла используйте `REVIEW-BUNDLE.md`.
+Если владелец решит провести независимую оценку, передайте текст ниже каждому рецензенту вместе с одинаковой версией 0.3.2. Сначала получите независимые ответы, затем сравните их. При загрузке одного файла используйте `REVIEW-BUNDLE.md`.
 
 ## Текст запроса
 
@@ -2730,7 +2779,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
 
 # Проверка Development Package
 
-Версия 0.3.1, дата 2026-10-16. Проверку выполняет `scripts/validate_package.py`; он ничего не записывает. `scripts/build_package.py` вызывает его первым и пишет этот файл, `REVIEW-BUNDLE.md`, `manifest.json` и архив только после успешной проверки.
+Версия 0.3.2, дата 2026-10-17. Проверку выполняет `scripts/validate_package.py`; он ничего не записывает. `scripts/build_package.py` вызывает его первым и пишет этот файл, `REVIEW-BUNDLE.md`, `manifest.json` и архив только после успешной проверки.
 
 - Состав каталога соответствует белому списку путей пакета, скрытые файлы и `__pycache__` в пакет не входят; версия совпадает в `build_package.py`, `contract_catalog.py`, `README.md` и `09`. Проверка читает только файлы внутри пакета, локальные ссылки документов его не покидают. `manifest.json` записывается после проверки; `validate_package.py --manifest` сверяет с ним размер и SHA-256 каждого файла полученного пакета и находит лишние и недостающие файлы.
 - Прочитаны все JSON-файлы и разрешены локальные ссылки `$ref`; в `openapi.json` нет внешних ссылок, у четырёх отдельных схем (агент и Microsoft 365) есть `$id`.
@@ -2740,10 +2789,10 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
 - Таблица жизненного цикла ОС: строк — 22; семейства совпадают с каталогом; каждое `servicingEndsAt` равно началу следующего дня по America/Los_Angeles в UTC.
 - Синтетические примеры (всего 3): два пакета агента содержат ровно все WIN-* и проходят схему и семантическую проверку, основной содержит эталонный случай BitLocker; запуск сбора M365 покрывает все собираемые M365-* (у отложенной M365-007 модуль `skipped` и наблюдений нет) и содержит эталонный случай report-only для M365-003.
 - Отклонены все отрицательные варианты (всего 56: пакеты агента, запуски M365 и тела `createPolicyRevision`); положительные варианты (SAFE_TEXT, WIN-006 без успешного поиска, норвежский UPN) приняты (всего 3).
-- Операции OpenAPI: всего 45 (P1 — 29, P2 — 16; агентских 5, портальных 40); проверены path parameters, `x-phase`, security, CSRF, hostname агента, роли, `x-audit-read`, `Accept-Language` и заголовки выдачи отчёта.
+- Операции OpenAPI: всего 52 (P1 — 36, P2 — 16; агентских 5, портальных 47); проверены path parameters, `x-phase`, security, CSRF, hostname агента, роли, `x-audit-read`, `Accept-Language` и заголовки выдачи отчёта.
 - Ответы: коды `Problem.code` (всего 37) совпадают с таблицей `05`, действия агента (всего 14) образуют закрытый перечень; наборы статусов операций соответствуют правилам.
 - `Assessment.reasonCode`: значений — 17; события `finding_event` совпадают с таблицей `05`.
-- Реестр инвариантов: записей — 201 (P1 — 105, P2 — 96); проверены поля, формы `expectedError`, разделы источников, покрытие кодов Problem, reasonCode, строк событий, обеих ветвей `assessmentMode` и каждой проверки в режиме assessed. Полноту правил число записей не доказывает.
+- Реестр инвариантов: записей — 207 (P1 — 111, P2 — 96); проверены поля, формы `expectedError`, разделы источников, покрытие кодов Problem, reasonCode, строк событий, обеих ветвей `assessmentMode` и каждой проверки в режиме assessed. Полноту правил число записей не доказывает.
 - Проверены локальные Markdown-ссылки и закрытие code fences; копия переписки `source/boss-chat.md` совпадает с SHA-256, закреплённым в `scripts/validate_docs.py`, и содержит 12 сообщений.
 
 Стандартная проверка выполнена: jsonschema и openapi-spec-validator с проверкой format. Полная стандартная проверка, пробная генерация клиентов C# и TypeScript и CI — первый результат WP-01.
@@ -2755,7 +2804,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
 
 ```json
 {
-  "catalogVersion": "0.3.1",
+  "catalogVersion": "0.3.2",
   "checks": [
     {
       "checkId": "M365-001",
@@ -4311,7 +4360,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
 
 ```json
 {
-  "version": "0.3.1",
+  "version": "0.3.2",
   "invariants": [
     {
       "id": "INV-001",
@@ -7545,6 +7594,100 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
         "effect": "none"
       },
       "acceptance": "AT-16"
+    },
+    {
+      "id": "INV-202",
+      "rule": "Подписанный предпросмотр шаблона связан с сотрудником и организацией; чужой token отклоняется.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Применение token другого Admin или другого клиента.",
+      "expectedError": {
+        "http": 400,
+        "code": "invalid_cursor"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-203",
+      "rule": "После предпросмотра смена версии политики или шаблона требует нового просмотра, без записи ревизии.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Другой Admin сохранил политику или шаблон между просмотром и применением.",
+      "expectedError": {
+        "http": 412,
+        "code": "revision_mismatch"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-204",
+      "rule": "Неприменённый предпросмотр действует 30 минут; после срока он не создаёт ревизию.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Применение через 31 минуту после просмотра.",
+      "expectedError": {
+        "http": 422,
+        "code": "validation_failed"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-205",
+      "rule": "Повтор того же применения, в том числе одновременно и после потери ответа, возвращает квитанцию без новой политики, задания и события аудита.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Два применения одного token.",
+      "expectedError": {
+        "effect": "none"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-206",
+      "rule": "Архивированный шаблон нельзя предварительно просмотреть для применения к клиенту.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "Предпросмотр архивированной текущей версии.",
+      "expectedError": {
+        "http": 422,
+        "code": "validation_failed"
+      },
+      "acceptance": "AT-06"
+    },
+    {
+      "id": "INV-207",
+      "rule": "При применении сохраняются идентификаторы клиента, исключения, расписания, доверенные провайдеры, перечни ролей/согласий, SID/RID и редакций; они не копируются из библиотеки.",
+      "sourceDoc": {
+        "file": "05-data-and-api.md",
+        "section": "Политика клиента"
+      },
+      "phase": "P1",
+      "enforcement": "portal_api",
+      "negativeExample": "У клиента собственные провайдеры, tenant ID и исключения; применён общий Windows-шаблон.",
+      "expectedError": {
+        "effect": "none"
+      },
+      "acceptance": "AT-06"
     }
   ]
 }
@@ -8678,7 +8821,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "Sikkerheit Proposed API",
-    "version": "0.3.1",
+    "version": "0.3.2",
     "description": "Проект контракта P1 (портал и Microsoft 365) и P2 (агент Windows); этап операции — расширение x-phase. Example hosts не являются развёрнутыми сервисами. Бизнес-инварианты (specs/invariants.json) и полномочия проверяются дополнительно к схемам; форматы uuid и date-time сервер проверяет явно."
   },
   "servers": [
@@ -11741,6 +11884,28 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             "description": "Несколько значений через запятую, например workflowState=new,in_progress. Очередь по умолчанию — technicalState=open&workflowState=new,in_progress."
           },
           {
+            "name": "assignedTo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "me"
+              ]
+            },
+            "description": "Только задачи текущего сотрудника из серверной сессии. Включает только open, new/in_progress, действующие субъекты и активные организации; cursor связан с сотрудником."
+          },
+          {
+            "name": "overdue",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "description": "Только задачи с dueAt < серверного now: open, new/in_progress, действующие субъекты и активные организации. Без срока, решённые и принятые риски исключены. Можно сочетать с assignedTo=me; остальные фильтры пересекаются."
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -12218,6 +12383,28 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
               "uniqueItems": true
             },
             "description": "Несколько значений через запятую, например workflowState=new,in_progress. Очередь по умолчанию — technicalState=open&workflowState=new,in_progress."
+          },
+          {
+            "name": "assignedTo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "me"
+              ]
+            },
+            "description": "Только задачи текущего сотрудника из серверной сессии. Включает только open, new/in_progress, действующие субъекты и активные организации; cursor связан с сотрудником."
+          },
+          {
+            "name": "overdue",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "description": "Только задачи с dueAt < серверного now: open, new/in_progress, действующие субъекты и активные организации. Без срока, решённые и принятые риски исключены. Можно сочетать с assignedTo=me; остальные фильтры пересекаются."
           },
           {
             "name": "Accept-Language",
@@ -16051,6 +16238,1211 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
           }
         ]
       }
+    },
+    "/api/v1/policy-templates": {
+      "get": {
+        "operationId": "listPolicyTemplates",
+        "summary": "Общая библиотека шаблонов",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplatePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin",
+          "Technician",
+          "Reader"
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "description": "Непрозрачный cursor, связанный с запросом и фильтром; иначе 400 invalid_cursor."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createPolicyTemplate",
+        "summary": "Создать пользовательский шаблон",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplate"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40,
+                  "pattern": "^\"[0-9]+\"$"
+                },
+                "description": "Текущая ревизия в кавычках."
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyTemplateCreate"
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/policy-templates/{templateId}": {
+      "get": {
+        "operationId": "getPolicyTemplate",
+        "summary": "Текущая версия шаблона",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplate"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40,
+                  "pattern": "^\"[0-9]+\"$"
+                },
+                "description": "Текущая ревизия в кавычках."
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin",
+          "Technician",
+          "Reader"
+        ],
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/policy-templates/{templateId}/revisions": {
+      "get": {
+        "operationId": "listPolicyTemplateRevisions",
+        "summary": "История версий шаблона",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplatePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin",
+          "Technician",
+          "Reader"
+        ],
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "description": "Непрозрачный cursor, связанный с запросом и фильтром; иначе 400 invalid_cursor."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createPolicyTemplateRevision",
+        "summary": "Изменить или архивировать шаблон",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplate"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40,
+                  "pattern": "^\"[0-9]+\"$"
+                },
+                "description": "Текущая ревизия в кавычках."
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyTemplateRevisionCreate"
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin"
+        ],
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "pattern": "^\"[0-9]+\"$"
+            },
+            "description": "Текущая ревизия в кавычках. Устаревшая: 412 revision_mismatch; отсутствует: 428 if_match_required."
+          }
+        ]
+      }
+    },
+    "/api/v1/policy-templates/{templateId}/preview": {
+      "post": {
+        "operationId": "previewPolicyTemplate",
+        "summary": "Предпросмотр применения к выбранным клиентам",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplatePreview"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40,
+                  "pattern": "^\"[0-9]+\"$"
+                },
+                "description": "Текущая ревизия в кавычках."
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "description": "До 50 явных organizationIds; не меняет данные. Подписанный previewToken связан с сотрудником, клиентом, версиями шаблона/политики, содержимым результата; срок 30 минут.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyTemplatePreviewRequest"
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin"
+        ],
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "pattern": "^\"[0-9]+\"$"
+            },
+            "description": "Текущая ревизия в кавычках. Устаревшая: 412 revision_mismatch; отсутствует: 428 if_match_required."
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/policy-template-applications": {
+      "post": {
+        "operationId": "applyPolicyTemplate",
+        "summary": "Применить просмотренный шаблон к одному клиенту",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplateApplication"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "description": "Проверяет просмотренный результат, активность клиента и текущие версии. Повтор того же token возвращает прежний результат без новой ревизии. Каждый клиент — отдельная транзакция.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyTemplateApplyRequest"
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin"
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "pattern": "^\"[0-9]+\"$"
+            },
+            "description": "Текущая ревизия в кавычках. Устаревшая: 412 revision_mismatch; отсутствует: 428 if_match_required."
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -18559,7 +19951,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             "if": {
               "properties": {
                 "action": {
-                  "const": "organization.lifecycle_change"
+                  "const": "policy.template_apply"
                 }
               },
               "required": [
@@ -18569,7 +19961,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             "then": {
               "properties": {
                 "details": {
-                  "$ref": "#/components/schemas/OrganizationLifecycleAuditDetails"
+                  "$ref": "#/components/schemas/PolicyTemplateApplicationAuditDetails"
                 }
               }
             },
@@ -18577,7 +19969,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
               "if": {
                 "properties": {
                   "action": {
-                    "const": "finding.assignment_change"
+                    "const": "organization.lifecycle_change"
                   }
                 },
                 "required": [
@@ -18587,7 +19979,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
               "then": {
                 "properties": {
                   "details": {
-                    "$ref": "#/components/schemas/FindingAssignmentAuditDetails"
+                    "$ref": "#/components/schemas/OrganizationLifecycleAuditDetails"
                   }
                 }
               },
@@ -18595,7 +19987,7 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                 "if": {
                   "properties": {
                     "action": {
-                      "const": "retention.purge_summary"
+                      "const": "finding.assignment_change"
                     }
                   },
                   "required": [
@@ -18605,14 +19997,33 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
                 "then": {
                   "properties": {
                     "details": {
-                      "$ref": "#/components/schemas/RetentionPurgeAuditDetails"
+                      "$ref": "#/components/schemas/FindingAssignmentAuditDetails"
                     }
                   }
                 },
                 "else": {
-                  "properties": {
-                    "details": {
-                      "type": "null"
+                  "if": {
+                    "properties": {
+                      "action": {
+                        "const": "retention.purge_summary"
+                      }
+                    },
+                    "required": [
+                      "action"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "details": {
+                        "$ref": "#/components/schemas/RetentionPurgeAuditDetails"
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "details": {
+                        "type": "null"
+                      }
                     }
                   }
                 }
@@ -22004,6 +23415,2054 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
           "expiresAt"
         ]
       },
+      "PolicyTemplateContent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "scope": {
+                "const": "m365"
+              },
+              "activeCheckIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "M365-001",
+                    "M365-002",
+                    "M365-003",
+                    "M365-004",
+                    "M365-005",
+                    "M365-006"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 6,
+                "uniqueItems": true
+              },
+              "checks": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "M365-001": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "phoneMethodsAccepted": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "required": [
+                          "phoneMethodsAccepted"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-002": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-003": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "deviceAlternativeAccepted": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Засчитывать grant «MFA или соответствующее либо гибридное устройство»."
+                          },
+                          "trustedLocationsExclusionAccepted": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Засчитывать политику, которая не требует MFA из доверенных расположений."
+                          }
+                        },
+                        "required": [
+                          "deviceAlternativeAccepted",
+                          "trustedLocationsExclusionAccepted"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-004": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-005": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "minGlobalAdmins": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 10,
+                            "default": 2
+                          },
+                          "maxGlobalAdmins": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 20,
+                            "default": 4
+                          }
+                        },
+                        "required": [
+                          "minGlobalAdmins",
+                          "maxGlobalAdmins"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-006": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  }
+                },
+                "required": [
+                  "M365-001",
+                  "M365-002",
+                  "M365-003",
+                  "M365-004",
+                  "M365-005",
+                  "M365-006"
+                ]
+              }
+            },
+            "required": [
+              "scope",
+              "activeCheckIds",
+              "checks"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "scope": {
+                "const": "windows"
+              },
+              "activeCheckIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "WIN-001",
+                    "WIN-002",
+                    "WIN-003",
+                    "WIN-004",
+                    "WIN-005",
+                    "WIN-006",
+                    "WIN-007",
+                    "WIN-008",
+                    "WIN-009",
+                    "WIN-011"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 10,
+                "uniqueItems": true
+              },
+              "checks": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "WIN-001": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "warnFreePercent": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "default": 10
+                          },
+                          "warnFreeBytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "default": 10737418240
+                          },
+                          "criticalFreePercent": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "default": 5
+                          },
+                          "criticalFreeBytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "default": 2147483648
+                          }
+                        },
+                        "required": [
+                          "warnFreePercent",
+                          "warnFreeBytes",
+                          "criticalFreePercent",
+                          "criticalFreeBytes"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-002": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "encryptionRequired": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "required": [
+                          "encryptionRequired"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-003": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-004": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "warnDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 3
+                          },
+                          "criticalDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 7
+                          }
+                        },
+                        "required": [
+                          "warnDays",
+                          "criticalDays"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-005": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "requiredProfiles": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "domain",
+                                "private",
+                                "public"
+                              ]
+                            },
+                            "minItems": 0,
+                            "maxItems": 3,
+                            "default": [
+                              "domain",
+                              "private",
+                              "public"
+                            ],
+                            "uniqueItems": true
+                          }
+                        },
+                        "required": [
+                          "requiredProfiles"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-006": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "maxSearchAgeDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 60,
+                            "default": 7
+                          }
+                        },
+                        "required": [
+                          "maxSearchAgeDays"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-007": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "warnDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 60,
+                            "default": 3
+                          }
+                        },
+                        "required": [
+                          "warnDays"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-008": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "allowBuiltinAdministrator": {
+                            "type": "boolean",
+                            "default": true
+                          },
+                          "maxOtherLocalAccounts": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 10,
+                            "default": 0
+                          }
+                        },
+                        "required": [
+                          "allowBuiltinAdministrator",
+                          "maxOtherLocalAccounts"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-009": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "secureBootRequired": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "required": [
+                          "secureBootRequired"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-011": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "const": "informational",
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "SYS-001": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "const": "informational",
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "SYS-002": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "SYS-003": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "graceDays": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 60,
+                            "default": 14
+                          },
+                          "criticalBehindMonths": {
+                            "type": "integer",
+                            "minimum": 2,
+                            "maximum": 12,
+                            "default": 2
+                          }
+                        },
+                        "required": [
+                          "graceDays",
+                          "criticalBehindMonths"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  }
+                },
+                "required": [
+                  "WIN-001",
+                  "WIN-002",
+                  "WIN-003",
+                  "WIN-004",
+                  "WIN-005",
+                  "WIN-006",
+                  "WIN-007",
+                  "WIN-008",
+                  "WIN-009",
+                  "WIN-011",
+                  "SYS-001",
+                  "SYS-002",
+                  "SYS-003"
+                ]
+              }
+            },
+            "required": [
+              "scope",
+              "activeCheckIds",
+              "checks"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "scope": {
+                "const": "all"
+              },
+              "activeCheckIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "M365-001",
+                    "M365-002",
+                    "M365-003",
+                    "M365-004",
+                    "M365-005",
+                    "M365-006",
+                    "WIN-001",
+                    "WIN-002",
+                    "WIN-003",
+                    "WIN-004",
+                    "WIN-005",
+                    "WIN-006",
+                    "WIN-007",
+                    "WIN-008",
+                    "WIN-009",
+                    "WIN-011"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 16,
+                "uniqueItems": true
+              },
+              "checks": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "M365-001": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "phoneMethodsAccepted": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "required": [
+                          "phoneMethodsAccepted"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-002": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-003": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "deviceAlternativeAccepted": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Засчитывать grant «MFA или соответствующее либо гибридное устройство»."
+                          },
+                          "trustedLocationsExclusionAccepted": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Засчитывать политику, которая не требует MFA из доверенных расположений."
+                          }
+                        },
+                        "required": [
+                          "deviceAlternativeAccepted",
+                          "trustedLocationsExclusionAccepted"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-004": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-005": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "minGlobalAdmins": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 10,
+                            "default": 2
+                          },
+                          "maxGlobalAdmins": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 20,
+                            "default": 4
+                          }
+                        },
+                        "required": [
+                          "minGlobalAdmins",
+                          "maxGlobalAdmins"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-006": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-001": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "warnFreePercent": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "default": 10
+                          },
+                          "warnFreeBytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "default": 10737418240
+                          },
+                          "criticalFreePercent": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "default": 5
+                          },
+                          "criticalFreeBytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "default": 2147483648
+                          }
+                        },
+                        "required": [
+                          "warnFreePercent",
+                          "warnFreeBytes",
+                          "criticalFreePercent",
+                          "criticalFreeBytes"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-002": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "encryptionRequired": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "required": [
+                          "encryptionRequired"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-003": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-004": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "warnDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 3
+                          },
+                          "criticalDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 7
+                          }
+                        },
+                        "required": [
+                          "warnDays",
+                          "criticalDays"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-005": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "requiredProfiles": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "domain",
+                                "private",
+                                "public"
+                              ]
+                            },
+                            "minItems": 0,
+                            "maxItems": 3,
+                            "default": [
+                              "domain",
+                              "private",
+                              "public"
+                            ],
+                            "uniqueItems": true
+                          }
+                        },
+                        "required": [
+                          "requiredProfiles"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-006": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "maxSearchAgeDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 60,
+                            "default": 7
+                          }
+                        },
+                        "required": [
+                          "maxSearchAgeDays"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-007": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "warnDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 60,
+                            "default": 3
+                          }
+                        },
+                        "required": [
+                          "warnDays"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-008": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "allowBuiltinAdministrator": {
+                            "type": "boolean",
+                            "default": true
+                          },
+                          "maxOtherLocalAccounts": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 10,
+                            "default": 0
+                          }
+                        },
+                        "required": [
+                          "allowBuiltinAdministrator",
+                          "maxOtherLocalAccounts"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-009": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "secureBootRequired": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "required": [
+                          "secureBootRequired"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-011": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "const": "informational",
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "SYS-001": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "const": "informational",
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "SYS-002": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "SYS-003": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "graceDays": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 60,
+                            "default": 14
+                          },
+                          "criticalBehindMonths": {
+                            "type": "integer",
+                            "minimum": 2,
+                            "maximum": 12,
+                            "default": 2
+                          }
+                        },
+                        "required": [
+                          "graceDays",
+                          "criticalBehindMonths"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  }
+                },
+                "required": [
+                  "M365-001",
+                  "M365-002",
+                  "M365-003",
+                  "M365-004",
+                  "M365-005",
+                  "M365-006",
+                  "WIN-001",
+                  "WIN-002",
+                  "WIN-003",
+                  "WIN-004",
+                  "WIN-005",
+                  "WIN-006",
+                  "WIN-007",
+                  "WIN-008",
+                  "WIN-009",
+                  "WIN-011",
+                  "SYS-001",
+                  "SYS-002",
+                  "SYS-003"
+                ]
+              }
+            },
+            "required": [
+              "scope",
+              "activeCheckIds",
+              "checks"
+            ]
+          }
+        ]
+      },
+      "PolicyTemplateApplicationAuditDetails": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "templateRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "policyVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "templateId",
+          "templateRevision",
+          "policyVersion"
+        ]
+      },
+      "PolicyTemplateCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 500,
+            "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]*$"
+          },
+          "content": {
+            "$ref": "#/components/schemas/PolicyTemplateContent"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "content"
+        ]
+      },
+      "PolicyTemplateRevisionCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 500,
+            "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]*$"
+          },
+          "content": {
+            "$ref": "#/components/schemas/PolicyTemplateContent"
+          },
+          "archived": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "content",
+          "archived"
+        ]
+      },
+      "PolicyTemplate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 500,
+            "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]*$"
+          },
+          "content": {
+            "$ref": "#/components/schemas/PolicyTemplateContent"
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$"
+          },
+          "createdBy": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "content",
+          "id",
+          "revision",
+          "archived",
+          "createdAt",
+          "createdBy"
+        ]
+      },
+      "PolicyTemplatePreviewRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "organizationIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            },
+            "minItems": 1,
+            "maxItems": 50,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "organizationIds"
+        ]
+      },
+      "PolicyTemplatePreviewItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "organizationName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unchanged",
+              "unavailable"
+            ]
+          },
+          "policyVersion": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "before": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PolicyConfiguration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "after": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PolicyConfiguration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "previewToken": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "problemCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "invalid_json",
+              "unsupported_media_type",
+              "payload_too_large",
+              "schema_violation",
+              "unsupported_schema_version",
+              "unexpected_subject",
+              "duplicate_observation",
+              "unknown_policy_version",
+              "batch_too_old",
+              "batch_time_inconsistent",
+              "agent_version_unsupported",
+              "idempotency_conflict",
+              "sequence_conflict",
+              "identity_conflict",
+              "organization_inactive",
+              "enrollment_key_invalid",
+              "challenge_invalid",
+              "session_invalid",
+              "device_unknown",
+              "device_revoked",
+              "rate_limited",
+              "temporarily_unavailable",
+              "session_required",
+              "csrf_failed",
+              "forbidden",
+              "not_found",
+              "invalid_cursor",
+              "revision_mismatch",
+              "if_match_required",
+              "workflow_transition_forbidden",
+              "lifecycle_transition_forbidden",
+              "connection_state_conflict",
+              "tenant_conflict",
+              "consent_not_granted",
+              "resource_not_ready",
+              "validation_failed",
+              "policy_inputs_missing",
+              null
+            ]
+          }
+        },
+        "required": [
+          "organizationId",
+          "organizationName",
+          "status",
+          "policyVersion",
+          "before",
+          "after",
+          "previewToken",
+          "problemCode"
+        ]
+      },
+      "PolicyTemplatePreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "templateRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expiresAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PolicyTemplatePreviewItem"
+            },
+            "minItems": 1,
+            "maxItems": 50
+          }
+        },
+        "required": [
+          "templateId",
+          "templateRevision",
+          "expiresAt",
+          "items"
+        ]
+      },
+      "PolicyTemplateApplyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "templateRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "previewToken": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "templateId",
+          "templateRevision",
+          "previewToken"
+        ]
+      },
+      "PolicyTemplateApplication": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "templateRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "policyVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "appliedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$"
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "templateId",
+          "templateRevision",
+          "policyVersion",
+          "appliedAt",
+          "replayed"
+        ]
+      },
       "OrganizationOverviewPage": {
         "type": "object",
         "additionalProperties": false,
@@ -22298,6 +25757,32 @@ Eg ville tenkt på dette som to produktflater: ein stille, robust agent som mål
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/WindowsRelease"
+            },
+            "minItems": 0,
+            "maxItems": 100
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "PolicyTemplatePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PolicyTemplate"
             },
             "minItems": 0,
             "maxItems": 100

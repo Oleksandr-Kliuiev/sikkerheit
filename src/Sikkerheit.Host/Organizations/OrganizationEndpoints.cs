@@ -299,23 +299,8 @@ public static class OrganizationEndpoints
         await using var scope = await scopes.OrganizationAsync(organizationId, ct);
         var organization = await RequireOrganizationAsync(scope, forUpdate: true, ct);
         RequireActive(organization);
-        var current = await scope.Db.PolicyRevisions.Where(p => p.OrganizationId == organizationId)
-            .MaxAsync(p => p.Version, ct);
-        if (ifMatch != $"\"{current}\"")
-        {
-            throw new ApiProblemException(ProblemCodes.RevisionMismatch, $"current revision is {current}");
-        }
-        var revision = new PolicyRevision
-        {
-            OrganizationId = organizationId, Version = organization.NextPolicyVersion, EffectiveFrom = now,
-            CreatedAt = now, CreatedBy = actor.EntraUserId, Configuration = body.Configuration.GetRawText(),
-        };
-        organization.NextPolicyVersion++;
-        scope.Db.PolicyRevisions.Add(revision);
-        await JobQueue.EnqueueAsync(scope, "recalculate_policy", organizationId,
-            "policy:" + revision.Version.ToString(CultureInfo.InvariantCulture), null, now, ct);
-        AuditLog.Staff(scope, actor, "policy.revision_create", "policy_revision",
-            revision.Version.ToString(CultureInfo.InvariantCulture), http.TraceIdentifier);
+        var revision = await PolicyWriting.CreateAsync(scope, organization, ifMatch, body.Configuration, actor,
+            http.TraceIdentifier, now, ct);
         await scope.CommitAsync(ct);
         http.Response.Headers.ETag = $"\"{revision.Version}\"";
         return Results.Json(PolicyRevisionDto.From(revision), ApiJson.Options, statusCode: StatusCodes.Status201Created);

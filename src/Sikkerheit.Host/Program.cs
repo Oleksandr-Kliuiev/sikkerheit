@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using Azure.Identity;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
@@ -17,9 +16,11 @@ using Sikkerheit.Host.Reports;
 
 // Maintenance commands run with the configuration of the service but without its web server and jobs (RB-05).
 var maintenance = RestoreReplayCommand.Matches(args);
-var builder = WebApplication.CreateBuilder(maintenance ? [] : args);
+var configurationCheck = args is ["check-configuration"];
+var builder = WebApplication.CreateBuilder(maintenance || configurationCheck ? [] : args);
 var configuration = builder.Configuration;
 var environment = builder.Environment;
+ProductionConfiguration.Validate(configuration, environment);
 if (maintenance)
 {
     // The JSON report goes to stdout; every log line goes to stderr.
@@ -54,15 +55,21 @@ builder.Services.AddSingleton<IStaffIdentityProvider>(sp => entra.Configured
     ? new EntraStaffIdentityProvider(entra, sp.GetRequiredService<TimeProvider>(), sp.GetRequiredService<ILogger<EntraStaffIdentityProvider>>())
     : new UnconfiguredStaffIdentityProvider());
 ConfigureDataProtection(builder.Services, configuration, environment);
-builder.Services.AddSingleton(_ => new Cursors(CursorKey(configuration, environment)));
+builder.Services.AddSingleton(_ => new Cursors(ProductionConfiguration.HmacKey(configuration, environment, "Cursors:Key")));
 builder.Services.AddSingleton(SecurityLog(configuration, environment));
 builder.Services.AddSingleton(FileStore(configuration, environment));
 var m365 = configuration.GetSection("M365").Get<M365Options>() ?? new M365Options();
 builder.Services.AddSingleton(m365);
 builder.Services.AddSingleton(new GraphRetryPolicy());
+builder.Services.AddSingleton<IGraphRateStore, PostgresGraphRateStore>();
 builder.Services.AddSingleton<GraphLimiter>();
 builder.Services.AddSingleton(new CollectorOptions { PerUserMfa = m365.PerUserMfa });
-builder.Services.AddHttpClient<GraphClient>();
+builder.Services.AddHttpClient<GraphClient>().ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    AllowAutoRedirect = false,
+    // Handlers are retained by JobRunner. Refresh connections so Graph DNS changes are still observed.
+    PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+});
 builder.Services.AddHttpClient<ITenantResolver, OpenIdTenantResolver>();
 builder.Services.AddSingleton<IGraphTokenProvider>(sp => string.IsNullOrEmpty(m365.ClientId) || string.IsNullOrEmpty(m365.KeyVaultUri)
     ? new UnconfiguredGraphTokenProvider()
@@ -74,7 +81,7 @@ builder.Services.AddTransient<IJobHandler, Sikkerheit.Host.Assessment.ReviewExpi
 builder.Services.AddTransient<IJobHandler, Sikkerheit.Host.Assessment.RecalculatePolicyJob>();
 builder.Services.AddSingleton(new AgentOptions
 {
-    NonceKey = AgentNonceKey(configuration, environment),
+    NonceKey = ProductionConfiguration.HmacKey(configuration, environment, "Agents:NonceKey"),
     MinimumAgentVersion = configuration["Agents:MinimumAgentVersion"] ?? "0.1.0",
 });
 builder.Services.AddSingleton(sp => new Nonces(sp.GetRequiredService<AgentOptions>().NonceKey, sp.GetRequiredService<TimeProvider>()));
@@ -98,6 +105,9 @@ builder.Services.AddTransient<IJobHandler, RetentionPurgeJob>();
 builder.Services.AddTransient<IJobHandler, TeamsDigestJob>();
 builder.Services.AddSingleton(configuration.GetSection("Teams").Get<TeamsOptions>() ?? new TeamsOptions());
 builder.Services.AddHttpClient(TeamsDigestJob.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30));
+var jobOptions = configuration.GetSection("Jobs").Get<JobExecutionOptions>() ?? new JobExecutionOptions();
+jobOptions.Validate();
+builder.Services.AddSingleton(jobOptions);
 builder.Services.AddSingleton<JobRunner>();
 builder.Services.AddSingleton<RestoreReplay>();
 builder.Services.AddSingleton<Scheduler>();
@@ -106,6 +116,7 @@ if (configuration.GetValue("Jobs:Enabled", false))
     // Only the production slot runs jobs (02 «Развёртывание и окружения»). Development may run queued jobs
     // (reports, exports) without the scheduler.
     builder.Services.AddHostedService(sp => sp.GetRequiredService<JobRunner>());
+    builder.Services.AddHostedService<JobMonitor>();
     if (configuration.GetValue("Jobs:SchedulerEnabled", true))
     {
         builder.Services.AddHostedService(sp => sp.GetRequiredService<Scheduler>());
@@ -116,6 +127,13 @@ builder.Services.AddAuthentication(SessionAuthenticationHandler.SchemeName)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+if (configurationCheck)
+{
+    Console.WriteLine("Configuration is valid; database, Azure access and tenant consent are not checked.");
+    await app.DisposeAsync();
+    return;
+}
 
 if (maintenance)
 {
@@ -158,6 +176,8 @@ else if (environment.IsProduction())
     throw new InvalidOperationException("Auth:Entra (TenantId, ClientId, RedirectUri) is required in Production");
 }
 OrganizationEndpoints.Map(app);
+PolicyTemplateEndpoints.Map(app);
+PolicyTemplateApplications.Map(app);
 ConnectionEndpoints.Map(app);
 AgentEndpoints.Map(app);
 ReleaseCatalog.Map(app);
@@ -215,35 +235,6 @@ static IFileStore FileStore(IConfiguration configuration, IHostEnvironment envir
         throw new InvalidOperationException("Storage:BlobServiceUri is required in Production");
     }
     return new LocalFileStore(configuration["Storage:LocalDirectory"] ?? Path.Combine(Path.GetTempPath(), "sikkerheit-files"));
-}
-
-// The HMAC key of the nonces: a Key Vault secret in Azure (04 «Ключ устройства и сессия»).
-static byte[] AgentNonceKey(IConfiguration configuration, IHostEnvironment environment)
-{
-    var configured = configuration["Agents:NonceKey"];
-    if (!string.IsNullOrEmpty(configured))
-    {
-        return Convert.FromBase64String(configured);
-    }
-    if (environment.IsProduction())
-    {
-        throw new InvalidOperationException("Agents:NonceKey is required in Production");
-    }
-    return RandomNumberGenerator.GetBytes(32);
-}
-
-static byte[] CursorKey(IConfiguration configuration, IHostEnvironment environment)
-{
-    var configured = configuration["Cursors:Key"];
-    if (!string.IsNullOrEmpty(configured))
-    {
-        return Convert.FromBase64String(configured);
-    }
-    if (environment.IsProduction())
-    {
-        throw new InvalidOperationException("Cursors:Key is required in Production");
-    }
-    return RandomNumberGenerator.GetBytes(32);
 }
 
 public partial class Program;

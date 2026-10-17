@@ -56,10 +56,11 @@ public static class FindingEndpoints
     }
 
     private sealed record Filters(string[]? TechnicalState, string[]? Freshness, string[]? Severity, string[]? CheckId,
-        string[]? WorkflowState)
+        string[]? WorkflowState, Guid? AssignedTo, bool Overdue)
     {
         public string Key => Cursors.Filter(("t", Join(TechnicalState)), ("f", Join(Freshness)), ("s", Join(Severity)),
-            ("c", Join(CheckId)), ("w", Join(WorkflowState)));
+            ("c", Join(CheckId)), ("w", Join(WorkflowState)), ("a", AssignedTo?.ToString()),
+            ("o", Overdue ? "true" : null));
 
         private static string? Join(string[]? values) => values is null ? null : string.Join(',', values);
     }
@@ -78,15 +79,23 @@ public static class FindingEndpoints
         return values;
     }
 
-    private static Filters Parse(string? technicalState, string? freshness, string? severity, string? checkId, string? workflowState) =>
-        new(Values(technicalState, TechnicalStates), Values(freshness, Freshnesses), Values(severity, Severities),
-            Values(checkId, Catalog.Checks.Select(c => c.CheckId).ToArray()), Values(workflowState, WorkflowStates));
+    private static Filters Parse(HttpContext http, string? technicalState, string? freshness, string? severity,
+        string? checkId, string? workflowState, string? assignedTo, string? overdue)
+    {
+        if (assignedTo is not (null or "me") || overdue is not (null or "true"))
+        {
+            throw new ApiProblemException(ProblemCodes.SchemaViolation, "unknown work filter value");
+        }
+        return new(Values(technicalState, TechnicalStates), Values(freshness, Freshnesses), Values(severity, Severities),
+            Values(checkId, Catalog.Checks.Select(c => c.CheckId).ToArray()), Values(workflowState, WorkflowStates),
+            assignedTo == "me" ? Actor.From(http.User).EntraUserId : null, overdue == "true");
+    }
 
     private static async Task<IResult> List(Guid organizationId, HttpContext http, DbScopes scopes, Cursors cursors,
         TimeProvider clock, string? cursor, string? limit, string? technicalState, string? freshness, string? severity,
-        string? checkId, string? workflowState, CancellationToken ct)
+        string? checkId, string? workflowState, string? assignedTo, string? overdue, CancellationToken ct)
     {
-        var filters = Parse(technicalState, freshness, severity, checkId, workflowState);
+        var filters = Parse(http, technicalState, freshness, severity, checkId, workflowState, assignedTo, overdue);
         var size = OrganizationEndpoints.Limit(limit);
         var position = cursors.Read(cursor, "listFindings", organizationId, filters.Key);
         await using var scope = await scopes.OrganizationAsync(organizationId, ct);
@@ -97,9 +106,9 @@ public static class FindingEndpoints
 
     private static async Task<IResult> ListAcross(HttpContext http, DbScopes scopes, Cursors cursors, TimeProvider clock,
         string? cursor, string? limit, string? technicalState, string? freshness, string? severity, string? checkId,
-        string? workflowState, CancellationToken ct)
+        string? workflowState, string? assignedTo, string? overdue, CancellationToken ct)
     {
-        var filters = Parse(technicalState, freshness, severity, checkId, workflowState);
+        var filters = Parse(http, technicalState, freshness, severity, checkId, workflowState, assignedTo, overdue);
         var size = OrganizationEndpoints.Limit(limit);
         var position = cursors.Read(cursor, "listFindingsAcrossOrganizations", null, filters.Key);
         await using var scope = await scopes.ReadAllAsync(ct);
@@ -114,6 +123,8 @@ public static class FindingEndpoints
     {
         var language = Texts.Language(http.Request.Headers.AcceptLanguage);
         var windows = await WindowsAsync(scope, ct);
+        var activeOrganizations = filters.AssignedTo is not null || filters.Overdue
+            ? await OrganizationDirectory.ActiveIdsAsync(scope, ct) : [];
         await using var command = new NpgsqlCommand($"""
             with latest as (
                 select w.key::uuid as organization_id, w.value as windows from jsonb_each(@windows) w)
@@ -127,6 +138,11 @@ public static class FindingEndpoints
               and (@severity::text[] is null or f.severity = any(@severity))
               and (@check::text[] is null or f.check_id = any(@check))
               and (@workflow::text[] is null or f.workflow_state = any(@workflow))
+              and (@assigned::uuid is null or f.assignee_id = @assigned)
+              and (not @overdue or f.due_at < @now)
+              and ((@assigned::uuid is null and not @overdue) or
+                   (f.technical_state = 'open' and f.workflow_state in ('new', 'in_progress')
+                    and s.retired_at is null and f.organization_id = any(@active_organizations)))
               and (@fresh::boolean is null or ({FreshExpression}) = @fresh)
               and (@rank::int is null
                    or (case f.severity when 'critical' then 0 else 1 end) > @rank
@@ -141,6 +157,9 @@ public static class FindingEndpoints
         AddArray(command, "severity", filters.Severity);
         AddArray(command, "check", filters.CheckId);
         AddArray(command, "workflow", filters.WorkflowState);
+        command.Parameters.AddWithValue("assigned", NpgsqlDbType.Uuid, (object?)filters.AssignedTo ?? DBNull.Value);
+        command.Parameters.AddWithValue("overdue", filters.Overdue);
+        command.Parameters.AddWithValue("active_organizations", NpgsqlDbType.Array | NpgsqlDbType.Uuid, activeOrganizations);
         command.Parameters.AddWithValue("fresh", NpgsqlDbType.Boolean,
             filters.Freshness is { Length: 1 } f ? f[0] == "fresh" : DBNull.Value);
         command.Parameters.AddWithValue("now", clock.GetUtcNow());

@@ -21,7 +21,9 @@ public sealed partial class ModuleBoundaryTests
     {
         ["staff_user"] = "Access", ["staff_session"] = "Access", ["staff_login"] = "Access",
         ["organization"] = "Organizations", ["policy_revision"] = "Organizations",
-        ["tenant_connection"] = "M365", ["collection_run"] = "M365",
+        ["policy_template"] = "Organizations", ["policy_template_revision"] = "Organizations",
+        ["policy_template_application"] = "Organizations",
+        ["tenant_connection"] = "M365", ["collection_run"] = "M365", ["graph_rate_window"] = "M365",
         ["subject"] = "Assessment", ["observation"] = "Assessment", ["assessment"] = "Assessment", ["finding"] = "Assessment",
         ["finding_event"] = "Assessment", ["risk_decision"] = "Assessment",
         ["report"] = "Reports", ["teams_digest"] = "Reports",

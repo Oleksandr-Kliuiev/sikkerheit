@@ -2,6 +2,7 @@
 stops the run before the first deployment."""
 import json
 import unittest
+from pathlib import Path
 
 from script_harness import ScriptCase, rule
 
@@ -25,6 +26,7 @@ def rules(site="app-sikkerheit-prod-ab12c", connection=app_settings(), server_fo
             rule(r"^account show --query name", out="Subscription"),
             rule(r"^ad signed-in-user show", out="me-1"),
             rule(r"^webapp list --resource-group " + GROUP, out=site),
+            rule(r"^webapp config appsettings list .*Hosting__AgentHosts", out="[]"),
             rule(r"^webapp config appsettings list", out=connection),
             rule(r"^postgres flexible-server show", rc=0 if server_found else 3, err="" if server_found else "not found"),
             rule(r"^deployment group create", out=json.dumps(OUTPUTS)),
@@ -125,6 +127,63 @@ class SetupTests(ScriptCase):
         result = self.run_script("setup.sh", "staging", rules=rules(), env=ENV)
         self.assertEqual(result.returncode, 2, self.describe(result))
         self.assertEqual(self.az_calls(), [])
+
+    def test_missing_hmac_keys_are_created_from_private_files_not_arguments(self):
+        result = self.setup_run()
+        self.assertEqual(result.returncode, 0, self.describe(result))
+        for name in ('cursor-key', 'agents-nonce-key'):
+            calls = self.calls_matching('keyvault secret set --vault-name kv-sikkerheit-prod --name ' + name)
+            self.assertEqual(len(calls), 1)
+            self.assertIn('--file ', calls[0])
+            self.assertNotIn('--value ', calls[0])
+            path = calls[0].split('--file ', 1)[1].split(' ', 1)[0]
+            self.assertFalse(Path(path).exists(), 'secret file was not cleaned up')
+
+    def test_existing_keys_are_never_rotated(self):
+        result = self.setup_run(extra=[rule(r'^keyvault secret list ', out='/secrets/existing')])
+        self.assertEqual(result.returncode, 0, self.describe(result))
+        self.assertEqual(self.calls_matching('keyvault secret set'), [])
+
+    def test_key_vault_read_failure_does_not_replace_existing_keys(self):
+        result = self.setup_run(extra=[rule(r'^keyvault secret list ', rc=1, err='throttled')])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.calls_matching('keyvault secret set'), [])
+        self.assertEqual(len(self.deployments()), 1)
+
+    def test_live_agent_hostname_and_minimum_version_are_preserved(self):
+        live = json.dumps([{'name': 'Hosting__AgentHosts__0', 'value': 'agent.example.no'},
+                           {'name': 'Agents__MinimumAgentVersion', 'value': '0.3.1'}])
+        result = self.setup_run(extra=[rule(r'^webapp config appsettings list .*Hosting__AgentHosts', out=live)])
+        self.assertEqual(result.returncode, 0, self.describe(result))
+        for deployment in self.deployments():
+            self.assertIn('agentHostname=agent.example.no ', deployment + ' ')
+            self.assertIn('minimumAgentVersion=0.3.1 ', deployment + ' ')
+
+    def test_live_job_concurrency_is_preserved(self):
+        live = json.dumps([{'name': 'Jobs__CollectionConcurrency', 'value': '3'},
+                           {'name': 'Jobs__MaintenanceConcurrency', 'value': '1'}])
+        result = self.setup_run(extra=[rule(r'^webapp config appsettings list .*Hosting__AgentHosts', out=live)])
+        self.assertEqual(result.returncode, 0, self.describe(result))
+        for deployment in self.deployments():
+            self.assertIn('collectionConcurrency=3 ', deployment + ' ')
+            self.assertIn('maintenanceConcurrency=1 ', deployment + ' ')
+
+    def test_explicit_job_concurrency_overrides_live_settings(self):
+        live = json.dumps([{'name': 'Jobs__CollectionConcurrency', 'value': '3'},
+                           {'name': 'Jobs__MaintenanceConcurrency', 'value': '2'}])
+        result = self.setup_run(env={'SIKKERHEIT_COLLECTION_CONCURRENCY': '4', 'SIKKERHEIT_MAINTENANCE_CONCURRENCY': '1'},
+                                extra=[rule(r'^webapp config appsettings list .*Hosting__AgentHosts', out=live)])
+        self.assertEqual(result.returncode, 0, self.describe(result))
+        for deployment in self.deployments():
+            self.assertIn('collectionConcurrency=4 ', deployment + ' ')
+            self.assertIn('maintenanceConcurrency=1 ', deployment + ' ')
+
+    def test_invalid_job_concurrency_stops_before_deployment(self):
+        for value in ('0', '9', '-1', 'unlimited'):
+            with self.subTest(value=value):
+                result = self.setup_run(env={'SIKKERHEIT_COLLECTION_CONCURRENCY': value})
+                self.assertEqual(result.returncode, 2, self.describe(result))
+                self.assertEqual(self.deployments(), [])
 
 
 if __name__ == "__main__":

@@ -1,12 +1,12 @@
 # Карта контекста Sikkerheit
 
-Типовые задачи и минимальный набор файлов для каждой. Состояние на 2026-10-16, пакет 0.3.1 (собран, тег `package-v0.3.1`). Пути даны от `development-package/`, если не указано иное. Правила работы — в [AGENTS.md](../AGENTS.md); стадии, гейты и статус — в [WORKFLOW.md](WORKFLOW.md).
+Типовые задачи и минимальный набор файлов для каждой. Состояние на 2026-10-17: собран пакет 0.3.2 по указанию владельца, без создания Git-тега; предыдущий тег — `package-v0.3.1`. Итоговое ревью — [reports/2026-10-17-release-0.3.2-review.md](reports/2026-10-17-release-0.3.2-review.md). Пути даны от `development-package/`, если не указано иное. Правила работы — в [AGENTS.md](../AGENTS.md); стадии, гейты и статус — в [WORKFLOW.md](WORKFLOW.md). Подготовка пилота, закрытые расхождения и оставшаяся реальная приёмка — [dev/pilot-readiness.md](dev/pilot-readiness.md).
 
 ## Файлы пакета
 
 | Файл | Содержание |
 | --- | --- |
-| `README.md` | Состав пакета, приоритет документов, «Изменения в 0.3.1» и «Изменения в 0.3.0» |
+| `README.md` | Состав пакета, приоритет документов, «Изменения в 0.3.2» и история предыдущих версий |
 | `01-product-and-scope.md` | Роли, сценарии P1 (M365) и P2 (агент), этапы P0–P3, FR-01…13 с колонкой «Контракт», язык портала и отчёта, границы обещаний, NFR-01…09, экономика пилотов |
 | `02-architecture-and-stack.md` | Один сервис и компоненты, развёртывание, сбор Microsoft 365 и лимиты Graph, агент под LocalSystem, фоновые задания, разделение клиентов и RLS, структура репозитория и владельцы таблиц по модулям |
 | `03-check-catalog.md` | Семантика результата, проверки M365-001…007 и их правила, модули и статусы Graph, проверки WIN-001…011 с правилами WIN-002, WIN-003, WIN-005…WIN-008, WIN-010 и SYS-001…003, матрица ОС, семейства и жизненный цикл, правило SYS-003 и каталог выпусков |
@@ -20,8 +20,8 @@
 | `specs/check-catalog.json` | 21 проверка: M365-* (P1, graph), WIN-* (P2, agent), SYS-* (P2, server) с закрытым `evidenceSchema` |
 | `specs/observation.schema.json`, `specs/scan-batch.schema.json` | Наблюдение и пакет агента (schemaVersion 2.0) |
 | `specs/graph-observation.schema.json`, `specs/graph-collection.schema.json` | Allowlist наблюдений M365 и запуск сбора |
-| `specs/openapi.json` | 45 операций: P1 — 29, P2 — 16; этап — `x-phase` |
-| `specs/invariants.json` | 201 инвариант вне JSON Schema (P1 — 105, P2 — 96) |
+| `specs/openapi.json` | 52 операции: P1 — 36, P2 — 16; этап — `x-phase` |
+| `specs/invariants.json` | 207 инвариантов вне JSON Schema (P1 — 111, P2 — 96) |
 | `examples/scan-batch.json`, `examples/scan-batch-unavailable.json` | Пакеты агента; основной — с эталонным случаем BitLocker |
 | `examples/m365-collection.json` | Запуск сбора M365; эталонный случай report-only для M365-003 |
 | `scripts/contract_catalog.py`, `contract_schemas.py`, `contract_paths.py`, `invariants_data.py` | Источники контракта (см. AGENTS.md → «Сгенерированные файлы») |
@@ -35,7 +35,7 @@
 
 ### Продукт, этапы, объём
 
-`README.md` → «Изменения в 0.3.1» и «Изменения в 0.3.0», затем `01`. Решения и риски — `08`. Почему архитектура такая и что стало с замечаниями G0 — `../docs/reviews/0.3.0-decisions.md`.
+`README.md` → «Изменения в 0.3.2» и история предыдущих версий, затем `01`. Решения и риски — `08`. Почему архитектура такая и что стало с замечаниями G0 — `../docs/reviews/0.3.0-decisions.md`.
 
 ### Проверки Microsoft 365 и права Graph
 
@@ -114,7 +114,7 @@
 | Каталог выпусков Windows, RB-13 (P2) | `Assessment/` (`ReleaseCatalog` — API, `release_import`, `release_catalog_check`; `ReleaseCatalogStore` — чтение сверенных месяцев и `verifiedThroughMonth`); платформенные таблицы `windows_release`, `windows_release_month` | `AgentLifecycleTests`, `AgentWorkerInvariantTests` |
 | Отчёт, покрытие, сводка Teams | `Reports/` (`Coverage`, `ReportBuilder`, `ReportHtml`, `ReportService`, `TeamsDigest`) | `Reports/*Tests`, `ReportApiTests`, `LifecycleJobTests` |
 | Экспорт, удаление, сроки хранения | `Exports/`, `Jobs/DataLifecycleJobs.cs`; строки модулей — их методы `DeleteOrganizationDataAsync`, `Purge…Async`, `ExportAsync` (`Assessment/AssessmentData.cs` и др.), общий `Data/OrganizationRows.cs` | `LifecycleJobTests`, `WorkerInvariantTests` (INV-071) |
-| Задания и планировщик | `Jobs/` (`JobQueue`, `JobRunner`, `Scheduler`) | `ReportPeriodTests`, интеграционные тесты заданий |
+| Задания и планировщик | `Jobs/` (`JobQueue`, `JobRunner`, `JobClaims`, `JobLease`, `JobExecutionOptions`, `JobMonitor`, `JobMetrics`, `Scheduler`) | `ReportPeriodTests`, `JobConcurrencyTests`, `ConcurrentCollectionTests`, `JobCapacityTests`; профиль — `tools/load/run_queue_profile.py` |
 | Журнал безопасности, аудит, файлы, идемпотентность | `Operations/` | через API-тесты, `InfraInvariantTests` |
 | Восстановление после PITR (RB-05) | `Operations/RestoreReplay.cs`, `RestoreReplayCommand.cs` (`dotnet Sikkerheit.Host.dll restore-replay --since <T>`) | `RestoreReplayTests`, `InfraInvariantTests`, `Operations/RestoreReplayCommandTests` |
 | Агент Windows (WP-09): служба, сборщики WIN-001…011, буфер, регистрация, сессия, check-in, автомат | `src/Agent/Sikkerheit.Agent` (`Runtime/AgentEngine*.cs`, `AgentStateMachine.cs`, `Storage/BatchBuffer.cs`, `Api/`, `Scan/`, `Protocol/`, `Windows/WindowsKeys.cs`), `src/Agent/Sikkerheit.Agent.Collectors` (`Collectors.cs`, `Mapping/`, `Windows/`, `Runtime/CollectorRunner.cs`) | `tests/Sikkerheit.Agent.Tests` (`AgentInvariantTests`, `StateMachineTests`, `CollectorInvariantTests`, `Support/FakeServer.cs`); проверка на Windows — `dev/agent-windows-verification.md` |
@@ -125,6 +125,16 @@
 | Azure | `infra/bicep/main.bicep` и `modules/`, `infra/scripts/setup.sh`, `deploy-app.sh`, учебное восстановление — `drill.sh`; развёртывание из GitHub по OIDC — `.github/workflows/deploy.yml` | `tools/iac/check_arm.py` (и `--self-test`; проверки восстановления — `restore_checks.py`, помощники — `iac_common.py`, выражения ARM — `arm_eval.py`; тесты скриптов на заглушке `az` — `tools/iac/tests`) |
 | Runbooks P1 (RB-01…RB-07, RB-14) | `runbooks/` (путь от `docs/`): указатель и шаблон протокола — `README.md` | — |
 | Локальная разработка | `tools/dev/` (база в Docker, демо-данные), `.claude/launch.json` | — |
+
+Дополнения подготовки пилота (2026-10-17):
+
+- Параллелизм и Graph: `M365/GraphLimiter.cs`, `PostgresGraphRateStore.cs`, `GraphRetryAfter.cs`, `GraphBatch.cs`; миграция `0003_graph_coordination.sql`; `GraphRateStoreTests`, `GraphRetryTests`. Общий допуск — `Jobs/`; настройки и метрики — `docs/dev/offline-improvements.md`, `infra/bicep/modules/job-alerts.bicep`.
+- Работа техников: `components/BulkFindingWork.tsx`, `FindingViews.tsx`, `lib/bulk-finding-work.ts`, `pages/organization/PolicyReview.tsx`; напоминания — `Assessment/FindingWorkSummary.cs` и `Reports/TeamsDigest.cs`. Atera без API — `tools/atera/`, `docs/dev/atera-inventory.md`.
+
+- Настройки Production: `src/Sikkerheit.Host/Platform/ProductionConfiguration.cs` (обязательные настройки, HMAC, hostname, minimum version); `tools/iac/deployment_checks.py` сверяет их с ARM, `check_startup.py` запускает настоящий bootstrap без внешних запросов. Режим сервиса — `check-configuration`.
+- DNS/TLS агента: `infra/scripts/configure-agent-host.sh` (`--plan`, затем отдельный `--apply`); параметры setup — `SIKKERHEIT_AGENT_HOST`, `SIKKERHEIT_MINIMUM_AGENT_VERSION`, без них сохраняются live-значения. Оповещения — `infra/bicep/modules/agent-alerts.bicep`.
+- Политика Windows: `src/Portal/src/pages/organization/WindowsPolicyFields.tsx`; отзыв по ключу — `RevokeDevicesByKey.tsx`. Даты ручного каталога обязательны (`lib/releases.ts`); RB-13 — `docs/runbooks/RB-13-windows-release-catalog.md`.
+- Кандидат MSI: `.github/workflows/agent-release.yml`, режимы `-PublishOnly`/`-PackageOnly` в `src/Agent/Installer/build.ps1`, `tools/rmm/Verify-Release.ps1`. Первый Windows-запуск, решение по WiX и настройка подписи ещё нужны; публикации на клиентские ПК нет.
 
 Отступления реализации от пакета и вопросы к 0.3.1 — `reviews/0.3.0-decisions.md`, разделы «Реализация P1» и «Реализация P2».
 
@@ -149,7 +159,7 @@
 | `01` | Таблица `| ID | Требование | Этап | Приёмка | Контракт |`, ровно FR-01…13, этап P1 или P2; каждая операция OpenAPI — в «Контракт» ровно одного FR своего этапа |
 | `03` | Таблицы с колонками `ID`, `Объект`, `Режим по умолчанию`: строка на каждую проверку каталога (M365, WIN, SYS), значения без обратных кавычек; таблица `| Семейство | editionId |` — ровно `OS_FAMILIES` по порядку; таблица `| Продукт | Семейство | displayVersion | build | Последний день обслуживания | servicingEndsAt |` с правилом America/Los_Angeles и семействами из `OS_FAMILIES` |
 | `04` | Таблица `| Роль | Область | Разрешения |` ровно с ролями Admin, Technician, Reader; таблица `| Право | Endpoints | Проверки |` — права в порядке `GRAPH_PERMISSIONS`; цепочка `retention_purge` (начинается с `risk_decision`) |
-| `05` | Таблицы операций с колонкой `operationId` (все 45); `| code | HTTP | Операции | Когда | Действие агента |`; `| eventType | Допустимые cause | assessmentId |`; `| Состояние | Что делает агент | Выход |` — ровно `AGENT_STATES` по порядку; цепочка `retention_purge` |
+| `05` | Таблицы операций с колонкой `operationId` (все 52); `| code | HTTP | Операции | Когда | Действие агента |`; `| eventType | Допустимые cause | assessmentId |`; `| Состояние | Что делает агент | Выход |` — ровно `AGENT_STATES` по порядку; цепочка `retention_purge` |
 | `07` | `| ID | Этап | Сценарий | Ожидаемый результат | Ответственный WP |` — ровно AT-01…17, этап P1, P2 или «P1, P2»; FR, записи реестра и строки `| Шаг | Условия |` ссылаются только на сценарии со своим этапом (диапазон «AT-01…AT-11» раскрывается); `| RB-nn | Название | Владелец роли | Этап | Операции |` — ровно 14, операции существуют и не позже этапа runbook; `| SP-nn |` с колонкой «Лимит», `| WP-nn |`; `| Параметр | Значение |` со строкой «Часы приёмки человеком в неделю» (целое число); план `| Работа | Этап | Часы приёмки |` с итогами `**Итого P1**` и `**Итого P2**`; календарь `| Отрезок | Состав | Часы приёмки | Минимум, недель | Календарные недели |` — сумма работ отрезка, недели = max(минимум, часы / часы в неделю с округлением половины вверх), каждая работа ровно в одном отрезке |
 | `08` | Строки `| ADR-nn |`, `| R-nn |` |
 | Все `.md` | Каждый упомянутый FR/AT/RB/SP/WP/ADR/R/INV определён в своём файле; локальные ссылки разрешаются; заголовки, на которые ссылается `invariants.json` (`sourceDoc`), существуют |
@@ -184,3 +194,11 @@ jq -c '.allOf[] | select(.then.properties.evidence) | {check: .if.properties.che
 ```bash
 jq -r '.invariants[] | "\(.id) \(.phase) \(.rule)"' development-package/specs/invariants.json
 ```
+
+### Шаблоны политик и представления задач
+
+`dev/offline-improvements.md` → «Шаблоны и очередь задач»; сервер — `Assessment/FindingEndpoints.cs`; контракт — `contract_paths.py` (`FINDING_FILTERS`) и `05` («Политика клиента», «API портала»). Портал — `FindingViews.tsx`, `finding-views.ts`, `policy-templates.ts`, `PolicyTemplates.tsx`, `PolicyReview.tsx`. `policy-defaults.g.json` генерируется `tools/contracts/gen_policy_defaults.py` из схемы; не менять вручную. Тесты — `FindingTaskViewTests`, `policy-templates.test.ts`, `PolicyTab.test.tsx`, `Findings.test.tsx`; локальный визуальный тест — `tools/portal/audit_workflows.mjs`.
+
+### Общая пользовательская библиотека и массовое применение
+
+`dev/shared-policy-templates.md`; контракт — `scripts/contract_policy_templates.py`, `_template_paths` в `contract_paths.py`, `05` → «Общая библиотека шаблонов и применение»; инварианты INV-202…207. Сервер — `Organizations/PolicyTemplate*`, `PolicyWriting.cs`; БД — `0004_policy_templates.sql`, экспорт/удаление `OrganizationLifecycle`. Портал — `pages/policy-templates/`, `shared-policy-templates.ts`, `bulk-policy-templates.ts`; сгенерированная карта переносимых полей `policy-template-fields.g.json` (генератор `tools/contracts/gen_policy_defaults.py`). Тесты — `PolicyTemplateTests`, библиотека и helpers портала; визуальная проверка — `tools/portal/audit_workflows.mjs`.

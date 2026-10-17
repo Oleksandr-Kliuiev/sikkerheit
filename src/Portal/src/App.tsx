@@ -19,6 +19,7 @@ import { ReportsTab } from './pages/organization/ReportsTab';
 import { SettingsTab } from './pages/organization/SettingsTab';
 import { SignInPage } from './pages/SignIn';
 import { StaffPage } from './pages/Staff';
+import { PolicyTemplateLibrary } from './pages/policy-templates/PolicyTemplateLibrary';
 import { WindowsReleasesPage } from './pages/WindowsReleases';
 
 /** The consent return page is public; everything else needs a staff session. */
@@ -55,13 +56,15 @@ export function App() {
           <Route path="organizations" element={<OrganizationsPage />} />
           <Route path="organizations/:organizationId" element={<OrganizationLayout />}>
             <Route index element={<OverviewTab />} />
-            <Route path="findings" element={<FindingsTab />} />
+            <Route path="policy-templates" element={<PolicyTemplateLibrary />} />
+          <Route path="findings" element={<FindingsTab />} />
             <Route path="assessments" element={<AssessmentsTab />} />
             <Route path="devices" element={<DevicesTab />} />
             <Route path="reports" element={<ReportsTab />} />
             <Route path="policy" element={<PolicyTab />} />
             <Route path="settings" element={<SettingsTab />} />
           </Route>
+          <Route path="policy-templates" element={<PolicyTemplateLibrary />} />
           <Route path="findings" element={<FindingsQueuePage />} />
           <Route path="windows-releases" element={<WindowsReleasesPage />} />
           <Route path="staff" element={<StaffPage />} />

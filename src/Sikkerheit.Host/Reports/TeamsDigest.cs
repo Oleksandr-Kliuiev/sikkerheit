@@ -190,8 +190,17 @@ public sealed class TeamsDigestJob(DbScopes scopes, IHttpClientFactory http, Tea
                     : $"Enhetsnøkkel byttet på {count.Count} enheter"));
             }
         }
+        // Daily deadline reminder: counts only, without staff names, user names or computer names.
+        var overdue = new List<DigestItem>();
+        foreach (var count in await FindingWorkSummary.OverdueAsync(scope, until, ct))
+        {
+            if (byId.TryGetValue(count.OrganizationId, out var organization) && organization.Status == "active")
+            {
+                overdue.Add(new DigestItem(organization.Id, organization.Name, "overdue", $"{count.Count} avvik har passert arbeidsfristen"));
+            }
+        }
         IEnumerable<DigestItem> ByName(List<DigestItem> list) => list.OrderBy(i => place[i.OrganizationId]);
-        var items = new List<DigestItem>([.. ByName(critical), .. ByName(collection), .. ByName(reports), .. ByName(devices)]);
+        var items = new List<DigestItem>([.. ByName(critical), .. ByName(collection), .. ByName(reports), .. ByName(devices), .. ByName(overdue)]);
         // The state of the release catalog is a fact of the platform, not of an organization.
         if (await ReleaseCatalogCheckJob.StateAsync(scope, until, ct) is { Verified: false } catalog)
         {

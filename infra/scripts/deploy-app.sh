@@ -39,6 +39,9 @@ if [[ "$env" == prod && -z "$staging_host" ]]; then
   echo "Production deploys through the staging slot, and $site has none: run infra/scripts/setup.sh prod"
   exit 1
 fi
+agent_host="$(az webapp config appsettings list --resource-group "$group" --name "$site" \
+  --query "[?name=='Hosting__AgentHosts__0'].value | [0]" -o tsv)"
+agent_host="${agent_host:-disabled.invalid}"
 
 work=""
 staging_running=no   # prod: the staging slot runs and must be stopped again
@@ -73,6 +76,18 @@ smoke() {
   expect "sign-in goes to Entra" "https://login.microsoftonline.com" "${location:0:33}"
   csp="$(curl -sI "https://$host/" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-security-policy"{print $2}' || true)"
   expect "portal CSP" "default-src 'self'" "${csp:0:18}"
+  local challenge_host="$host" challenge_status=404
+  if [[ "$agent_host" != disabled.invalid ]]; then
+    challenge_status=201
+    [[ "$host" == "$staging_host" ]] || challenge_host="$agent_host"
+  fi
+  expect "agent challenge" "$challenge_status" "$(curl --max-time 30 -s -o /dev/null -w '%{http_code}' \
+    -H 'Content-Type: application/json' -d '{"purpose":"enroll"}' "https://$challenge_host/api/v1/agent/challenges")"
+  if [[ "$agent_host" != disabled.invalid && "$host" != "$staging_host" ]]; then
+    expect "agent API closed on the portal host" 404 "$(curl --max-time 30 -s -o /dev/null -w '%{http_code}' \
+      -H 'Content-Type: application/json' -d '{"purpose":"enroll"}' "https://$host/api/v1/agent/challenges")"
+    expect "portal closed on the agent host" 404 "$(curl --max-time 30 -s -o /dev/null -w '%{http_code}' "https://$agent_host/")"
+  fi
 }
 
 # The migrations identity of the environment: owner of the schema, Entra administrator of the server (main.bicep).
@@ -157,6 +172,7 @@ deploy_with_slot() {
   az webapp deployment slot swap --resource-group "$group" --name "$site" --slot staging --target-slot production -o none
   swapped=yes
   wait_healthy "$prod_host"
+  smoke "$prod_host"
   az webapp stop --resource-group "$group" --name "$site" --slot staging -o none
   staging_running=no
 }
@@ -204,6 +220,7 @@ say "Build the portal"
 say "Publish the service"
 version="$(git -C "$root" describe --tags --always --dirty 2>/dev/null || echo dev)"
 dotnet publish "$root/src/Sikkerheit.Host" -c Release -o "$work/out" --nologo -p:InformationalVersion="$version"
+python3 -I "$root/tools/iac/check_startup.py" --assembly "$work/out/Sikkerheit.Host.dll"
 [[ -f "$work/out/wwwroot/index.html" ]] || { echo "The portal is missing from the package"; exit 1; }
 (cd "$work/out" && zip -qr "$work/app.zip" .)
 

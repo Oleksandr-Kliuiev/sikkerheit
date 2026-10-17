@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "Sikkerheit Proposed API",
-    "version": "0.3.1",
+    "version": "0.3.2",
     "description": "Проект контракта P1 (портал и Microsoft 365) и P2 (агент Windows); этап операции — расширение x-phase. Example hosts не являются развёрнутыми сервисами. Бизнес-инварианты (specs/invariants.json) и полномочия проверяются дополнительно к схемам; форматы uuid и date-time сервер проверяет явно."
   },
   "servers": [
@@ -3066,6 +3066,28 @@
             "description": "Несколько значений через запятую, например workflowState=new,in_progress. Очередь по умолчанию — technicalState=open&workflowState=new,in_progress."
           },
           {
+            "name": "assignedTo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "me"
+              ]
+            },
+            "description": "Только задачи текущего сотрудника из серверной сессии. Включает только open, new/in_progress, действующие субъекты и активные организации; cursor связан с сотрудником."
+          },
+          {
+            "name": "overdue",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "description": "Только задачи с dueAt < серверного now: open, new/in_progress, действующие субъекты и активные организации. Без срока, решённые и принятые риски исключены. Можно сочетать с assignedTo=me; остальные фильтры пересекаются."
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -3543,6 +3565,28 @@
               "uniqueItems": true
             },
             "description": "Несколько значений через запятую, например workflowState=new,in_progress. Очередь по умолчанию — technicalState=open&workflowState=new,in_progress."
+          },
+          {
+            "name": "assignedTo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "me"
+              ]
+            },
+            "description": "Только задачи текущего сотрудника из серверной сессии. Включает только open, new/in_progress, действующие субъекты и активные организации; cursor связан с сотрудником."
+          },
+          {
+            "name": "overdue",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "description": "Только задачи с dueAt < серверного now: open, new/in_progress, действующие субъекты и активные организации. Без срока, решённые и принятые риски исключены. Можно сочетать с assignedTo=me; остальные фильтры пересекаются."
           },
           {
             "name": "Accept-Language",
@@ -7376,6 +7420,1211 @@
           }
         ]
       }
+    },
+    "/api/v1/policy-templates": {
+      "get": {
+        "operationId": "listPolicyTemplates",
+        "summary": "Общая библиотека шаблонов",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplatePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin",
+          "Technician",
+          "Reader"
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "description": "Непрозрачный cursor, связанный с запросом и фильтром; иначе 400 invalid_cursor."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createPolicyTemplate",
+        "summary": "Создать пользовательский шаблон",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplate"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40,
+                  "pattern": "^\"[0-9]+\"$"
+                },
+                "description": "Текущая ревизия в кавычках."
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyTemplateCreate"
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/policy-templates/{templateId}": {
+      "get": {
+        "operationId": "getPolicyTemplate",
+        "summary": "Текущая версия шаблона",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplate"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40,
+                  "pattern": "^\"[0-9]+\"$"
+                },
+                "description": "Текущая ревизия в кавычках."
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin",
+          "Technician",
+          "Reader"
+        ],
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/policy-templates/{templateId}/revisions": {
+      "get": {
+        "operationId": "listPolicyTemplateRevisions",
+        "summary": "История версий шаблона",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplatePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin",
+          "Technician",
+          "Reader"
+        ],
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "description": "Непрозрачный cursor, связанный с запросом и фильтром; иначе 400 invalid_cursor."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createPolicyTemplateRevision",
+        "summary": "Изменить или архивировать шаблон",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplate"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40,
+                  "pattern": "^\"[0-9]+\"$"
+                },
+                "description": "Текущая ревизия в кавычках."
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyTemplateRevisionCreate"
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin"
+        ],
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "pattern": "^\"[0-9]+\"$"
+            },
+            "description": "Текущая ревизия в кавычках. Устаревшая: 412 revision_mismatch; отсутствует: 428 if_match_required."
+          }
+        ]
+      }
+    },
+    "/api/v1/policy-templates/{templateId}/preview": {
+      "post": {
+        "operationId": "previewPolicyTemplate",
+        "summary": "Предпросмотр применения к выбранным клиентам",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplatePreview"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40,
+                  "pattern": "^\"[0-9]+\"$"
+                },
+                "description": "Текущая ревизия в кавычках."
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "description": "До 50 явных organizationIds; не меняет данные. Подписанный previewToken связан с сотрудником, клиентом, версиями шаблона/политики, содержимым результата; срок 30 минут.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyTemplatePreviewRequest"
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin"
+        ],
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "pattern": "^\"[0-9]+\"$"
+            },
+            "description": "Текущая ревизия в кавычках. Устаревшая: 412 revision_mismatch; отсутствует: 428 if_match_required."
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/policy-template-applications": {
+      "post": {
+        "operationId": "applyPolicyTemplate",
+        "summary": "Применить просмотренный шаблон к одному клиенту",
+        "x-phase": "P1",
+        "security": [
+          {
+            "PortalSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный результат по семантике 05-data-and-api.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyTemplateApplication"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          },
+          "503": {
+            "description": "Problem с безопасным кодом из каталога Problem.code (05) и correlationId.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retry."
+              }
+            }
+          }
+        },
+        "description": "Проверяет просмотренный результат, активность клиента и текущие версии. Повтор того же token возвращает прежний результат без новой ревизии. Каждый клиент — отдельная транзакция.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyTemplateApplyRequest"
+              }
+            }
+          }
+        },
+        "x-allowed-roles": [
+          "Admin"
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "pattern": "^\"[0-9]+\"$"
+            },
+            "description": "Текущая ревизия в кавычках. Устаревшая: 412 revision_mismatch; отсутствует: 428 if_match_required."
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -9884,7 +11133,7 @@
             "if": {
               "properties": {
                 "action": {
-                  "const": "organization.lifecycle_change"
+                  "const": "policy.template_apply"
                 }
               },
               "required": [
@@ -9894,7 +11143,7 @@
             "then": {
               "properties": {
                 "details": {
-                  "$ref": "#/components/schemas/OrganizationLifecycleAuditDetails"
+                  "$ref": "#/components/schemas/PolicyTemplateApplicationAuditDetails"
                 }
               }
             },
@@ -9902,7 +11151,7 @@
               "if": {
                 "properties": {
                   "action": {
-                    "const": "finding.assignment_change"
+                    "const": "organization.lifecycle_change"
                   }
                 },
                 "required": [
@@ -9912,7 +11161,7 @@
               "then": {
                 "properties": {
                   "details": {
-                    "$ref": "#/components/schemas/FindingAssignmentAuditDetails"
+                    "$ref": "#/components/schemas/OrganizationLifecycleAuditDetails"
                   }
                 }
               },
@@ -9920,7 +11169,7 @@
                 "if": {
                   "properties": {
                     "action": {
-                      "const": "retention.purge_summary"
+                      "const": "finding.assignment_change"
                     }
                   },
                   "required": [
@@ -9930,14 +11179,33 @@
                 "then": {
                   "properties": {
                     "details": {
-                      "$ref": "#/components/schemas/RetentionPurgeAuditDetails"
+                      "$ref": "#/components/schemas/FindingAssignmentAuditDetails"
                     }
                   }
                 },
                 "else": {
-                  "properties": {
-                    "details": {
-                      "type": "null"
+                  "if": {
+                    "properties": {
+                      "action": {
+                        "const": "retention.purge_summary"
+                      }
+                    },
+                    "required": [
+                      "action"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "details": {
+                        "$ref": "#/components/schemas/RetentionPurgeAuditDetails"
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "details": {
+                        "type": "null"
+                      }
                     }
                   }
                 }
@@ -13329,6 +14597,2054 @@
           "expiresAt"
         ]
       },
+      "PolicyTemplateContent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "scope": {
+                "const": "m365"
+              },
+              "activeCheckIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "M365-001",
+                    "M365-002",
+                    "M365-003",
+                    "M365-004",
+                    "M365-005",
+                    "M365-006"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 6,
+                "uniqueItems": true
+              },
+              "checks": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "M365-001": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "phoneMethodsAccepted": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "required": [
+                          "phoneMethodsAccepted"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-002": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-003": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "deviceAlternativeAccepted": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Засчитывать grant «MFA или соответствующее либо гибридное устройство»."
+                          },
+                          "trustedLocationsExclusionAccepted": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Засчитывать политику, которая не требует MFA из доверенных расположений."
+                          }
+                        },
+                        "required": [
+                          "deviceAlternativeAccepted",
+                          "trustedLocationsExclusionAccepted"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-004": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-005": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "minGlobalAdmins": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 10,
+                            "default": 2
+                          },
+                          "maxGlobalAdmins": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 20,
+                            "default": 4
+                          }
+                        },
+                        "required": [
+                          "minGlobalAdmins",
+                          "maxGlobalAdmins"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-006": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  }
+                },
+                "required": [
+                  "M365-001",
+                  "M365-002",
+                  "M365-003",
+                  "M365-004",
+                  "M365-005",
+                  "M365-006"
+                ]
+              }
+            },
+            "required": [
+              "scope",
+              "activeCheckIds",
+              "checks"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "scope": {
+                "const": "windows"
+              },
+              "activeCheckIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "WIN-001",
+                    "WIN-002",
+                    "WIN-003",
+                    "WIN-004",
+                    "WIN-005",
+                    "WIN-006",
+                    "WIN-007",
+                    "WIN-008",
+                    "WIN-009",
+                    "WIN-011"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 10,
+                "uniqueItems": true
+              },
+              "checks": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "WIN-001": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "warnFreePercent": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "default": 10
+                          },
+                          "warnFreeBytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "default": 10737418240
+                          },
+                          "criticalFreePercent": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "default": 5
+                          },
+                          "criticalFreeBytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "default": 2147483648
+                          }
+                        },
+                        "required": [
+                          "warnFreePercent",
+                          "warnFreeBytes",
+                          "criticalFreePercent",
+                          "criticalFreeBytes"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-002": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "encryptionRequired": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "required": [
+                          "encryptionRequired"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-003": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-004": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "warnDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 3
+                          },
+                          "criticalDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 7
+                          }
+                        },
+                        "required": [
+                          "warnDays",
+                          "criticalDays"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-005": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "requiredProfiles": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "domain",
+                                "private",
+                                "public"
+                              ]
+                            },
+                            "minItems": 0,
+                            "maxItems": 3,
+                            "default": [
+                              "domain",
+                              "private",
+                              "public"
+                            ],
+                            "uniqueItems": true
+                          }
+                        },
+                        "required": [
+                          "requiredProfiles"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-006": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "maxSearchAgeDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 60,
+                            "default": 7
+                          }
+                        },
+                        "required": [
+                          "maxSearchAgeDays"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-007": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "warnDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 60,
+                            "default": 3
+                          }
+                        },
+                        "required": [
+                          "warnDays"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-008": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "allowBuiltinAdministrator": {
+                            "type": "boolean",
+                            "default": true
+                          },
+                          "maxOtherLocalAccounts": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 10,
+                            "default": 0
+                          }
+                        },
+                        "required": [
+                          "allowBuiltinAdministrator",
+                          "maxOtherLocalAccounts"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-009": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "secureBootRequired": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "required": [
+                          "secureBootRequired"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-011": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "const": "informational",
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "SYS-001": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "const": "informational",
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "SYS-002": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "SYS-003": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "graceDays": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 60,
+                            "default": 14
+                          },
+                          "criticalBehindMonths": {
+                            "type": "integer",
+                            "minimum": 2,
+                            "maximum": 12,
+                            "default": 2
+                          }
+                        },
+                        "required": [
+                          "graceDays",
+                          "criticalBehindMonths"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  }
+                },
+                "required": [
+                  "WIN-001",
+                  "WIN-002",
+                  "WIN-003",
+                  "WIN-004",
+                  "WIN-005",
+                  "WIN-006",
+                  "WIN-007",
+                  "WIN-008",
+                  "WIN-009",
+                  "WIN-011",
+                  "SYS-001",
+                  "SYS-002",
+                  "SYS-003"
+                ]
+              }
+            },
+            "required": [
+              "scope",
+              "activeCheckIds",
+              "checks"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "scope": {
+                "const": "all"
+              },
+              "activeCheckIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "M365-001",
+                    "M365-002",
+                    "M365-003",
+                    "M365-004",
+                    "M365-005",
+                    "M365-006",
+                    "WIN-001",
+                    "WIN-002",
+                    "WIN-003",
+                    "WIN-004",
+                    "WIN-005",
+                    "WIN-006",
+                    "WIN-007",
+                    "WIN-008",
+                    "WIN-009",
+                    "WIN-011"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 16,
+                "uniqueItems": true
+              },
+              "checks": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "M365-001": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "phoneMethodsAccepted": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "required": [
+                          "phoneMethodsAccepted"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-002": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-003": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "deviceAlternativeAccepted": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Засчитывать grant «MFA или соответствующее либо гибридное устройство»."
+                          },
+                          "trustedLocationsExclusionAccepted": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Засчитывать политику, которая не требует MFA из доверенных расположений."
+                          }
+                        },
+                        "required": [
+                          "deviceAlternativeAccepted",
+                          "trustedLocationsExclusionAccepted"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-004": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-005": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "minGlobalAdmins": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 10,
+                            "default": 2
+                          },
+                          "maxGlobalAdmins": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 20,
+                            "default": 4
+                          }
+                        },
+                        "required": [
+                          "minGlobalAdmins",
+                          "maxGlobalAdmins"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "M365-006": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 48
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-001": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "warnFreePercent": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "default": 10
+                          },
+                          "warnFreeBytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "default": 10737418240
+                          },
+                          "criticalFreePercent": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "default": 5
+                          },
+                          "criticalFreeBytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "default": 2147483648
+                          }
+                        },
+                        "required": [
+                          "warnFreePercent",
+                          "warnFreeBytes",
+                          "criticalFreePercent",
+                          "criticalFreeBytes"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-002": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "encryptionRequired": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "required": [
+                          "encryptionRequired"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-003": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-004": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "warnDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 3
+                          },
+                          "criticalDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 7
+                          }
+                        },
+                        "required": [
+                          "warnDays",
+                          "criticalDays"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-005": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "requiredProfiles": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "domain",
+                                "private",
+                                "public"
+                              ]
+                            },
+                            "minItems": 0,
+                            "maxItems": 3,
+                            "default": [
+                              "domain",
+                              "private",
+                              "public"
+                            ],
+                            "uniqueItems": true
+                          }
+                        },
+                        "required": [
+                          "requiredProfiles"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-006": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "maxSearchAgeDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 60,
+                            "default": 7
+                          }
+                        },
+                        "required": [
+                          "maxSearchAgeDays"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-007": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "warnDays": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 60,
+                            "default": 3
+                          }
+                        },
+                        "required": [
+                          "warnDays"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-008": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "allowBuiltinAdministrator": {
+                            "type": "boolean",
+                            "default": true
+                          },
+                          "maxOtherLocalAccounts": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 10,
+                            "default": 0
+                          }
+                        },
+                        "required": [
+                          "allowBuiltinAdministrator",
+                          "maxOtherLocalAccounts"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-009": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "secureBootRequired": {
+                            "type": "boolean",
+                            "default": true
+                          }
+                        },
+                        "required": [
+                          "secureBootRequired"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "WIN-011": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "const": "informational",
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "SYS-001": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "const": "informational",
+                        "default": "informational"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "SYS-002": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {},
+                        "required": []
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  },
+                  "SYS-003": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "assessmentMode": {
+                        "type": "string",
+                        "enum": [
+                          "assessed",
+                          "informational"
+                        ],
+                        "default": "assessed"
+                      },
+                      "freshnessWindowHours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 720,
+                        "default": 72
+                      },
+                      "parameters": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "graceDays": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 60,
+                            "default": 14
+                          },
+                          "criticalBehindMonths": {
+                            "type": "integer",
+                            "minimum": 2,
+                            "maximum": 12,
+                            "default": 2
+                          }
+                        },
+                        "required": [
+                          "graceDays",
+                          "criticalBehindMonths"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "assessmentMode",
+                      "freshnessWindowHours",
+                      "parameters"
+                    ]
+                  }
+                },
+                "required": [
+                  "M365-001",
+                  "M365-002",
+                  "M365-003",
+                  "M365-004",
+                  "M365-005",
+                  "M365-006",
+                  "WIN-001",
+                  "WIN-002",
+                  "WIN-003",
+                  "WIN-004",
+                  "WIN-005",
+                  "WIN-006",
+                  "WIN-007",
+                  "WIN-008",
+                  "WIN-009",
+                  "WIN-011",
+                  "SYS-001",
+                  "SYS-002",
+                  "SYS-003"
+                ]
+              }
+            },
+            "required": [
+              "scope",
+              "activeCheckIds",
+              "checks"
+            ]
+          }
+        ]
+      },
+      "PolicyTemplateApplicationAuditDetails": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "templateRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "policyVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "templateId",
+          "templateRevision",
+          "policyVersion"
+        ]
+      },
+      "PolicyTemplateCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 500,
+            "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]*$"
+          },
+          "content": {
+            "$ref": "#/components/schemas/PolicyTemplateContent"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "content"
+        ]
+      },
+      "PolicyTemplateRevisionCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 500,
+            "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]*$"
+          },
+          "content": {
+            "$ref": "#/components/schemas/PolicyTemplateContent"
+          },
+          "archived": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "content",
+          "archived"
+        ]
+      },
+      "PolicyTemplate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 500,
+            "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069<>]*$"
+          },
+          "content": {
+            "$ref": "#/components/schemas/PolicyTemplateContent"
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$"
+          },
+          "createdBy": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "content",
+          "id",
+          "revision",
+          "archived",
+          "createdAt",
+          "createdBy"
+        ]
+      },
+      "PolicyTemplatePreviewRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "organizationIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            },
+            "minItems": 1,
+            "maxItems": 50,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "organizationIds"
+        ]
+      },
+      "PolicyTemplatePreviewItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "organizationName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F​-‏‪-‮⁦-⁩<>]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unchanged",
+              "unavailable"
+            ]
+          },
+          "policyVersion": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "before": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PolicyConfiguration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "after": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PolicyConfiguration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "previewToken": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "problemCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "invalid_json",
+              "unsupported_media_type",
+              "payload_too_large",
+              "schema_violation",
+              "unsupported_schema_version",
+              "unexpected_subject",
+              "duplicate_observation",
+              "unknown_policy_version",
+              "batch_too_old",
+              "batch_time_inconsistent",
+              "agent_version_unsupported",
+              "idempotency_conflict",
+              "sequence_conflict",
+              "identity_conflict",
+              "organization_inactive",
+              "enrollment_key_invalid",
+              "challenge_invalid",
+              "session_invalid",
+              "device_unknown",
+              "device_revoked",
+              "rate_limited",
+              "temporarily_unavailable",
+              "session_required",
+              "csrf_failed",
+              "forbidden",
+              "not_found",
+              "invalid_cursor",
+              "revision_mismatch",
+              "if_match_required",
+              "workflow_transition_forbidden",
+              "lifecycle_transition_forbidden",
+              "connection_state_conflict",
+              "tenant_conflict",
+              "consent_not_granted",
+              "resource_not_ready",
+              "validation_failed",
+              "policy_inputs_missing",
+              null
+            ]
+          }
+        },
+        "required": [
+          "organizationId",
+          "organizationName",
+          "status",
+          "policyVersion",
+          "before",
+          "after",
+          "previewToken",
+          "problemCode"
+        ]
+      },
+      "PolicyTemplatePreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "templateRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expiresAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PolicyTemplatePreviewItem"
+            },
+            "minItems": 1,
+            "maxItems": 50
+          }
+        },
+        "required": [
+          "templateId",
+          "templateRevision",
+          "expiresAt",
+          "items"
+        ]
+      },
+      "PolicyTemplateApplyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "templateRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "previewToken": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "templateId",
+          "templateRevision",
+          "previewToken"
+        ]
+      },
+      "PolicyTemplateApplication": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36,
+            "format": "uuid",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "templateRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "policyVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "appliedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$"
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "templateId",
+          "templateRevision",
+          "policyVersion",
+          "appliedAt",
+          "replayed"
+        ]
+      },
       "OrganizationOverviewPage": {
         "type": "object",
         "additionalProperties": false,
@@ -13623,6 +16939,32 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/WindowsRelease"
+            },
+            "minItems": 0,
+            "maxItems": 100
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "PolicyTemplatePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PolicyTemplate"
             },
             "minItems": 0,
             "maxItems": 100

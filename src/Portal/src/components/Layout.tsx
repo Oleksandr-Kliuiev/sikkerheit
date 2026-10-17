@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { NavLink, Outlet } from 'react-router';
+import { useEffect } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router';
 import { post } from '../api/client';
 import { useI18n } from '../i18n/i18n';
 import { useAuth } from '../lib/auth';
@@ -8,6 +9,15 @@ import { Button } from './ui';
 
 export function Layout() {
   const { t } = useI18n();
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const parts = pathname.split('/').filter(Boolean);
+    const title = parts[0] === 'organizations' && parts[1]
+      ? `${t('nav.organizations')} — ${t(`tabs.${parts[2] ?? 'overview'}`)}`
+      : t(parts[0] === 'findings' ? 'nav.findings' : parts[0] === 'staff' ? 'nav.staff'
+        : parts[0] === 'policy-templates' ? 'library.title' : parts[0] === 'windows-releases' ? 'nav.releases' : 'nav.organizations');
+    document.title = `${title} — ${t('app.name')}`;
+  }, [pathname, t]);
   const { staff } = useAuth();
   const client = useQueryClient();
 
@@ -31,6 +41,7 @@ export function Layout() {
           <NavLink to="/organizations">{t('nav.organizations')}</NavLink>
           <NavLink to="/findings">{t('nav.findings')}</NavLink>
           <NavLink to="/windows-releases">{t('nav.releases')}</NavLink>
+          <NavLink to="/policy-templates">{t('library.nav')}</NavLink>
           <NavLink to="/staff">{t('nav.staff')}</NavLink>
         </nav>
         <div className="topbar-end">

@@ -20,7 +20,8 @@ public static class Telemetry
         }
         // The scrubber is registered first, so it runs before the exporter's processor sees a span.
         services.ConfigureOpenTelemetryTracerProvider(tracing => tracing.AddProcessor(new QueryScrubber()));
-        services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddMeter(Agents.AgentMetrics.MeterName));
+        services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddMeter(
+            Agents.AgentMetrics.MeterName, Jobs.JobMetrics.MeterName, M365.GraphMetrics.MeterName));
         services.AddOpenTelemetry().UseAzureMonitor();
     }
 

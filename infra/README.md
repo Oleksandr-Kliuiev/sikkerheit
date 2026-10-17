@@ -1,5 +1,7 @@
 # Развёртывание Sikkerheit в Azure
 
+Дополнения исполнения 2026-10-17: [фоновые задания и Graph](../docs/dev/offline-improvements.md). Миграция `0003_graph_coordination.sql` добавляет общие квоты Graph; стандартный процесс развёртывания применяет её через staging. По умолчанию группы заданий — 8 сборов и 2 служебных задания. `setup.sh` сохраняет live-значения; переопределения `SIKKERHEIT_COLLECTION_CONCURRENCY` и `SIKKERHEIT_MAINTENANCE_CONCURRENCY` принимают 1…8 и передаются на оба слота. Настройки закреплены за слотами. Bicep включает оповещения о задержках очереди и 429; поступление метрик, KQL и доставку ещё нужно подтвердить в Azure.
+
 Ресурсы — `bicep/main.bicep` (модули в `bicep/modules`), установка — `scripts/setup.sh`, выпуск версии — `scripts/deploy-app.sh` (с рабочей машины или из `.github/workflows/deploy.yml`), учебное восстановление — `scripts/drill.sh`, IaC-тест — `tools/iac/check_arm.py`. Требования к ресурсам — `development-package/06-azure-and-operations.md`.
 
 ## Что создаётся
@@ -20,6 +22,8 @@
 
 Ориентир стоимости production — около 110–125 USD в месяц, test — около 45 (`06`, «Модель расходов»).
 
+Подготовка пилота и журнал закрытых расхождений — [pilot-readiness.md](../docs/dev/pilot-readiness.md). Реальные SP-01/SP-02 и допуск G1 ещё требуют доступа и приёмки.
+
 ## Первая установка
 
 Нужны права Owner на подписку и Application Administrator (или Global Administrator) в tenant компании. Вход — в своём терминале:
@@ -37,7 +41,7 @@ SIKKERHEIT_ALERT_EMAIL=drift@firma.no infra/scripts/setup.sh prod
 1. Группу ресурсов и первый проход Bicep. Сервер базы — тот, что в строке подключения приложения; при первой установке — `psql-sikkerheit-<env>-<5>`. `SIKKERHEIT_DATABASE_SERVER` должен назвать тот же сервер, а нужен, только если приложения или адреса базы в его строке подключения нет. Скрипт останавливается до развёртывания, если сервера нет в группе, имя расходится со строкой подключения или вызов `az` не удался: иначе Bicep вернул бы сервис на другой сервер или создал бы новый пустой.
 2. Регистрацию «Sikkerheit Portal»: redirect URI приложения и слота `staging` (в test слота нет), app roles, собственный API со scope `access_as_user` и токенами v1 (в них есть `amr`), назначение ролей только через Enterprise application, federated credentials managed identity приложения и слота, роль Admin запустившему скрипт.
 3. Регистрацию «Sikkerheit Graph Reader»: multi-tenant, application permissions только на чтение (`Organization.Read.All`, `User.Read.All`, `UserAuthenticationMethod.Read.All`, `RoleManagement.Read.Directory`, `GroupMember.Read.All`, `Policy.Read.All`), redirect URI страницы возврата consent.
-4. Сертификат Graph в Key Vault, его публичную часть — в регистрацию; право sign — только production-слоту; секрет `cursor-key`; `teams-webhook`, если задан `SIKKERHEIT_TEAMS_WEBHOOK`.
+4. Сертификат Graph в Key Vault, его публичную часть — в регистрацию; право sign — только production-слоту; секреты `cursor-key` и `agents-nonce-key` (32 случайных байта, base64); `teams-webhook`, если задан `SIKKERHEIT_TEAMS_WEBHOOK`. Существующие HMAC-ключи не меняются; сбой чтения останавливает setup. Новые значения передаются Azure CLI через временный файл с правами 0600 и удаляются, включая выход по сигналу.
 5. Блокировку неизменяемости журнала безопасности, если `SIKKERHEIT_LOCK_SECURITY_LOG=yes` (отменить нельзя; сделать до пилота). Заблокированная политика допускает только продление срока, поэтому следующие проходы Bicep её не передают (параметр `securityLogLocked` скрипт определяет сам).
 6. Второй проход Bicep с идентификаторами приложений; в prod слот `staging` затем останавливается.
 7. Identity развёртывания из GitHub, если задан `SIKKERHEIT_GITHUB_REPO` (раздел «Развёртывание из GitHub»).
@@ -52,6 +56,10 @@ infra/scripts/deploy-app.sh prod
 
 - prod: слот `staging` (миграции при старте под identity миграций) → smoke-тесты на hostname слота (health, страница портала, 401 API, переход на вход Entra, CSP) → переключение слотов → остановка `staging`. При ошибке слот `staging` тоже останавливается; если переключение уже было, скрипт печатает команды отката.
 - test: приложению на время развёртывания назначаются identity миграций и настройки `Database__MigrateOnStart=true`, `ConnectionStrings__SikkerheitOwner`, `Database__OwnerIdentityClientId`, `Database__AppPrincipals__0__*` → публикация → те же smoke-тесты на hostname приложения → настройки и identity снимаются, приложение перезапускается. Снимает их trap, в том числе при ошибке любого шага; после прерванного запуска — `infra/scripts/deploy-app.sh test --cleanup`.
+
+Перед загрузкой ZIP выполняется `tools/iac/check_startup.py`: реальный Production-bootstrap с синтетическими значениями для M365, Windows и staging; сеть, задания и HTTP не запускаются. Smoke проверяет challenge агента по контракту (`purpose=enroll`): 201 при включённом P2, иначе 404; после swap проверяется и production. В production портал закрыт на hostname агента, API агента — на hostname портала. В staging оба доступны на hostname слота для smoke.
+
+На первой установке `Hosting__AgentHosts__0=disabled.invalid`: P2 закрыт. Для подготовки его DNS/TLS — `infra/scripts/configure-agent-host.sh <env> agent.example.no --plan`; после DNS отдельно `--apply`. Затем setup с `SIKKERHEIT_AGENT_HOST=agent.example.no`. `SIKKERHEIT_MINIMUM_AGENT_VERSION=x.y.z` меняет минимальную версию; без явных значений setup сохраняет живые hostname и минимум. Эти настройки и nonce закреплены за слотами. Скрипт не создаёт DNS-записи у провайдера и не включает API до отдельного setup.
 
 Без `infra/.state/<env>.json` (другая машина, CI) скрипт находит приложение, hostname, identity миграций и адрес базы через `az`.
 
@@ -117,6 +125,8 @@ python3 -I tools/iac/check_arm.py
 
 Скрипт собирает `main.bicep` (`az bicep build`, вход в Azure не нужен) и для `prod` и `test` проверяет итоговый ARM-шаблон: хранилище без ключей и публичного доступа, ровно пять приватных контейнеров, soft delete 7 дней; неизменяемость `security-log` 30 суток без append writes и удаление через 45 суток (INV-083); удаление `restore-orphans/` через 30 суток (INV-081); PostgreSQL без публичного доступа и firewall rules, только вход Entra, PITR 14 суток; identity миграций в prod только у слота `staging`, в test — ни у одного ресурса; `Jobs__Enabled` и `Database__MigrateOnStart` по слотам и как настройки слота (INV-085); в настройках нет секретов, `Cursors__Key` и `Teams__WebhookUrl` — ссылки на Key Vault.
 
+`deployment_checks.py` дополнительно сверяет обязательные настройки `ProductionConfiguration.RequiredSettings` с обоими слотами, ссылку `Agents__NonceKey`, forwarded headers App Service, закрытый по умолчанию API агента и sticky minimum version. Пять правил `agent-alerts.bicep` включаются с hostname агента; их имена метрик сверяются с кодом. Реальные данные KQL и доставку оповещений подтверждает SP-05.
+
 Проверки восстановления (`tools/iac/restore_checks.py`):
 
 - identity восстановления есть только у production-слота, и её называет настройка слота `Restore__ManagedIdentityClientId`;
@@ -157,4 +167,4 @@ python3 -I -m unittest discover -s tools/iac/tests
 - Identity миграций — администратор Entra сервера PostgreSQL: при старте с `Database__MigrateOnStart` она создаёт роли managed identity приложения (в prod — обоих слотов) и включает их в группу `sikkerheit_app`. Так установка не требует SQL с машины вне VNet. В prod identity назначена только слоту `staging`, который работает лишь во время развёртывания; в test — приложению на время развёртывания.
 - Служебная identity пишет журнал безопасности с ролью Storage Blob Data Contributor; запрет изменения и удаления записей даёт заблокированная политика неизменяемости контейнера.
 - Шаг 5 восстановления (`06`): файлы без строк переносит в карантин identity слота (Storage Blob Data Contributor на всё хранилище) — identity восстановления только читает.
-- Smoke-тесты не вызывают `createAgentChallenge`: API агента появится в P2.
+- В staging API агента и портал используют hostname слота для smoke; production использует разные hostname. Это явное исключение для изолированного слота, не разрешение совместить production-hostname.

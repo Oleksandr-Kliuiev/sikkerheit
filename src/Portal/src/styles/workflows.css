@@ -1,0 +1,64 @@
+/* Shared controls and the policy/task workflows. Dimensions use a 4/8px grid. */
+:root { --space-1: 4px; --space-2: 8px; --space-3: 16px; --space-4: 24px; --space-5: 32px; }
+.field, .form-row > *, .topbar > *, .dialog-header > * { min-width: 0; }
+.form-row { align-items: flex-end; }
+.form-row > .button { align-self: flex-end; margin-bottom: 12px; }
+input:not([type='checkbox']), select, textarea { min-width: 0; }
+input[type='checkbox'] { width: 24px; height: 24px; flex-shrink: 0; margin: 0; }
+select {
+  appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%2367758b' stroke-width='2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+.button[aria-pressed='true'], .button[aria-pressed='true']:hover {
+  color: var(--accent-ink); background: var(--accent); border-color: var(--accent);
+}
+.link-button { min-height: 24px; text-align: left; }
+.work-views { align-items: center; gap: var(--space-2); }
+.work-views .help { flex: 1 1 260px; max-width: 65ch; }
+.policy-templates { max-width: 960px; padding: var(--space-3) 0; }
+.policy-templates h3 { margin: 0 0 var(--space-2); }
+.policy-templates > .help { max-width: 65ch; margin: var(--space-2) 0; }
+.policy-templates .form-row { margin-top: var(--space-3); }
+.policy-form > .form-grid { max-width: 960px; margin-top: var(--space-4); padding-top: var(--space-3); }
+.policy-form > .form-grid .checks, .policy-form > .form-grid .table-wrap,
+.policy-form > .form-grid > .help { grid-column: 1 / -1; }
+.policy-form .check { align-self: start; }
+.table-wrap {
+  background:
+    linear-gradient(to right, var(--surface) 30%, transparent) left center / 40px 100% local,
+    linear-gradient(to left, var(--surface) 30%, transparent) right center / 40px 100% local,
+    radial-gradient(farthest-side at 0 50%, var(--muted), transparent) left center / 8px 100% scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--muted), transparent) right center / 8px 100% scroll;
+  background-repeat: no-repeat;
+  background-color: var(--surface);
+}
+.dialog-header, .dialog-footer { flex-wrap: wrap; }
+.dialog-header h2 { overflow-wrap: anywhere; flex: 1 1 160px; }
+@media (min-width: 720px) {
+  .policy-form > .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+}
+@media (max-width: 720px) {
+  .policy-templates .form-row > * { flex: 1 1 100%; }
+  .policy-form .table-wrap { max-width: 100%; }
+  .card-header { flex-wrap: wrap; }
+}
+.tabs {
+  background: linear-gradient(to right, var(--page), transparent 24px, transparent calc(100% - 24px), var(--page));
+}
+@media (max-width: 520px) {
+  .policy-review .table { display: block; }
+  .policy-review thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .policy-review tbody { display: grid; }
+  .policy-review tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .policy-review th { grid-column: 1 / -1; }
+  .policy-review td { overflow-wrap: anywhere; }
+  .policy-review td::before { content: attr(data-label); display: block; font-weight: 600; margin-bottom: var(--space-1); }
+}
+.field { align-content: start; }
+.policy-form > .form-grid { align-items: start; }
+@media (max-width: 720px) {
+  .tabs { mask-image: linear-gradient(to right, black calc(100% - 16px), transparent); }
+}

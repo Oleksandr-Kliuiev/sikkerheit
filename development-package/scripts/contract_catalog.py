@@ -5,7 +5,7 @@ checks, Graph permissions, Problem.code with agent actions, Assessment.reasonCod
 agent states and portal role sets. Counts are never hard-coded elsewhere.
 """
 
-CATALOG_VERSION = '0.3.1'
+CATALOG_VERSION = '0.3.2'
 
 # checkId, name, phase, defaultAssessmentMode, source, subjectType
 CHECKS = [
@@ -204,14 +204,16 @@ ACCEPT_LANGUAGE_MAX = 35
 AUDIT_READS = ['downloadOrganizationExport', 'listAuditEvents', 'downloadReport']
 # Portal operations outside /organizations/{organizationId}: reads across organizations or staff data.
 CROSS_ORG_OPERATIONS = ['listOrganizations', 'createOrganization', 'listFindingsAcrossOrganizations', 'listStaff',
-                        'getCurrentStaff', 'listWindowsReleases', 'importWindowsReleases', 'verifyWindowsReleaseMonth']
+                        'listPolicyTemplates', 'createPolicyTemplate', 'getPolicyTemplate', 'listPolicyTemplateRevisions',
+                        'createPolicyTemplateRevision', 'previewPolicyTemplate', 'getCurrentStaff', 'listWindowsReleases', 'importWindowsReleases', 'verifyWindowsReleaseMonth']
 # Actions of changeOrganizationLifecycle (OrganizationLifecycleChange.action and audit details).
 LIFECYCLE_ACTIONS = ['disable', 'enable', 'schedule_deletion', 'cancel_deletion']
 # Deletion order of retention_purge (04 «Сроки хранения», 05); keys of RetentionPurgeAuditDetails.deleted.
 RETENTION_PURGE_ORDER = ['risk_decision', 'finding_event', 'assessment', 'finding', 'observation', 'collection_run',
                          'scan_batch', 'scan_request', 'subject', 'device_presence', 'device', 'revoked_installation']
 # AuditEvent.action -> schema of AuditEvent.details; details is null for every other action.
-AUDIT_DETAILS = {'organization.lifecycle_change': 'OrganizationLifecycleAuditDetails',
+AUDIT_DETAILS = {'policy.template_apply': 'PolicyTemplateApplicationAuditDetails',
+                'organization.lifecycle_change': 'OrganizationLifecycleAuditDetails',
                  'finding.assignment_change': 'FindingAssignmentAuditDetails',
                  'retention.purge_summary': 'RetentionPurgeAuditDetails'}
 # Operations accepting Accept-Language and answering with Content-Language.

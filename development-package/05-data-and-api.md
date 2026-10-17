@@ -41,7 +41,22 @@
 
 `basisSnapshot` неизменяем и содержит checkId, ruleId, ruleVersion, evaluatedPolicyVersion, result, severity, reasonCode, observedAt и минимальные поля для explanation; у SYS-003 — также `verifiedThroughMonth` каталога, ожидаемый месяц и число пропущенных месяцев. Через 90 дней evidence удаляется, остаётся `basisSnapshot`, `evidenceAvailability=expired`, `observationId=NULL`.
 
+### Общая библиотека шаблонов и применение
+
+`policy_template` и `policy_template_revision` — платформенные таблицы модуля Organizations, без RLS: содержат только переносимые настройки, доступные всем сотрудникам. Текущая версия задаётся заголовком; версии неизменяемы, содержат автора и время. История сохраняется без автоматического удаления. Создание и новые версии, включая архивирование и восстановление из архива, разрешены только Admin. `If-Match` проверяет текущую ревизию, устаревшая — 412 `revision_mismatch`; без заголовка — 428 `if_match_required`. Физического удаления через API нет. Все изменения библиотеки оставляют неизменяемую версию с автором и временем, без создания клиентской ревизии.
+
+`PolicyTemplateContent` — закрытый объект `{scope, activeCheckIds, checks}`. scope=m365 включает M365-001…006; windows — WIN-001…009, WIN-011 и SYS-001…003; all — оба набора. Для области передаются все её checks; сервер разрешает только переносимые параметры. Нет m365, agent, WIN-010, M365-007, notApplicableEditionIds; запрещены privilegedRoleTemplateIds, allowedPermissionGrantPolicies, approvedProviders, defenderApproved, approvedFirewallProviders, allowedDomainRids, allowedSids. Поэтому tenant ID, исключения, расписания, доверенные провайдеры, роли/согласия, SID/RID и редакции клиента сохраняются. При создании шаблон проверяется на политике по умолчанию; каждый реальный результат снова проходит схему PolicyConfiguration и PolicyRules. Клиент с недостающими входными параметрами получает unavailable в просмотре, без записи.
+
+Admin выбирает до 50 уникальных organizationIds явно. Предпросмотр читает каждого клиента в отдельной области REPEATABLE READ, ничего не пишет и возвращает before/after, policyVersion, status=ready|unchanged|unavailable, problemCode и previewToken. ready означает наличие изменений, но ещё не запись; unchanged не имеет token и новой ревизии не создаёт. Неактивный или недоступный клиент не мешает просмотру остальных. Снимки не сохраняются в общую платформенную таблицу. Token подписан ключом Cursors: связан с Admin, клиентом, версией шаблона, версией политики, хэшем результата, случайным nonce и сроком 30 минут. Чужой или изменённый token — 400 invalid_cursor; истёкший неприменённый — 422 validation_failed. Архивированный шаблон не допускает просмотра/применения. Смена шаблона, включая архивирование, или политики после просмотра — 412 revision_mismatch, требуется новый просмотр.
+
+Массовое применение вызывает applyPolicyTemplate отдельно для каждого ready-клиента. Сервер блокирует организацию, проверяет её активность и исходный If-Match, блокирует заголовок шаблона от смены версии, сам повторяет слияние и сравнивает хэш. Тело не принимает конфигурацию от браузера. Одна транзакция создаёт policy_revision, recalculate_policy, аудит policy.revision_create и policy.template_apply и квитанцию policy_template_application. Квитанция содержит только хэш token, ссылки на версии, appliedAt/appliedBy; это клиентская таблица с принудительной RLS, входит в экспорт/удаление организации. Ссылка на policy_revision удаляется каскадом при её штатном удалении по срокам (не менее 12 месяцев). Повтор того же подписанного token тем же Admin возвращает исходную policyVersion с replayed=true, без новой ревизии, задания или аудита; одновременно отправленные повторы сериализуются. Успешный повтор доступен и после срока просмотра, пока хранится квитанция; клиент должен оставаться активным.
+
+Групповой транзакции нет: возможен частичный результат. Портал показывает applied/failed/unknown/skipped отдельно. После потери ответа, 5xx, смены версии, потери прав или ограничения частоты новые записи останавливаются; неизвестный результат можно подтвердить только тем же token. Неприменённые клиенты требуют нового просмотра, без скрытого изменения состава группы и без автоматического повтора с новой версией. Библиотека и приложение шаблонов не обращаются к Graph, RMM или PSA и не меняют настройки Microsoft 365 либо Windows.
+
 ### Политика клиента
+
+В портале Admin может заполнить черновик встроенным шаблоном версии 1: базовый Microsoft 365 (`M365-001`…`M365-006`), тот же набор без принятия телефонных методов для `M365-001`, базовый Windows (`WIN-001`…`WIN-009`, `WIN-011`). Значения по умолчанию берутся из схемы `PolicyConfiguration`. Шаблон действует только в указанной области; `M365-007`, `WIN-010` и `SYS-*` не меняются. Сохраняются расписания, `excludedUserIds`, `expectedTenantId`, перечни привилегированных ролей и согласий, доверенные антивирусы/межсетевые экраны, разрешённые SID/RID и исключения редакций. Предпросмотр сравнивает шаблон с текущим черновиком; применение заполняет только черновик. Отдельное сохранение создаёт обычную неизменяемую ревизию через `createPolicyRevision`, требует Admin и исходный `If-Match`, проходит прежние проверки и аудит. Шаблоны не изменяют настройки Microsoft 365 и не содержат идентификаторов других клиентов. Общая пользовательская библиотека и применение к выбранным клиентам описаны ниже.
+
 
 `policy_revision.configuration` описывается закрытой схемой `PolicyConfiguration`. Поля:
 
@@ -459,6 +474,9 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 
 Портал использует серверную сессию сотрудника (`PortalSession`) и CSRF-токен (`CsrfToken`) для изменений. Списки возвращают cursor pagination, максимум 100 записей. Cursor связан с операцией, организацией и фильтром; чужой или изменённый cursor — 400 `invalid_cursor`. Изменения finding и политики требуют `If-Match`: устаревшая ревизия — 412 `revision_mismatch`, отсутствующий заголовок — 428 `if_match_required`. Тело запроса портала ограничено 65536 байт. Префикс `{org}` означает `/api/v1/organizations/{organizationId}`. Роли: A — Admin, T — Technician, R — Reader (`04`, «Вход сотрудников и роли»).
 
+Дополнительные фильтры списков finding: `assignedTo=me` выбирает назначения текущему сотруднику из серверной сессии; `overdue=true` выбирает `dueAt < now` по серверному времени. Оба ограничивают выборку состояниями `technicalState=open`, `workflowState=new|in_progress`, действующими субъектами (`retiredAt=null`) и активными организациями. Другие значения отклоняются как `schema_violation`. Фильтры пересекаются с остальными и применяются до пагинации. Cursor для `assignedTo=me` связан с Entra ID сотрудника. Время проверяется заново на каждой странице; очередь является живой выборкой, а не снимком.
+
+
 | operationId | Метод и путь | Роли | Повтор и конкуренция | Успех |
 | --- | --- | --- | --- | --- |
 | getCurrentStaff | GET `/api/v1/me` | A, T, R | Возвращает роли и CSRF-токен сессии | 200 CurrentStaff |
@@ -474,6 +492,13 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 | listAuditEvents | GET `{org}/audit-events` | A | cursor; аудит каждого чтения | 200 AuditEventPage |
 | listPolicyRevisions | GET `{org}/policy-revisions` | A, T, R | cursor | 200 PolicyRevisionPage |
 | createPolicyRevision | POST `{org}/policy-revisions` | A | `If-Match` = `"<текущая версия>"` | 201 PolicyRevision + ETag |
+| listPolicyTemplates | GET `/api/v1/policy-templates` | A, T, R | cursor; includeArchived=true | 200 PolicyTemplatePage |
+| createPolicyTemplate | POST `/api/v1/policy-templates` | A | PolicyTemplateCreate | 201 PolicyTemplate + ETag |
+| getPolicyTemplate | GET `/api/v1/policy-templates/{templateId}` | A, T, R | Текущая версия | 200 PolicyTemplate + ETag |
+| listPolicyTemplateRevisions | GET `/api/v1/policy-templates/{templateId}/revisions` | A, T, R | cursor; новые первыми | 200 PolicyTemplatePage |
+| createPolicyTemplateRevision | POST `/api/v1/policy-templates/{templateId}/revisions` | A | If-Match; PolicyTemplateRevisionCreate; включая archived | 201 PolicyTemplate + ETag |
+| previewPolicyTemplate | POST `/api/v1/policy-templates/{templateId}/preview` | A | If-Match шаблона; PolicyTemplatePreviewRequest | 200 PolicyTemplatePreview + ETag |
+| applyPolicyTemplate | POST `{org}/policy-template-applications` | A | If-Match политики; PolicyTemplateApplyRequest; token предпросмотра | 200 PolicyTemplateApplication |
 | getTenantConnection | GET `{org}/m365-connection` | A, T, R | — | 200 TenantConnection |
 | startTenantConsent | POST `{org}/m365-connection/consent` | A | Тело `tenantHint`; ссылка только для ожидаемого tenant, действует 7 суток | 201 ConsentStart |
 | verifyTenantConnection | POST `{org}/m365-connection/verify` | A | Повтор после успеха возвращает активное подключение | 200 TenantConnection |
@@ -503,6 +528,8 @@ Check-in сравнивает `CheckIn.observedAt` со временем сер�
 | verifyWindowsReleaseMonth | POST `/api/v1/windows-releases/months/{securityMonth}/verify` | A | Идемпотентно; вводит записи месяца в действие и ставит `patch_level_sweep` всех организаций; месяц без записей — только с `noNewReleases=true`, иначе 422 `validation_failed` | 200 WindowsReleaseMonth |
 
 Аудит:
+
+- policy.template_apply содержит templateId, templateRevision, policyVersion; повтор по квитанции не пишет событие повторно.
 
 - **Изменения.** Каждое изменение портала пишет `audit_event` своей организации; `createOrganization` — в аудит созданной организации. Изменения каталога выпусков — платформенные: автор и время записываются в `importedBy`, `verifiedBy` и `verifiedAt` и в журнал запросов сервиса.
 - **Чтения.** Выдача отчёта и экспорта и чтение журнала аудита пишут аудит при каждом обращении (расширение `x-audit-read`).

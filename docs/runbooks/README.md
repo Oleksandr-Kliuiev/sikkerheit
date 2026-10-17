@@ -18,6 +18,7 @@
 | RB-10 | Ключ регистрации организации | Security Owner | Плановая ротация; «Alert RB-10»; подозрение на утечку ключа; кража ПК | [RB-10-enrollment-key.md](RB-10-enrollment-key.md) |
 | RB-11 | Конфликт идентичности устройства | Service Manager | «Alert RB-11»; «Konflikt» в «Enheter»; частый `device.sequence_resync` | [RB-11-device-identity.md](RB-11-device-identity.md) |
 | RB-12 | Агент не выходит на связь | Service Manager | «Alert RB-12»; «Sist sett» старше 72 часов; отказы 422; часы; буфер | [RB-12-agent-offline.md](RB-12-agent-offline.md) |
+| RB-13 | Каталог выпусков Windows | Service Manager (Admin) | В течение семи суток после второго вторника и после внеочередного выпуска | [RB-13-windows-release-catalog.md](RB-13-windows-release-catalog.md) |
 | RB-14 | Бюджет Azure и дневной лимит журналов | Product Owner (+ Operations) | Письмо бюджета на 80% и 100%; достигнут дневной лимит Log Analytics | [RB-14-azure-budget-and-log-cap.md](RB-14-azure-budget-and-log-cap.md) |
 
 ## Роли

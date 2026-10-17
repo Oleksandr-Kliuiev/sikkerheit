@@ -37,6 +37,8 @@ class ScriptCase(unittest.TestCase):
             shutil.copy(script, scripts / script.name)
         for tree in ("infra/bicep/modules", "src/Portal", "src/Sikkerheit.Host"):
             (self.root / tree).mkdir(parents=True)
+        (self.root / 'tools/iac').mkdir(parents=True)
+        shutil.copy(REPO / 'tools/iac/check_startup.py', self.root / 'tools/iac/check_startup.py')
         self.bin = self.tmp / "bin"
         shutil.copytree(HERE / "stubs", self.bin)
         self.log = self.tmp / "az.log"

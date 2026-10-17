@@ -33,3 +33,9 @@ export interface Page<T> {
   items: T[];
   nextCursor: string | null;
 }
+
+export type PolicyTemplate = Schemas['PolicyTemplate'];
+export type PolicyTemplateContent = Schemas['PolicyTemplateContent'];
+export type PolicyTemplatePreview = Schemas['PolicyTemplatePreview'];
+export type PolicyTemplatePreviewItem = Schemas['PolicyTemplatePreviewItem'];
+export type PolicyTemplateApplication = Schemas['PolicyTemplateApplication'];

@@ -8,7 +8,7 @@ namespace Sikkerheit.Contracts;
 /// <summary>Closed catalogs of the Development Package; see 03 and 05.</summary>
 public static partial class Catalog
 {
-    public const string Version = "0.3.1";
+    public const string Version = "0.3.2";
 
     public static readonly IReadOnlyList<CheckDefinition> Checks =
     [
@@ -54,7 +54,7 @@ public static partial class Catalog
     public static readonly IReadOnlyList<string> Roles = ["Admin", "Technician", "Reader"];
     public static readonly IReadOnlyList<string> Languages = ["nb", "nn", "en"];
     public static readonly IReadOnlyList<string> AuditReads = ["downloadOrganizationExport", "listAuditEvents", "downloadReport"];
-    public static readonly IReadOnlyList<string> CrossOrganizationOperations = ["listOrganizations", "createOrganization", "listFindingsAcrossOrganizations", "listStaff", "getCurrentStaff", "listWindowsReleases", "importWindowsReleases", "verifyWindowsReleaseMonth"];
+    public static readonly IReadOnlyList<string> CrossOrganizationOperations = ["listOrganizations", "createOrganization", "listFindingsAcrossOrganizations", "listStaff", "listPolicyTemplates", "createPolicyTemplate", "getPolicyTemplate", "listPolicyTemplateRevisions", "createPolicyTemplateRevision", "previewPolicyTemplate", "getCurrentStaff", "listWindowsReleases", "importWindowsReleases", "verifyWindowsReleaseMonth"];
     public static readonly IReadOnlyList<string> LifecycleActions = ["disable", "enable", "schedule_deletion", "cancel_deletion"];
     public static readonly IReadOnlyList<string> RetentionPurgeOrder = ["risk_decision", "finding_event", "assessment", "finding", "observation", "collection_run", "scan_batch", "scan_request", "subject", "device_presence", "device", "revoked_installation"];
     public static readonly IReadOnlyList<string> SecurityLogActions = ["device.revoke", "enrollment_key.revoke", "organization.disable", "organization.schedule_deletion", "organization.cancel_deletion", "organization.delete", "m365.disconnect"];

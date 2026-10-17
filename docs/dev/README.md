@@ -1,5 +1,7 @@
 # Разработка Sikkerheit
 
+Текущий комплект — 0.3.2. [Итоговое ревью и проверки](../reports/2026-10-17-release-0.3.2-review.md); [готовность к пилоту](pilot-readiness.md).
+
 Код сервиса — в `src/`, тесты — в `tests/`, портал — в `src/Portal`, инфраструктура — в `infra/`, контракт — в `development-package/specs` (файлы встроены в сборку `Sikkerheit.Contracts`, типы портала генерируются из `openapi.json`).
 
 ## Инструменты
@@ -15,6 +17,10 @@ export PATH="$HOME/.dotnet:$HOME/.local/opt/node24/bin:$PATH" DOTNET_ROOT="$HOME
 ```
 
 ## Проверки
+
+Подготовка пилота и реальные проверки после предоставления доступов — [pilot-readiness.md](pilot-readiness.md).
+
+Параллельные задания, общий ограничитель Graph, метрики и улучшения портала — [offline-improvements.md](offline-improvements.md). Сверка инвентаря Atera без API — [atera-inventory.md](atera-inventory.md).
 
 ```bash
 dotnet test --project tests/Sikkerheit.UnitTests
@@ -50,6 +56,14 @@ python3 -I tools/lint/check_source_text.py
 python3 -I tools/iac/check_arm.py
 ```
 
+Production-bootstrap без Azure/БД (после Release-сборки):
+
+```bash
+python3 -I tools/iac/check_startup.py --assembly src/Sikkerheit.Host/bin/Release/net10.0/Sikkerheit.Host.dll
+```
+
+Сервис также поддерживает `dotnet Sikkerheit.Host.dll check-configuration` с настоящими настройками окружения: проверяет конфигурацию и регистрацию компонентов, не запускает HTTP, задания и миграции. Этот результат не подтверждает доступ к Azure, БД или tenant.
+
 Интеграционные и контрактные тесты поднимают PostgreSQL 17 в Docker; IaC-проверка собирает ARM JSON командой `az bicep build` (нужен Azure CLI с Bicep, вход в Azure не нужен).
 
 После изменения `development-package/scripts/contract_catalog.py` перегенерировать `src/Sikkerheit.Contracts/Catalog.g.cs` командой без `--check`; после изменения OpenAPI — `npm run gen:api` в `src/Portal`. CI (`.github/workflows/ci.yml`) проверяет и то и другое.
@@ -63,7 +77,7 @@ python3 -I tools/iac/check_arm.py
 - Тест помечается `[Invariant("INV-nnn")]`, класс — `[Enforcement("<enforcement>")]`; классы разложены по уровням: `PortalApiInvariantTests` (HTTP), `DatabaseInvariantTests` (RLS и области), `SchemaInvariantTests`, `CollectorInvariantTests` (поддельный Graph), `EvaluatorRuleInvariantTests` (правила и автомат проблем без базы) и `EvaluatorPipelineInvariantTests` (через запуск сбора), `WorkerInvariantTests` (задания и lease), `InfraInvariantTests` (восстановление, журнал безопасности, задания слотов). Для P2 (WP-10) добавлены классы по тем же уровням: `AgentApiInvariantTests` (`agent_api`: регистрация, сессия, приём пакета по HTTP с тестовым агентом), `WindowsRuleInvariantTests` (правила WIN и SYS без базы) и `WindowsPipelineInvariantTests` (пакет через сервис), `AgentWorkerInvariantTests`, `AgentPortalInvariantTests`, `AgentSchemaInvariantTests`, `AgentInfraInvariantTests` (повтор журнала после восстановления).
 - `Invariants/RegistryCoverageTests` роняет сборку, если у записи P1 или у серверной записи P2 нет теста на её `enforcement`, если тест ссылается на неизвестную запись, запись агента или запись другого уровня, а классы серверных уровней не работают с PostgreSQL. Запись `infra` может закрыть и IaC-проверка: её кортеж `INVARIANTS` в `tools/iac/check_arm.py` читается тестом.
 - Записи P2: 83 из 96 закрыты в этом проекте (WP-10 и INV-201 из WP-11). 13 записей уровня `agent` проверены в `tests/Sikkerheit.Agent.Tests` (своя отметка `[Invariant]`, `RegistryCoverageTests` читает её из исходников); INV-201 (скрипт RMM) проверяет `RmmScriptInvariantTests` — запускает `pwsh` с `tools/rmm/tests/Run-RmmTests.ps1` (без `pwsh` локально тест пропускается, в CI без него падает). Тестовый агент — `tests/Sikkerheit.IntegrationTests/Infrastructure/FakeAgent.cs`: свой ключ P-256, отпечаток машины и подписи по `05`, пакеты по примеру пакета; `AgentHost.cs` поднимает сервис с организацией и ключом регистрации.
-- Реестр в пакете 0.3.0 местами старше решений, уже внесённых в код (F01, F03, F04, F10, F11, access token v1): такие тесты проверяют поведение по решению, а `Decision` атрибута называет его. Тексты 0.3.1 совпадают с этим поведением; новые записи 0.3.1 потребуют своих тестов — проверка покрытия перечислит их.
+- Реестр в пакете 0.3.0 местами старше решений, уже внесённых в код (F01, F03, F04, F10, F11, access token v1): такие тесты проверяют поведение по решению, а `Decision` атрибута называет его. Тексты 0.3.2 совпадают с реализованным поведением; все 207 записей реестра покрыты отрицательными тестами, полноту проверяет RegistryCoverageTests.
 - Чтобы добавить запись: тест в класс её уровня с атрибутом `[Invariant]`; общий сценарий — `Support/ContractHost.cs`. Инфраструктура интеграционных тестов (`ApiFactory`, `PostgresFixture`, поддельный Graph, `LogCapture`) подключена в проект ссылками на файлы.
 
 ## Восстановление после PITR
@@ -124,3 +138,5 @@ Identity: в Azure (задан `SecurityLog:ContainerUri`) журнал безо
 - `src/Agent/Installer/Package.wxs`, `build.ps1` — описание MSI (WiX); сборка только на Windows. Статическая проверка: `python3 -I tools/rmm/check_installer.py`, её тесты — `python3 -I -m unittest discover -s tools/rmm/tests -p 'test_*.py'`.
 - Метрики `agent.*` для колец и остановки — `Agents/AgentMetrics.cs`; процедура — RB-08…RB-12 в `docs/runbooks/`.
 - CI: задание `rmm` (ubuntu) и `rmm-windows` (windows-latest, не блокирует: те же тесты в Windows PowerShell 5.1).
+
+Общая библиотека политик, переносимые поля, выбор клиентов и безопасное повторное применение — [shared-policy-templates.md](shared-policy-templates.md). Новая миграция 0004; ключи и production-зависимости не добавляются.

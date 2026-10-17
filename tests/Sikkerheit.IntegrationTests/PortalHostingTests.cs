@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using Sikkerheit.Contracts;
 using Sikkerheit.Host.Platform;
 using Sikkerheit.IntegrationTests.Infrastructure;
@@ -33,5 +34,34 @@ public sealed class PortalHostingTests(PostgresFixture postgres) : IAsyncLifetim
             var answer = await StaffClient.Answer.ReadAsync(response, null);
             Assert.Equal(ProblemCodes.NotFound, answer.Code);
         }
+    }
+
+    [Fact]
+    public async Task Azure_agent_smoke_uses_the_real_contract_and_keeps_portal_and_agent_hosts_separate()
+    {
+        _factory.Settings["Hosting:PortalHosts:0"] = "portal.test";
+        _factory.Settings["Hosting:AgentHosts:0"] = "agent.test";
+        using var client = StaffClient.Anonymous(_factory);
+        using var challenge = await client.PostAsJsonAsync("https://agent.test/api/v1/agent/challenges",
+            new { purpose = "enroll" }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, challenge.StatusCode);
+        using var portalChallenge = await client.PostAsJsonAsync("https://portal.test/api/v1/agent/challenges",
+            new { purpose = "enroll" }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, portalChallenge.StatusCode);
+        using var agentPortal = await client.GetAsync("https://agent.test/api/v1/me", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, agentPortal.StatusCode);
+        using var portal = await client.GetAsync("https://portal.test/api/v1/me", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, portal.StatusCode);
+    }
+
+    [Fact]
+    public async Task M365_only_deployment_keeps_the_agent_routes_closed()
+    {
+        _factory.Settings["Hosting:PortalHosts:0"] = "localhost";
+        _factory.Settings["Hosting:AgentHosts:0"] = "disabled.invalid";
+        using var client = StaffClient.Anonymous(_factory);
+        using var challenge = await client.PostAsJsonAsync("/api/v1/agent/challenges", new { purpose = "enroll" },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, challenge.StatusCode);
     }
 }

@@ -14,6 +14,7 @@ import type {
   OrganizationOverview,
   Page,
   PolicyRevision,
+  PolicyTemplate,
   Report,
   StaffUser,
   TenantConnection,
@@ -52,10 +53,11 @@ async function all<T>(path: string, maxPages = 20): Promise<T[]> {
 }
 
 /** A cursor list read page by page («Vis flere»). */
-export function usePaged<T>(key: readonly unknown[], path: string, enabled = true) {
+export function usePaged<T>(key: readonly unknown[], path: string, enabled = true, refetchInterval?: number) {
   return useInfiniteQuery({
     queryKey: key,
     enabled,
+    refetchInterval,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => {
       const separator = path.includes('?') ? '&' : '?';
@@ -91,11 +93,13 @@ export interface FindingFilters {
   freshness?: string[];
   workflowState?: string[];
   checkId?: string[];
+  assignedTo?: 'me';
+  overdue?: 'true';
 }
 
-export function useFindings(organizationId: string | null, filters: FindingFilters, language: string) {
+export function useFindings(organizationId: string | null, filters: FindingFilters, language: string, currentStaffId: string) {
   const base = organizationId ? `${org(organizationId)}/findings` : '/api/v1/findings';
-  return usePaged<Finding>(['findings', organizationId ?? 'all', filters, language], base + query({ ...filters }));
+  return usePaged<Finding>(['findings', organizationId ?? 'all', filters, language, filters.assignedTo ? currentStaffId : null], base + query({ ...filters }), true, filters.overdue ? 60_000 : undefined);
 }
 
 export function useFinding(organizationId: string, findingId: string, language: string) {
@@ -176,4 +180,13 @@ export interface ReleaseFilters {
 /** The Windows release catalog is shared by all customers (03 «Правило SYS-003 и каталог выпусков»). */
 export function useWindowsReleases(filters: ReleaseFilters) {
   return usePaged<WindowsRelease>(['windows-releases', filters], `/api/v1/windows-releases${query({ ...filters })}`);
+}
+
+export function usePolicyTemplates(includeArchived = false) {
+  return usePaged<PolicyTemplate>(['policy-templates', includeArchived],
+    '/api/v1/policy-templates' + query({ includeArchived: includeArchived ? 'true' : undefined }));
+}
+export function usePolicyTemplateHistory(id: string) {
+  return usePaged<PolicyTemplate>(['policy-template-history', id],
+    `/api/v1/policy-templates/${encodeURIComponent(id)}/revisions`, !!id);
 }

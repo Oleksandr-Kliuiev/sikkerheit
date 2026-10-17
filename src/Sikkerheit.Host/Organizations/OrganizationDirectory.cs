@@ -18,4 +18,8 @@ public static class OrganizationDirectory
         await all.Db.Organizations.AsNoTracking().OrderBy(o => o.Name).ThenBy(o => o.Id)
             .Select(o => new OrganizationSummary(o.Id, o.Name, o.Timezone, o.Status, o.CreatedAt, o.DeletionDueAt))
             .ToListAsync(ct);
+
+    /// <summary>IDs of active organizations visible in the caller's RLS scope, for actionable work queues.</summary>
+    public static async Task<Guid[]> ActiveIdsAsync(DbScope scope, CancellationToken ct) =>
+        await scope.Db.Organizations.AsNoTracking().Where(o => o.Status == "active").Select(o => o.Id).ToArrayAsync(ct);
 }

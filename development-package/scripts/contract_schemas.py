@@ -686,6 +686,9 @@ def api_schemas(observation, batch):
                        ['type', 'title', 'status', 'code', 'correlationId']),
         **_agent_schemas(), **_portal_schemas(),
     }
-    for entity in PAGED:
+    from contract_policy_templates import schemas as template_schemas
+    schemas.update(template_schemas(policy_configuration(), obj, array, enum, integer, ref, string, nullable,
+                                    safe_text, UUID, TIME, BOOL, [code for code, _, _ in PROBLEM_CODES]))
+    for entity in [*PAGED, 'PolicyTemplate']:
         schemas[entity + 'Page'] = obj({'items': array(ref(entity), 100), 'nextCursor': nullable(string(2048))})
     return schemas

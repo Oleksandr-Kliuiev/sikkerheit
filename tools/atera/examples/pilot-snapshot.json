@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "atera": {
+    "capturedAt": "2026-10-17T12:00:00Z",
+    "complete": true,
+    "agents": [
+      {"agentId": 101, "customerId": 10, "name": "PC-01"},
+      {"agentId": 102, "customerId": 10, "name": "PC-02"},
+      {"agentId": 201, "customerId": 20, "name": "PC-01"}
+    ]
+  },
+  "sikkerheit": {
+    "capturedAt": "2026-10-17T12:00:00Z",
+    "complete": true,
+    "organizations": [
+      {
+        "organizationId": "11111111-1111-4111-8111-111111111111",
+        "pages": [{
+          "cursor": null,
+          "items": [
+            {"id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1", "displayName": "PC-01", "status": "active", "identityState": "ok", "lastSeenAt": "2026-10-17T11:00:00Z", "agentVersion": "0.1.0"},
+            {"id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2", "displayName": "PC-02", "status": "active", "identityState": "ok", "lastSeenAt": "2026-10-17T11:00:00Z", "agentVersion": "0.1.0"}
+          ],
+          "nextCursor": null
+        }]
+      },
+      {
+        "organizationId": "22222222-2222-4222-8222-222222222222",
+        "pages": [{
+          "cursor": null,
+          "items": [
+            {"id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1", "displayName": "PC-01", "status": "active", "identityState": "ok", "lastSeenAt": "2026-10-14T11:00:00Z", "agentVersion": "0.0.9"}
+          ],
+          "nextCursor": null
+        }]
+      }
+    ]
+  },
+  "customerMappings": [
+    {"customerId": 10, "organizationId": "11111111-1111-4111-8111-111111111111"},
+    {"customerId": 20, "organizationId": "22222222-2222-4222-8222-222222222222"}
+  ],
+  "deviceMappings": [
+    {"agentId": 101, "organizationId": "11111111-1111-4111-8111-111111111111", "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"},
+    {"agentId": 201, "organizationId": "22222222-2222-4222-8222-222222222222", "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1"}
+  ]
+}

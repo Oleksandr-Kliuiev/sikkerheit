@@ -7,11 +7,20 @@ namespace Sikkerheit.IntegrationTests.Infrastructure;
 public sealed class TestClock : TimeProvider
 {
     private long _offsetTicks;
+    private long _frozenTicks;
 
-    public override DateTimeOffset GetUtcNow() => base.GetUtcNow().AddTicks(Interlocked.Read(ref _offsetTicks));
+    public override DateTimeOffset GetUtcNow() => Interlocked.Read(ref _frozenTicks) is var ticks && ticks != 0
+        ? new DateTimeOffset(ticks, TimeSpan.Zero) : base.GetUtcNow().AddTicks(Interlocked.Read(ref _offsetTicks));
+
+    /// <summary>Freeze the clock for exact due-date boundary tests; timers still use real time.</summary>
+    public void Freeze(DateTimeOffset moment) => Interlocked.Exchange(ref _frozenTicks, moment.UtcTicks);
 
     /// <summary>Moves «now» to the moment; time keeps flowing from there.</summary>
-    public void Set(DateTimeOffset moment) => Interlocked.Exchange(ref _offsetTicks, (moment - base.GetUtcNow()).Ticks);
+    public void Set(DateTimeOffset moment)
+    {
+        Interlocked.Exchange(ref _offsetTicks, (moment - base.GetUtcNow()).Ticks);
+        Interlocked.Exchange(ref _frozenTicks, 0);
+    }
 
     /// <summary>Local time in a zone as an instant, for readable test scenarios.</summary>
     public void SetLocal(string timezone, int year, int month, int day, int hour, int minute = 0)

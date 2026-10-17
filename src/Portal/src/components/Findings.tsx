@@ -6,6 +6,10 @@ import type { Finding } from '../api/types';
 import { useI18n } from '../i18n/i18n';
 import { useAuth } from '../lib/auth';
 import { formatDateTime, fromLocalInput, toLocalInput } from '../lib/format';
+import { BULK_FINDING_LIMIT, canBulkWork, findingKey } from '../lib/bulk-finding-work';
+import { BulkFindingWork } from './BulkFindingWork';
+import { FindingViews } from './FindingViews';
+import { useNow } from '../lib/use-now';
 import { Badge, Button, Dialog, Empty, ErrorMessage, Facts, Field, Loading, Notice, severityTone } from './ui';
 
 const filterValues = {
@@ -36,12 +40,16 @@ export function subjectText(finding: Pick<Finding, 'subject'>, t: (key: string) 
 /** Findings of one organization or the shared queue of all (FR-06, FR-09). */
 export function FindingsList({ organizationId, organizationNames }: { organizationId: string | null; organizationNames?: Map<string, string> }) {
   const { t, locale, language } = useI18n();
+  const { canWork, staff: currentStaff } = useAuth();
+  const now = useNow();
   const [filters, setFilters] = useState<FindingFilters>({ technicalState: ['open'] });
   const [selected, setSelected] = useState<Finding | null>(null);
-  const findings = useFindings(organizationId, filters, language);
+  const [workSelection, setWorkSelection] = useState<Map<string, Finding>>(new Map());
+  const findings = useFindings(organizationId, filters, language, currentStaff.entraUserId);
   const items = findings.data?.pages.flatMap((page) => page.items) ?? [];
 
   function toggle(name: keyof typeof filterValues, value: string) {
+    setWorkSelection(new Map());
     setFilters((current) => {
       const values = new Set(current[name] ?? []);
       if (values.has(value)) {
@@ -55,6 +63,7 @@ export function FindingsList({ organizationId, organizationNames }: { organizati
 
   return (
     <>
+      <FindingViews key={currentStaff.entraUserId} filters={filters} onChange={(next) => { setFilters(next); setWorkSelection(new Map()); }} />
       <div className="filters" role="group">
         {(Object.keys(filterValues) as (keyof typeof filterValues)[]).map((name) => (
           <fieldset key={name} className="filter">
@@ -71,11 +80,17 @@ export function FindingsList({ organizationId, organizationNames }: { organizati
       {findings.isPending && <Loading />}
       <ErrorMessage error={findings.error} onRetry={() => void findings.refetch()} />
       {findings.data && items.length === 0 && <Empty>{t('findings.empty')}</Empty>}
+      {canWork && <BulkFindingWork selected={[...workSelection.values()]} organizationNames={organizationNames} onClear={() => setWorkSelection(new Map())} />}
       {items.length > 0 && (
         <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
+                {canWork && <th scope="col"><input type="checkbox" aria-label={t('bulk.selectLoaded')}
+                  disabled={!items.some(canBulkWork)} checked={items.filter(canBulkWork).slice(0, BULK_FINDING_LIMIT).length > 0
+                    && items.filter(canBulkWork).slice(0, BULK_FINDING_LIMIT).every((finding) => workSelection.has(findingKey(finding)))}
+                  onChange={(event) => setWorkSelection(event.target.checked
+                    ? new Map(items.filter(canBulkWork).slice(0, BULK_FINDING_LIMIT).map((finding) => [findingKey(finding), finding])) : new Map())} /></th>}
                 <th scope="col">{t('findings.severity')}</th>
                 <th scope="col">{t('findings.check')}</th>
                 {organizationNames && <th scope="col">{t('findings.organization')}</th>}
@@ -88,7 +103,18 @@ export function FindingsList({ organizationId, organizationNames }: { organizati
             </thead>
             <tbody>
               {items.map((finding) => (
-                <tr key={finding.id} className="clickable" onClick={() => setSelected(finding)}>
+                <tr key={findingKey(finding)} className="clickable" onClick={() => setSelected(finding)}>
+                  {canWork && <td onClick={(event) => event.stopPropagation()}><input type="checkbox"
+                    aria-label={t('bulk.selectFinding', { title: finding.title })} checked={workSelection.has(findingKey(finding))}
+                    disabled={!canBulkWork(finding) || (!workSelection.has(findingKey(finding)) && workSelection.size >= BULK_FINDING_LIMIT)}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setWorkSelection((current) => {
+                        const next = new Map(current);
+                        if (checked) next.set(findingKey(finding), finding); else next.delete(findingKey(finding));
+                        return next;
+                      });
+                    }} /></td>}
                   <td>
                     <Badge tone={severityTone(finding.severity)}>{t(`severity.${finding.severity}`)}</Badge>
                   </td>
@@ -111,7 +137,9 @@ export function FindingsList({ organizationId, organizationNames }: { organizati
                   </td>
                   <td>{t(`workflow.${finding.workflowState}`)}</td>
                   <td>{formatDateTime(finding.openedAt, locale)}</td>
-                  <td>{formatDateTime(finding.dueAt, locale)}</td>
+                  <td>{formatDateTime(finding.dueAt, locale)}{' '}
+                    {canBulkWork(finding) && finding.dueAt && Date.parse(finding.dueAt) < now && <Badge tone="bad">{t('findings.overdue')}</Badge>}
+                  </td>
                 </tr>
               ))}
             </tbody>
