@@ -39,6 +39,13 @@ public sealed class FindingApiTests(PostgresFixture postgres) : IAsyncLifetime
 
     public async ValueTask DisposeAsync() => await _factory.DisposeAsync();
 
+    /// <summary>Now plus days at the microsecond precision of the contract (at most 6 fractional digits): Linux has a 100 ns clock.</summary>
+    private static DateTimeOffset InDays(int days)
+    {
+        var moment = DateTimeOffset.UtcNow.AddDays(days);
+        return moment.AddTicks(-(moment.Ticks % 10));
+    }
+
     [Fact]
     public async Task Queue_lists_open_findings_with_filters_and_localized_texts()
     {
@@ -78,15 +85,15 @@ public sealed class FindingApiTests(PostgresFixture postgres) : IAsyncLifetime
 
         var technician = await StaffClient.SignInAsync(_factory, "Technician");
         var forbidden = await technician.PostAsync($"{path}/risk-decisions",
-            new { decision = "risk_accepted", reason = "Kunden godtek", reviewAt = DateTimeOffset.UtcNow.AddDays(30) }, ifMatch: progressed.ETag);
+            new { decision = "risk_accepted", reason = "Kunden godtek", reviewAt = InDays(30) }, ifMatch: progressed.ETag);
         Assert.Equal(ProblemCodes.Forbidden, forbidden.Code);
 
         var tooLate = await _admin.PostAsync($"{path}/risk-decisions",
-            new { decision = "risk_accepted", reason = "Kunden godtek", reviewAt = DateTimeOffset.UtcNow.AddDays(400) }, ifMatch: progressed.ETag);
+            new { decision = "risk_accepted", reason = "Kunden godtek", reviewAt = InDays(400) }, ifMatch: progressed.ETag);
         Assert.Equal(ProblemCodes.ValidationFailed, tooLate.Code);
 
         var accepted = await _admin.PostAsync($"{path}/risk-decisions",
-            new { decision = "risk_accepted", reason = "Kunden godtek risikoen", reviewAt = DateTimeOffset.UtcNow.AddDays(30) },
+            new { decision = "risk_accepted", reason = "Kunden godtek risikoen", reviewAt = InDays(30) },
             "Finding", ifMatch: progressed.ETag);
         Assert.Equal("risk_accepted", accepted.Body.GetProperty("workflowState").GetString());
         Assert.Equal("Kunden godtek risikoen", accepted.Body.GetProperty("workflowReason").GetString());

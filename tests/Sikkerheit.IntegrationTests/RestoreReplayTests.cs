@@ -133,6 +133,21 @@ public sealed class RestoreReplayTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Verification_passes_when_the_clock_has_a_sub_microsecond_remainder()
+    {
+        // Linux has a 100 ns clock, PostgreSQL stores microseconds: the postponed deadline must still be
+        // at least 7 days after the restore, not a fraction of a microsecond earlier.
+        var scenario = await BuildAsync();
+        await using var restored = new ApiFactory(scenario.ConnectionString, _log, _files);
+        restored.Clock.SetLocal(Oslo, 2026, 11, 10, 10);
+        var moment = restored.Clock.GetUtcNow();
+        restored.Clock.Freeze(new DateTimeOffset(moment.Ticks - moment.Ticks % 10 + 7, TimeSpan.Zero));
+        var report = await restored.Services.GetRequiredService<RestoreReplay>().RunAsync(new RestoreOptions(T, Drill: false), Ct);
+        Assert.True(report.Verification.Passed, string.Join("; ", report.Verification.Problems));
+        Assert.NotEmpty(report.DeletionsPostponed);
+    }
+
+    [Fact]
     public async Task Replay_restores_every_restriction_after_the_restore_point_and_is_idempotent()
     {
         var scenario = await BuildAsync();

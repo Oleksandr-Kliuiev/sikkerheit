@@ -69,7 +69,10 @@ public sealed class RestoreReplay(DbScopes scopes, ISecurityLog securityLog, IFi
 
     public async Task<RestoreReport> RunAsync(RestoreOptions options, CancellationToken ct)
     {
-        var now = clock.GetUtcNow();
+        // PostgreSQL keeps microseconds: a deadline stored from a 100 ns clock (Linux) would read back earlier than
+        // run.Now + 7 days and fail the check of step 6.
+        var started = clock.GetUtcNow();
+        var now = started.AddTicks(-(started.Ticks % 10));
         var run = new Run(options, now);
         var report = new RestoreReport
         {
